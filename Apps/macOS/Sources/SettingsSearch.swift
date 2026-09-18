@@ -4,13 +4,13 @@ import TimeTugCore
 /// Visible label strings, shared by the views and the search catalog so they cannot drift.
 enum SettingsText {
     static let leadTime = "Lead time"
-    static let videoLink = "Only events with a video link"
+    static let videoLink = "Require a video link"
     static let skipSolo = "Skip events with no other attendees"
     static let skipDeclined = "Skip declined events"
     static let testTug = "Test tug"
     static let skipAllDay = "Skip all-day events"
     static let appearance = "Appearance"
-    static let menuBarText = "Next to the icon"
+    static let menuBarText = "Menu bar text"
     static let launchAtLogin = "Launch at login"
     static let about = "About TimeTug"
     static let aboutButton = "About TimeTug…"
@@ -31,7 +31,7 @@ enum SettingsSearch {
         .init(id: "lead-time", title: SettingsText.leadTime,
               keywords: ["tug", "takeover", "take over", "before", "start", "minutes", "at start", "warning"], pane: .tugRules),
         .init(id: "video-link", title: SettingsText.videoLink,
-              keywords: ["tug", "takeover", "take over", "zoom", "meet", "teams", "conference"], pane: .tugRules),
+              keywords: ["tug", "takeover", "take over", "zoom", "meet", "teams", "conference", "only events", "only events with a video link", "video link required"], pane: .tugRules),
         .init(id: "skip-solo", title: SettingsText.skipSolo,
               keywords: ["tug", "takeover", "take over", "solo", "alone", "attendees"], pane: .tugRules),
         .init(id: "skip-declined", title: SettingsText.skipDeclined,
@@ -43,7 +43,7 @@ enum SettingsSearch {
         .init(id: "appearance", title: SettingsText.appearance,
               keywords: ["theme", "light", "dark", "auto", "automatic", "mode", "dark mode", "color scheme"], pane: .general),
         .init(id: "menu-bar-text", title: SettingsText.menuBarText,
-              keywords: ["menu bar", "text", "next meeting", "countdown", "title"], pane: .general),
+              keywords: ["menu bar", "text", "next meeting", "countdown", "title", "next to the icon"], pane: .general),
         .init(id: "launch-at-login", title: SettingsText.launchAtLogin,
               keywords: ["startup", "open at login", "boot"], pane: .general),
         .init(id: "about", title: SettingsText.about,
@@ -55,7 +55,7 @@ enum SettingsSearch {
         guard !needle.isEmpty else { return [] }
 
         let calendarItems = calendars.map {
-            SettingsSearchItem(id: calendarIDPrefix + $0.key, title: $0.title, keywords: [], pane: .calendars)
+            SettingsSearchItem(id: calendarIDPrefix + $0.key, title: $0.title, keywords: [$0.accountName].compactMap { $0 }, pane: .calendars)
         }
         let all = catalog + calendarItems
         let titleMatches = all.filter { fold($0.title).contains(needle) }

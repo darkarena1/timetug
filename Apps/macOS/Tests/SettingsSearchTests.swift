@@ -112,4 +112,22 @@ final class SettingsSearchTests: XCTestCase {
             XCTAssertEqual(SettingsSearch.catalog.first { $0.id == id }?.pane, .general, id)
         }
     }
+
+    func testCalendarFoundByAccountName() {
+        let cal = CalendarInfo(sourceID: "s", calendarID: "1", title: "Family", accountName: "iCloud")
+        let hit = SettingsSearch.results(for: "iCloud", calendars: [cal]).first { $0.id == "calendar:s/1" }
+        XCTAssertEqual(hit?.title, "Family")
+        XCTAssertEqual(hit?.pane, .calendars)
+    }
+
+    func testOldMenuBarPhraseStillFindsMenuBarText() {
+        XCTAssertTrue(ids("next to the icon").contains("menu-bar-text"))
+        XCTAssertEqual(SettingsSearch.catalog.first { $0.id == "menu-bar-text" }?.title, "Menu bar text")
+    }
+
+    func testOldVideoLinkPhraseStillFindsVideoLink() {
+        XCTAssertTrue(ids("only events with a video link").contains("video-link"))
+        XCTAssertTrue(ids("video link").contains("video-link"))
+        XCTAssertEqual(SettingsSearch.catalog.first { $0.id == "video-link" }?.title, "Require a video link")
+    }
 }

@@ -13,23 +13,6 @@ struct GeneralPane: View {
 
     var body: some View {
         Form {
-            Section(SettingsText.appearance) {
-                VStack(spacing: 8) {
-                    HStack(spacing: 20) {
-                        ForEach([AppearanceMode.light, .dark, .auto], id: \.self) { mode in
-                            AppearanceTile(mode: mode, isSelected: settings.appearanceMode == mode) {
-                                settings.appearanceMode = mode
-                            }
-                        }
-                    }
-                    .settingsHighlight("appearance", navigation: navigation)
-                    Text("Auto matches your Mac's appearance.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
-            }
             Section("App") {
                 Toggle(SettingsText.launchAtLogin, isOn: $launchAtLogin)
                     .settingsHighlight("launch-at-login", navigation: navigation)
@@ -66,6 +49,23 @@ struct GeneralPane: View {
                     Text("Countdown only").tag(MenuBarDisplayMode.countdown)
                 }
                 .settingsHighlight("menu-bar-text", navigation: navigation)
+            }
+            Section(SettingsText.appearance) {
+                VStack(spacing: 8) {
+                    HStack(spacing: 20) {
+                        ForEach([AppearanceMode.light, .dark, .auto], id: \.self) { mode in
+                            AppearanceTile(mode: mode, isSelected: settings.appearanceMode == mode) {
+                                settings.appearanceMode = mode
+                            }
+                        }
+                    }
+                    .settingsHighlight("appearance", navigation: navigation)
+                    Text("Auto matches your Mac's appearance.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
             }
         }
         .formStyle(.grouped)

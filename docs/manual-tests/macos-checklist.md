@@ -13,6 +13,10 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Declined, solo, all-day and non-opted-in events never take over.
 - [ ] Menu bar modes: icon only, next meeting (long titles truncated), countdown only.
 - [ ] Launch at login toggle works.
-- [ ] Settings sidebar order is General, Calendars, Tug Rules; General has "Appearance", "App" and "Menu bar" sections; "About TimeTug…" opens a sheet with logo, version and Done.
+- [ ] Settings sidebar order is General, Calendars, Tug Rules; General has "App", "Menu bar" and "Appearance" (last) sections; "About TimeTug…" opens a sheet with logo, version and Done.
 - [ ] Appearance Auto/Light/Dark changes Settings, the popover and the About sheet; Auto follows the OS setting (the takeover overlay stays dark).
 - [ ] About sheet is readable in both Light and Dark appearance (logo lockup, tagline pill, version, Done).
+- [ ] Calendars pane lists calendars grouped by account (section header per account, "Other" when unknown) under pinned "Calendar / Tug / Show in list" column headers; checkboxes line up under the headers, also after scrolling.
+- [ ] With VoiceOver on, each calendar checkbox is announced with the calendar name ("Tug for <name>", "Show <name> in list") and Space toggles it; checkboxes are reachable with Tab/keyboard navigation.
+- [ ] Tug Rules "Lead time" is a menu picker ("At start", "1 minute", ... "30 minutes"); a previously saved odd value (e.g. 7 minutes) still appears and is selected.
+- [ ] Turning on "Require a video link" shows the orange "Meetings without a link won't tug you." note; turning it off hides it.
