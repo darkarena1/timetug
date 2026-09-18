@@ -7,6 +7,12 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Takeover fires at lead time on every connected display; lead time 0 fires at start.
 - [ ] On a real takeover, Join opens the link and closes the overlay; Return joins; Esc dismisses; Snooze re-fires later. (Settings' "Test tug" Join only closes the overlay; it never opens the sample URL.)
 - [ ] Overlay covers a full-screen app and follows display plug/unplug.
+- [ ] Takeover backdrop is a blurred navy layer: windows and Calendar content behind it are not readable. With Reduce Transparency on it is a solid navy.
+- [ ] Primary display shows the puppy hero, a big countdown (soft blue, turning orange with a gentle pulse under a minute), "Starting now" (orange) and "Started N min ago" (red-orange); details line shows time range, calendar and people count.
+- [ ] Join, the Snooze menu (1, 5, 10 minutes) and Dismiss all work; Return joins (dismisses when there is no link), Esc dismisses, 1/5/0 snooze 1/5/10 minutes, and the hint line lists only what applies.
+- [ ] Other displays mirror the countdown and title with the app icon and "Dismiss on your main display", and no buttons.
+- [ ] VoiceOver announces the meeting when the takeover appears and focus starts on Join (Dismiss without a link).
+- [ ] Reduce Motion: no fade-in and no countdown pulse.
 - [ ] Sleep the Mac through a meeting start; on wake with the meeting in progress the overlay appears with "Started N ago".
 - [ ] Changing the system clock/timezone recomputes the schedule.
 - [ ] A meeting at 12:05 AM with a 10 min lead fires at 11:55 PM and does not repeat after midnight.

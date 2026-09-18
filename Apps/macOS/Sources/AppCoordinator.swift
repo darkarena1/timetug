@@ -180,7 +180,8 @@ final class AppCoordinator {
 
     private func present(_ request: TakeoverRequest) {
         let event = request.event
-        overlay.show(request, actions: .init(
+        let calendarTitle = snapshot.calendars.first { $0.key == event.calendarKey }?.title
+        overlay.show(request, calendarTitle: calendarTitle, actions: .init(
             join: { [weak self] in
                 if let url = request.joinURL { NSWorkspace.shared.open(url) }
                 self?.closeOverlay()
@@ -208,7 +209,7 @@ final class AppCoordinator {
             start: now.addingTimeInterval(settings.takeover.leadTime),
             end: now.addingTimeInterval(settings.takeover.leadTime + 1800),
             otherAttendeeCount: 1, conferenceURL: URL(string: "https://meet.google.com/aaa-bbbb-ccc"))
-        overlay.show(TakeoverRequest.make(for: sample, now: now), actions: .init(
+        overlay.show(TakeoverRequest.make(for: sample, now: now), calendarTitle: "Sample calendar", actions: .init(
             join: { [weak self] in self?.overlay.hide() },
             snooze: { [weak self] _ in self?.overlay.hide() },
             dismiss: { [weak self] in self?.overlay.hide() }
