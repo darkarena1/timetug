@@ -10,6 +10,7 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 | 3 TakeoverPolicy | complete, review clean | a92ec5e..749d9c9 |
 | 4 Ledger, Scheduler, TakeoverRequest | complete (DeepSeek Critical was a false positive, verified: no typo, 41/41 pass) | 7413e39..e3bf990 |
 | 5 CalendarStore | complete (+ dedupe-merge fix so opt-in/links survive; re-review Importants were about the controller-ordered fix, adjudicated not defects) | 461ca02..cb44e8c |
+| 6 DayAgenda | complete, review clean (Core package done: 63 tests) | 3e61801..f656bd1 |
 
 ## Notes
 - 2026-09-18: brand artwork added by the user (`artwork/`, `Apps/macOS/Resources/Assets.xcassets`, `docs/ARTWORK_USAGE.md`); plan Task 13 covers wiring it in plus README. `artwork/Source` boards and menu bar PNG exports were intentionally not committed (still in ~/Downloads/TimeTugAssets).
@@ -19,3 +20,5 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 - Task 2 leftover minors: Google redirect unwrap ignores bare google.com and /url/; regex rebuilt per call (perf).
 - Reviewer calibration: DeepSeek flash hallucinated a test typo in Task 4 (verified false). Verify any Critical/Important finding against the repo before acting.
 - Design change in Task 5: CalendarEvent.additionalCalendarKeys/allCalendarKeys; TakeoverPolicy opt-in passes if ANY calendar of a merged meeting is opted in; DayAgenda (Task 6) hides a merged meeting only if all its calendars are hidden (plan already updated).
+- Task 5 minors: sourceNames uniqueKeysWithValues traps on duplicate source ids; dedupe key uses raw doubles. Task 6 minors: force-unwrapped day arithmetic in DayAgenda.make.
+- Manual/visual verification steps (Tasks 8-11, checklist in docs/manual-tests) cannot be done by subagents: they build and run unit tests only; the user must do the manual checks.
