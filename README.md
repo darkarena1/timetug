@@ -12,6 +12,7 @@ and takes over every screen shortly before a meeting starts, so you don't hyperf
 - Full-screen takeover on every display at a configurable lead time (0 = "starting now"), with Join, Snooze and Dismiss
 - Detects Zoom, Meet, Teams, Webex and similar links for a one-click Join
 - Per-calendar Tug opt-in; never takes over for all-day events; skips declined and solo events by default
+- Menu bar icon turns color when a meeting is about to tug you
 - Menu bar: icon only (default), next meeting, or countdown
 - Light, Dark or Auto appearance
 

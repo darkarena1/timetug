@@ -99,6 +99,8 @@ final class AppCoordinator {
                                     now: now, calendar: .current)
         if agenda != model.agenda { model.agenda = agenda }
         statusItem?.setTitle(TimeFormatting.statusTitle(mode: settings.menuBarMode, next: agenda.next, now: now))
+        statusItem?.setIconState(MenuBarIconState.resolve(
+            events: snapshot.events, settings: settings.takeover, ledger: ledger, now: now))
     }
 
     /// Timers alone are not trusted: recompute after wake, clock, timezone and day changes.
@@ -133,6 +135,7 @@ final class AppCoordinator {
     private func closeOverlay() {
         overlay.hide()
         rearm()
+        updateUI()
     }
 
     /// Settings' "Test tug" button: a sample event that never touches the ledger.

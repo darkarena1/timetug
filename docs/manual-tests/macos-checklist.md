@@ -21,3 +21,4 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] With VoiceOver on, each calendar checkbox is announced with the calendar name ("Tug for <name>", "Show <name> in list") and Space toggles it; checkboxes are reachable with Tab/keyboard navigation.
 - [ ] Tug Rules "Lead time" is a menu picker ("At start", "1 minute", ... "30 minutes"); a previously saved odd value (e.g. 7 minutes) still appears and is selected.
 - [ ] Turning on "Require a video link" shows the orange "Meetings without a link won't tug you." note; turning it off hides it.
+- [ ] Menu bar icon turns to the color puppy within 10 minutes of a tug-worthy meeting and returns to the template icon after Join/Dismiss or when the meeting ends (works in light and dark menu bars).

@@ -8,24 +8,38 @@ final class StatusItemController: NSObject {
     private let popover = NSPopover()
     private let onOpenSettings: () -> Void
     private let onOpenAbout: () -> Void
+    private let idleImage: NSImage?
+    private let soonImage: NSImage?
+    private var iconState = MenuBarIconState.idle
 
     init(popoverContent: NSViewController, onOpenSettings: @escaping () -> Void, onOpenAbout: @escaping () -> Void) {
         self.onOpenSettings = onOpenSettings
         self.onOpenAbout = onOpenAbout
+        let fallback = NSImage(systemSymbolName: "alarm", accessibilityDescription: "TimeTug")
+        idleImage = NSImage(named: "MenuBarTemplate") ?? fallback
+        idleImage?.isTemplate = true            // the OS tints it for light/dark menu bars
+        idleImage?.accessibilityDescription = "TimeTug"
+        soonImage = NSImage(named: "MenuBarColor") ?? idleImage
+        if soonImage !== idleImage { soonImage?.isTemplate = false }
+        soonImage?.accessibilityDescription = "TimeTug: meeting soon"
         super.init()
         popover.behavior = .transient
         popover.contentViewController = popoverContent
         if let button = item.button {
-            let image = NSImage(named: "MenuBarTemplate")
-                ?? NSImage(systemSymbolName: "alarm", accessibilityDescription: "TimeTug")
-            image?.isTemplate = true            // the OS tints it for light/dark menu bars
-            image?.accessibilityDescription = "TimeTug"
-            button.image = image
+            button.image = idleImage
             button.imagePosition = .imageLeading
             button.target = self
             button.action = #selector(clicked)
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
+    }
+
+    /// Swaps between the template icon and the color icon; a no-op when the state is unchanged.
+    func setIconState(_ state: MenuBarIconState) {
+        guard state != iconState, let button = item.button else { return }
+        iconState = state
+        button.image = state == .soon ? soonImage : idleImage
+        button.toolTip = state == .soon ? "Meeting soon" : nil
     }
 
     /// nil shows the icon only.
