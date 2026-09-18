@@ -17,7 +17,7 @@ targets:
   TimeTug:
     type: application
     platform: macOS
-    sources: [Sources]
+    sources: [Sources, Resources]
     dependencies:
       - package: TimeTugCore
         product: TimeTugCore
@@ -36,6 +36,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.timetug.app
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   TimeTugTests:
     type: bundle.unit-test
     platform: macOS

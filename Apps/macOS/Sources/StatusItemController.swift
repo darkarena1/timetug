@@ -14,7 +14,11 @@ final class StatusItemController: NSObject {
         popover.behavior = .transient
         popover.contentViewController = popoverContent
         if let button = item.button {
-            button.image = NSImage(systemSymbolName: "alarm", accessibilityDescription: "TimeTug")
+            let image = NSImage(named: "MenuBarTemplate")
+                ?? NSImage(systemSymbolName: "alarm", accessibilityDescription: "TimeTug")
+            image?.isTemplate = true            // the OS tints it for light/dark menu bars
+            image?.accessibilityDescription = "TimeTug"
+            button.image = image
             button.imagePosition = .imageLeading
             button.target = self
             button.action = #selector(clicked)

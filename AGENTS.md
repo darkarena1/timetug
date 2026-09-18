@@ -7,6 +7,7 @@ TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
 - `Packages/TimeTugCore`: pure Swift, platform-neutral logic. NO UI or Apple-only imports.
 - `Packages/EventKitSource`: Apple Calendar adapter (macOS only).
 - `Apps/macOS`: AppKit/SwiftUI shell. Generated Xcode project (XcodeGen).
+- `artwork/`: brand images (see `docs/ARTWORK_USAGE.md`); the app's asset catalog is `Apps/macOS/Resources/Assets.xcassets`. Do not use the app icon for the menu bar; use the `MenuBarTemplate` template image.
 
 ## Rules
 - Core answers "what and when". The app answers "how it looks and where it lives". If code needs a window, tray or pixel, it belongs in the app.
