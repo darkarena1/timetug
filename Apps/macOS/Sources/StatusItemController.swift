@@ -38,6 +38,12 @@ final class StatusItemController: NSObject {
         }
     }
 
+    /// Opens a meeting link from the popup and closes the popup.
+    func join(_ url: URL) {
+        NSWorkspace.shared.open(url)
+        popover.performClose(nil)
+    }
+
     /// Swaps between the template icon and the color icon; a no-op when the state is unchanged.
     func setIconState(_ state: MenuBarIconState) {
         guard state != iconState, let button = item.button else { return }

@@ -34,8 +34,12 @@ final class AppCoordinator {
     func start() async {
         NSApp.appearance = settings.appearanceMode.nsAppearance
         statusItem = StatusItemController(
-            popoverContent: NSHostingController(
-                rootView: DropdownView(model: model, onOpenSettings: { [weak self] in self?.openSettings() })
+            popoverContent: Self.makePopoverController(
+                DropdownView(
+                    model: model,
+                    onOpenSettings: { [weak self] in self?.openSettings() },
+                    onJoin: { [weak self] url in self?.statusItem?.join(url) }
+                )
             ),
             onOpenSettings: { [weak self] in self?.openSettings() },
             onOpenAbout: { [weak self] in self?.aboutWindow.show(on: self?.statusItem?.clickedScreen) }
@@ -62,6 +66,13 @@ final class AppCoordinator {
         if settings.takeover.takeoverCalendarKeys.isEmpty { openSettings(pane: .calendars) }
 
         for await _ in eventKit.changes() { await refresh() }
+    }
+
+    /// Hosting controller that reports its content size so the popover is exactly as tall as the popup.
+    private static func makePopoverController(_ view: DropdownView) -> NSViewController {
+        let controller = NSHostingController(rootView: view)
+        controller.sizingOptions = [.preferredContentSize]
+        return controller
     }
 
     func refresh() async {
@@ -98,6 +109,7 @@ final class AppCoordinator {
         let agenda = DayAgenda.make(events: snapshot.events, settings: settings.takeover,
                                     now: now, calendar: .current)
         if agenda != model.agenda { model.agenda = agenda }
+        if model.leadTime != settings.takeover.leadTime { model.leadTime = settings.takeover.leadTime }
         statusItem?.setTitle(TimeFormatting.statusTitle(mode: settings.menuBarMode, next: agenda.next, now: now))
         statusItem?.setIconState(MenuBarIconState.resolve(
             events: snapshot.events, settings: settings.takeover, ledger: ledger, now: now))

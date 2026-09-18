@@ -8,4 +8,6 @@ final class AppModel: ObservableObject {
     @Published var calendars: [CalendarInfo] = []
     @Published var statuses: [String: SourceStatus] = [:]
     @Published var sourceNames: [String: String] = [:]
+    /// Takeover lead time, shown in the popup footer.
+    @Published var leadTime: TimeInterval = 60
 }

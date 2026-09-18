@@ -1,0 +1,196 @@
+import AppKit
+import Foundation
+import SwiftUI
+import TimeTugCore
+import XCTest
+@testable import TimeTug
+
+final class PopupLogicTests: XCTestCase {
+    private let utc = TimeZone(identifier: "UTC")!
+    private let posix = Locale(identifier: "en_US_POSIX")
+    private var cal: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = utc; return c }
+
+    /// 2026-09-18 at the given UTC hour/minute.
+    private func at(_ h: Int, _ m: Int = 0) -> Date {
+        cal.date(from: DateComponents(year: 2026, month: 9, day: 18, hour: h, minute: m))!
+    }
+
+    private func event(_ id: String, _ title: String, _ start: Date, _ end: Date, allDay: Bool = false,
+                       calendarID: String = "work", conference: String? = nil) -> CalendarEvent {
+        CalendarEvent(sourceEventID: id, sourceID: "src", calendarID: calendarID, title: title,
+                      start: start, end: end, isAllDay: allDay,
+                      conferenceURL: conference.flatMap(URL.init(string:)))
+    }
+
+    private let calendars = [
+        CalendarInfo(sourceID: "src", calendarID: "work", title: "Work", colorHex: "#FF0000"),
+        CalendarInfo(sourceID: "src", calendarID: "home", title: "Personal", colorHex: "#00FF00"),
+    ]
+
+    private func agenda(_ events: [CalendarEvent], now: Date) -> DayAgenda {
+        var s = TakeoverSettings()
+        s.skipAllDayEvents = false
+        return DayAgenda.make(events: events, settings: s, now: now, calendar: cal)
+    }
+
+    private func rows(_ events: [CalendarEvent], now: Date, calendars: [CalendarInfo]? = nil) -> [PopupRowModel] {
+        PopupRowModel.rows(agenda: agenda(events, now: now), calendars: calendars ?? self.calendars,
+                           now: now, locale: posix, timeZone: utc)
+    }
+
+    // MARK: rows
+
+    func testKindsAndMetaTexts() {
+        let now = at(15, 20)
+        let evs = [
+            event("a", "Holiday", at(0), at(23, 59), allDay: true, calendarID: "home"),
+            event("b", "Standup", at(9), at(9, 30)),
+            event("c", "Design review", at(15), at(16), conference: "https://zoom.us/j/1"),
+            event("d", "Dance Party", at(19, 15), at(20), calendarID: "home", conference: "https://zoom.us/j/2"),
+            event("e", "Wind down", at(21), at(22, 30), calendarID: "home", conference: "https://zoom.us/j/3"),
+        ]
+        let r = rows(evs, now: now)
+        XCTAssertEqual(r.map(\.kind), [.allDay, .past, .current, .next, .upcoming])
+        XCTAssertEqual(r[0].timeText, "All day")
+        XCTAssertEqual(r[0].metaText, "All day · Personal")
+        XCTAssertEqual(r[1].timeText, "9:00 AM")
+        XCTAssertEqual(r[1].metaText, "30 min · done")
+        XCTAssertEqual(r[2].metaText, "Ends 4:00 PM")
+        XCTAssertEqual(r[3].timeText, "7:15 PM")
+        XCTAssertEqual(r[3].metaText, "7:15 – 8:00 PM · Personal")
+        XCTAssertEqual(r[4].metaText, "9:00 – 10:30 PM · Personal")
+        XCTAssertEqual(r[2].colorHex, "#FF0000")
+        XCTAssertEqual(r[3].colorHex, "#00FF00")
+        XCTAssertEqual(r[3].start, at(19, 15))
+        XCTAssertEqual(r[3].end, at(20))
+    }
+
+    func testRangeAcrossNoon() {
+        let r = rows([event("a", "Lunch", at(11, 30), at(12, 15))], now: at(8))
+        XCTAssertEqual(r[0].metaText, "11:30 AM – 12:15 PM · Work")
+    }
+
+    func testJoinURLOnlyForCurrentAndNext() {
+        let now = at(15, 20)
+        let r = rows([
+            event("b", "Past", at(9), at(10), conference: "https://zoom.us/j/0"),
+            event("c", "Current", at(15), at(16), conference: "https://zoom.us/j/1"),
+            event("d", "Next", at(19), at(20), conference: "https://zoom.us/j/2"),
+            event("e", "Later", at(21), at(22), conference: "https://zoom.us/j/3"),
+            event("f", "NoLink", at(15), at(16)),
+        ], now: now)
+        let byTitle = Dictionary(uniqueKeysWithValues: r.map { ($0.title, $0) })
+        XCTAssertNil(byTitle["Past"]!.joinURL)
+        XCTAssertEqual(byTitle["Current"]!.joinURL, URL(string: "https://zoom.us/j/1"))
+        XCTAssertEqual(byTitle["Next"]!.joinURL, URL(string: "https://zoom.us/j/2"))
+        XCTAssertNil(byTitle["Later"]!.joinURL)
+        XCTAssertNil(byTitle["NoLink"]!.joinURL)
+    }
+
+    func testMissingCalendarHasNilColorAndBareMeta() {
+        let r = rows([event("a", "X", at(19), at(20), calendarID: "gone")], now: at(8))
+        XCTAssertNil(r[0].colorHex)
+        XCTAssertEqual(r[0].kind, .next)
+        XCTAssertEqual(r[0].metaText, "7:00 – 8:00 PM")
+    }
+
+    func testDurationFormatting() {
+        let now = at(23, 0)
+        let r = rows([
+            event("a", "A", at(1), at(2)),
+            event("b", "B", at(3), at(4, 30)),
+            event("c", "C", at(5), at(5, 45)),
+        ], now: now)
+        XCTAssertEqual(r.map(\.metaText), ["1 h · done", "1 h 30 min · done", "45 min · done"])
+    }
+
+    func testEmptyAgenda() {
+        XCTAssertEqual(rows([], now: at(8)), [])
+        XCTAssertEqual(PopupRowModel.meetingsLeft(agenda: .empty), 0)
+    }
+
+    func testMeetingsLeftCountsCurrentAndUpcomingTimedOnly() {
+        let now = at(15, 20)
+        let a = agenda([
+            event("a", "Holiday", at(0), at(23, 59), allDay: true),
+            event("b", "Past", at(9), at(10)),
+            event("c", "Current", at(15), at(16)),
+            event("d", "Next", at(19), at(20)),
+            event("e", "Later", at(21), at(22)),
+        ], now: now)
+        XCTAssertEqual(PopupRowModel.meetingsLeft(agenda: a), 3)
+    }
+
+    // MARK: text
+
+    func testSummaryVariants() {
+        let now = at(10)
+        func s(_ left: Int, _ total: Int) -> String {
+            PopupText.summary(now: now, meetingsLeft: left, totalTimed: total, locale: posix, timeZone: utc)
+        }
+        XCTAssertEqual(s(3, 4), "Sep 18 · 3 meetings left")
+        XCTAssertEqual(s(1, 4), "Sep 18 · 1 meeting left")
+        XCTAssertEqual(s(0, 4), "Sep 18 · No meetings left")
+        XCTAssertEqual(s(0, 0), "Sep 18 · No meetings today")
+    }
+
+    func testWeekday() {
+        XCTAssertEqual(PopupText.weekday(now: at(10), locale: posix, timeZone: utc), "Friday")
+    }
+
+    func testCountdown() {
+        XCTAssertEqual(PopupText.countdown(until: at(19, 15), now: at(15, 35)), "in 3h 40m")
+        XCTAssertEqual(PopupText.countdown(until: at(15, 40), now: at(15, 35)), "in 5m")
+    }
+
+    func testTugFooter() {
+        XCTAssertEqual(PopupText.tugFooter(leadTime: 0), "Tugs you at start")
+        XCTAssertEqual(PopupText.tugFooter(leadTime: 60), "Tugs you 1 min before")
+        XCTAssertEqual(PopupText.tugFooter(leadTime: 300), "Tugs you 5 min before")
+    }
+
+    func testProgress() {
+        XCTAssertEqual(PopupText.progress(start: at(10), end: at(11), now: at(9)), 0)
+        XCTAssertEqual(PopupText.progress(start: at(10), end: at(11), now: at(10, 30)), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(PopupText.progress(start: at(10), end: at(11), now: at(12)), 1)
+        XCTAssertEqual(PopupText.progress(start: at(11), end: at(11), now: at(11)), 0)
+        XCTAssertEqual(PopupText.progress(start: at(11), end: at(10), now: at(12)), 0)
+    }
+
+    func testSpokenDuration() {
+        XCTAssertEqual(PopupText.spokenDuration(13200), "3 hours 40 minutes")
+        XCTAssertEqual(PopupText.spokenDuration(3600), "1 hour")
+        XCTAssertEqual(PopupText.spokenDuration(60), "1 minute")
+        XCTAssertEqual(PopupText.spokenDuration(30), "less than a minute")
+    }
+
+    // MARK: JoinLabel and Color(hex:)
+
+    func testJoinLabel() {
+        func t(_ s: String) -> String { JoinLabel.text(for: URL(string: s)!) }
+        XCTAssertEqual(t("https://us02web.zoom.us/j/1"), "Join Zoom")
+        XCTAssertEqual(t("https://zoom.com/j/1"), "Join Zoom")
+        XCTAssertEqual(t("zoommtg://zoom.us/join?confno=1"), "Join Zoom")
+        XCTAssertEqual(t("https://meet.google.com/aaa-bbbb-ccc"), "Join Google Meet")
+        XCTAssertEqual(t("https://teams.microsoft.com/l/meetup-join/1"), "Join Teams")
+        XCTAssertEqual(t("https://teams.live.com/meet/1"), "Join Teams")
+        XCTAssertEqual(t("https://acme.webex.com/meet/x"), "Join Webex")
+        XCTAssertEqual(t("https://app.slack.com/huddle/T1/C1"), "Join Slack huddle")
+        XCTAssertEqual(t("https://example.com/room"), "Join meeting")
+        XCTAssertEqual(t("https://notzoom.us.evil.example/x"), "Join meeting")
+    }
+
+    func testColorHex() throws {
+        let c = try XCTUnwrap(Color(hex: "#FF8000"))
+        let ns = try XCTUnwrap(NSColor(c).usingColorSpace(.sRGB))
+        XCTAssertEqual(ns.redComponent, 1, accuracy: 0.01)
+        XCTAssertEqual(ns.greenComponent, 128.0 / 255, accuracy: 0.01)
+        XCTAssertEqual(ns.blueComponent, 0, accuracy: 0.01)
+        XCTAssertNotNil(Color(hex: "#00ff00"))
+        XCTAssertNil(Color(hex: nil))
+        XCTAssertNil(Color(hex: "#FFF"))
+        XCTAssertNil(Color(hex: "GGGGGG"))
+        XCTAssertNil(Color(hex: ""))
+        XCTAssertNil(Color(hex: "#FF80001"))
+    }
+}
