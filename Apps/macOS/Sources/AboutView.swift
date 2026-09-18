@@ -13,7 +13,7 @@ struct AboutView: View {
         VStack(spacing: 14) {
             Image("AboutHero")
                 .resizable()
-                .aspectRatio(1.84, contentMode: .fill)
+                .aspectRatio(928.0 / 445.0, contentMode: .fill)
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
