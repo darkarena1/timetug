@@ -15,6 +15,7 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 | 8 macOS shell + coordinator | complete (build + 8 app tests verified by controller; GUI checks pending user) | 4a3bf7a..a920ac8 |
 | 9 Dropdown popover | complete, review clean (GUI check pending user) | c017000..f484b0a |
 | 10 Takeover overlay | complete (build + 8 tests verified by controller; GUI checks pending user; DeepSeek Important on fireTest Join adjudicated not a defect, plan wording fixed) | cb9c4c5..d292e70 |
+| 11 Settings window | complete (build + 8 tests verified; GUI checks pending user) | 0284da9..c47a1cd |
 
 ## Notes
 - 2026-09-18: brand artwork added by the user (`artwork/`, `Apps/macOS/Resources/Assets.xcassets`, `docs/ARTWORK_USAGE.md`); plan Task 13 covers wiring it in plus README. `artwork/Source` boards and menu bar PNG exports were intentionally not committed (still in ~/Downloads/TimeTugAssets).
@@ -27,3 +28,4 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 - Task 5 minors: sourceNames uniqueKeysWithValues traps on duplicate source ids; dedupe key uses raw doubles. Task 6 minors: force-unwrapped day arithmetic in DayAgenda.make.
 - Manual/visual verification steps (Tasks 8-11, checklist in docs/manual-tests) cannot be done by subagents: they build and run unit tests only; the user must do the manual checks.
 - Task 8: plan test inputs 300s->299s (compact(300) is "5m"); fireTest() is added in Task 10 not Task 8; DeepSeek flagged both, adjudicated not defects.
+- OPEN QUESTION FOR USER (plan-mandated finding, Task 11): SettingsView launch-at-login toggle uses `try?` on SMAppService register/unregister, so failures are swallowed and the toggle can show a state that is not real. Suggested fix: on failure, revert the toggle to `SMAppService.mainApp.status == .enabled` and show a short message. Needs user decision (plan text mandates the current code).
