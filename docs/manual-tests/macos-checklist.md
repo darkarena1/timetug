@@ -33,3 +33,9 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] With two displays, Settings/About open on the display whose menu bar icon you clicked.
 - [ ] Settings > General > Shortcut: record a shortcut; from another app press it: the popup appears under the menu bar icon and takes keyboard focus. Press it again: the popup closes.
 - [ ] Clear the shortcut with the recorder's ✕: pressing the old combination no longer does anything. A system-reserved combination shows the library's warning.
+- [ ] Dismiss a takeover, then quit and relaunch the app during the meeting: no second takeover for it.
+- [ ] Launch the app 10 minutes into a meeting that qualifies: no takeover for it.
+- [ ] Delete or decline a meeting right before its takeover is due: no takeover appears.
+- [ ] Edit a meeting's title after its takeover: no second takeover. Move its time: a new takeover appears for the new time.
+- [ ] Two meetings starting together: the second takeover appears after you dismiss the first.
+- [ ] Ledger file does not grow: after several days of use `~/Library/Application Support/TimeTug/takeover-ledger.json` only contains recent meetings.

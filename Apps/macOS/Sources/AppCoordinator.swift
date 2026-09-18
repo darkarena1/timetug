@@ -9,6 +9,8 @@ import TimeTugCore
 @MainActor
 final class AppCoordinator {
     private static let periodicRefresh: TimeInterval = 300
+    /// Meetings that started longer than this before launch are treated as already handled.
+    private static let launchGrace: TimeInterval = 120
 
     let settings = SettingsStore()
     let model = AppModel()
@@ -17,7 +19,10 @@ final class AppCoordinator {
     private let eventKit = EventKitSource()
     private let store: CalendarStore
     private var snapshot = CalendarSnapshot.empty
-    private var ledger = TakeoverLedger()
+    private let ledgerStore = LedgerStore()
+    private var ledger: TakeoverLedger
+    /// True until the first successful refresh after launch has acknowledged in-progress meetings.
+    private var needsLaunchAcknowledge = true
     private var fireTimer: Timer?
     private var tickTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
@@ -30,6 +35,11 @@ final class AppCoordinator {
 
     init() {
         store = CalendarStore(sources: [eventKit])
+        var loaded = ledgerStore.load()
+        loaded.prune(now: Date())
+        ledger = loaded
+        TakeoverLog.ledgerLoaded(count: loaded.keyCount)
+        persistLedger()
     }
 
     func start() async {
@@ -88,7 +98,14 @@ final class AppCoordinator {
         model.calendars = snapshot.calendars
         model.statuses = snapshot.statuses
         model.sourceNames = snapshot.sourceNames
-        ledger.prune(now: Date())
+        if ledger.prune(now: Date()) { persistLedger() }
+        if needsLaunchAcknowledge {
+            // Meetings already underway at launch never take over (late fire is for wake-from-sleep).
+            needsLaunchAcknowledge = false
+            let count = ledger.acknowledgeInProgress(events: snapshot.events, now: Date(), grace: Self.launchGrace)
+            TakeoverLog.acknowledgedOnLaunch(count: count)
+            if count > 0 { persistLedger() }
+        }
         rearm()
         updateUI()
     }
@@ -107,9 +124,33 @@ final class AppCoordinator {
         fireTimer = timer
     }
 
+    private func persistLedger() {
+        ledgerStore.save(ledger, now: Date())
+    }
+
+    /// Always checks the ledger and the current calendar snapshot BEFORE showing anything: the
+    /// event captured when the timer was armed may be stale.
     private func fire(_ event: CalendarEvent) {
-        ledger.markFired(event)
-        present(TakeoverRequest.make(for: event, now: Date()))
+        let now = Date()
+        let decision = TakeoverGuard.evaluate(
+            event: event, currentEvents: snapshot.events, settings: settings.takeover,
+            ledger: ledger, now: now, overlayVisible: overlay.isVisible)
+        switch decision {
+        case .suppress(.overlayVisible):
+            // Stays pending, not marked fired; closeOverlay() re-arms.
+            TakeoverLog.suppressed(.overlayVisible, event: event)
+        case .suppress(let reason):
+            TakeoverLog.suppressed(reason, event: event)
+            rearm()
+        case .present:
+            let current = snapshot.events.first { $0.id == event.id || $0.contentKey == event.contentKey } ?? event
+            let reason = ledger.isSnoozed(current) ? "snooze expired"
+                : now >= current.start.addingTimeInterval(Self.launchGrace) ? "late after wake" : "lead time"
+            ledger.markFired(current, now: now)
+            persistLedger()
+            TakeoverLog.presented(reason: reason, event: current)
+            present(TakeoverRequest.make(for: current, now: now))
+        }
     }
 
     func updateUI() {
@@ -146,6 +187,7 @@ final class AppCoordinator {
             },
             snooze: { [weak self] seconds in
                 self?.ledger.snooze(event, for: seconds, now: Date())
+                self?.persistLedger()
                 self?.closeOverlay()
             },
             dismiss: { [weak self] in self?.closeOverlay() }

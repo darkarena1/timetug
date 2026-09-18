@@ -35,7 +35,7 @@ final class MenuBarIconStateTests: XCTestCase {
     func testAcknowledgedIsIdle() {
         let e = event(startingIn: -300)
         var ledger = TakeoverLedger()
-        ledger.markFired(e)
+        ledger.markFired(e, now: Date(timeIntervalSince1970: 1_799_999_000))
         XCTAssertEqual(resolve([e], ledger: ledger), .idle)
     }
 

@@ -70,7 +70,7 @@ Contents:
 
 - Recompute the schedule on wake, system clock change and timezone change. Timers alone are not trusted.
 - **Late fire:** if the lead time has passed but the meeting has not ended, show the takeover immediately, marked already started.
-- **No repeats:** remember fired events by id + start. Edited/rescheduled events count as new. At midnight, prune the fired memory by event end time (not wholesale) so a 11:55 PM takeover does not repeat after rollover.
+- **No repeats:** remember fired events in a persisted ledger (survives relaunch), keyed by id + start and by content (title + start + end) so a changed source id is still the same meeting. A fire-time guard re-checks the current snapshot and the ledger before showing, and a second takeover waits while one is visible. Meetings already underway at launch (started more than 120 s earlier) are acknowledged, not fired. Edited-time/rescheduled events count as new. Entries are pruned by event end (not wholesale, so a 11:55 PM takeover does not repeat after rollover), after 7 days, and beyond 2000 entries. See ADR 0006.
 - **Snooze:** re-arms the same event; capped at the meeting's end.
 - **Source failure isolation:** one failing source does not affect others. Takeovers fire from last-known events even if a refresh just failed. Source problems are visible in the dropdown and settings, never silent.
 
