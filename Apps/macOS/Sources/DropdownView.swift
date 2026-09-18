@@ -239,12 +239,13 @@ private struct EventCard: View {
                             .padding(.top, 4)
                     }
                 }
-                if row.kind == .current, let url = row.joinURL {
+                if row.kind == .current || isNext, let url = row.joinURL {
+                    // Same compact button for the meeting in progress and the next one; the provider
+                    // name ("Join Zoom") is in the tooltip and the VoiceOver label.
                     JoinButton(title: "Join", url: url, eventTitle: row.title, fullWidth: false, palette: palette, onJoin: onJoin)
+                        .help(JoinLabel.text(for: url))
+                        .accessibilityHint(JoinLabel.text(for: url))
                 }
-            }
-            if isNext, let url = row.joinURL {
-                JoinButton(title: JoinLabel.text(for: url), url: url, eventTitle: row.title, fullWidth: true, palette: palette, onJoin: onJoin)
             }
         }
         .padding(12)
