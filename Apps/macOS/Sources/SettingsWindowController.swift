@@ -27,7 +27,7 @@ final class SettingsWindowController {
         // Persist size/position; center only when there is no saved frame yet.
         // (`setFrameAutosaveName` reports whether the name could be set, not whether a frame
         // was restored, so restore explicitly first.)
-        let name = "TimeTugSettings"
+        let name = "TimeTugSettings.v2"
         if !created.setFrameUsingName(name) { created.center() }
         created.setFrameAutosaveName(name)
         return created

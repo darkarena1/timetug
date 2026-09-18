@@ -53,7 +53,7 @@ final class AppCoordinator {
             Task { @MainActor in await self?.refresh() }
         }
         await refresh()
-        if settings.takeover.takeoverCalendarKeys.isEmpty { openSettings(tab: .calendars) }
+        if settings.takeover.takeoverCalendarKeys.isEmpty { openSettings(pane: .calendars) }
 
         for await _ in eventKit.changes() { await refresh() }
     }
@@ -144,8 +144,8 @@ final class AppCoordinator {
         ))
     }
 
-    func openSettings(tab: SettingsTab? = nil) {
-        if let tab { navigation.tab = tab }
+    func openSettings(pane: SettingsPane? = nil) {
+        if let pane { navigation.pane = pane }
         settingsWindow.show()
     }
 }
