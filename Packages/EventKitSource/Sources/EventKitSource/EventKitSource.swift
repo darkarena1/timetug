@@ -19,7 +19,10 @@ public final class EventKitSource: CalendarSource, @unchecked Sendable {
     public func calendars() async throws -> [CalendarInfo] {
         try requireAccess()
         return store.calendars(for: .event).map {
-            CalendarInfo(sourceID: id, calendarID: $0.calendarIdentifier, title: $0.title)
+            let account = $0.source?.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            return CalendarInfo(
+                sourceID: id, calendarID: $0.calendarIdentifier, title: $0.title,
+                accountName: (account?.isEmpty ?? true) ? nil : account)
         }
     }
 
