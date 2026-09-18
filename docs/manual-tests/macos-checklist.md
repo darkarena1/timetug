@@ -22,3 +22,6 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Tug Rules "Lead time" is a menu picker ("At start", "1 minute", ... "30 minutes"); a previously saved odd value (e.g. 7 minutes) still appears and is selected.
 - [ ] Turning on "Require a video link" shows the orange "Meetings without a link won't tug you." note; turning it off hides it.
 - [ ] Menu bar icon turns to the color puppy within 10 minutes of a tug-worthy meeting and returns to the template icon after Join/Dismiss or when the meeting ends (works in light and dark menu bars).
+- [ ] With Xcode (or any app) frontmost on the same display, right-click the icon: Settings and About open in front of it.
+- [ ] With Xcode full-screen on a display, invoke Settings/About from that display: they appear over it in the current Space.
+- [ ] With two displays, Settings/About open on the display whose menu bar icon you clicked.

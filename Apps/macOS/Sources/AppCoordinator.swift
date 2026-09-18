@@ -38,7 +38,7 @@ final class AppCoordinator {
                 rootView: DropdownView(model: model, onOpenSettings: { [weak self] in self?.openSettings() })
             ),
             onOpenSettings: { [weak self] in self?.openSettings() },
-            onOpenAbout: { [weak self] in self?.aboutWindow.show() }
+            onOpenAbout: { [weak self] in self?.aboutWindow.show(on: self?.statusItem?.clickedScreen) }
         )
         _ = await eventKit.requestAccess()
         observeSystemEvents()
@@ -155,6 +155,6 @@ final class AppCoordinator {
 
     func openSettings(pane: SettingsPane? = nil) {
         if let pane { navigation.pane = pane }
-        settingsWindow.show()
+        settingsWindow.show(on: statusItem?.clickedScreen)
     }
 }

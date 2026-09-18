@@ -6,14 +6,11 @@ import SwiftUI
 final class AboutWindowController {
     private var window: NSWindow?
 
-    func show() {
+    func show(on screen: NSScreen? = nil) {
         let window = window ?? makeWindow()
         self.window = window
         if window.isMiniaturized { window.deminiaturize(nil) }
-        // Menu bar-only app: activate first, then force the window in front.
-        NSApp.activate(ignoringOtherApps: true)
-        window.orderFrontRegardless()
-        window.makeKeyAndOrderFront(nil)
+        WindowPresenter.present(window, on: screen)
     }
 
     private func makeWindow() -> NSWindow {

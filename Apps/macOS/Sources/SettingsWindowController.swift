@@ -8,15 +8,11 @@ final class SettingsWindowController {
 
     init(content: @escaping () -> SettingsView) { self.content = content }
 
-    func show() {
+    func show(on screen: NSScreen? = nil) {
         let window = window ?? makeWindow()
         self.window = window
         if window.isMiniaturized { window.deminiaturize(nil) }
-        // A menu bar-only app is not active by default, so activate first, then force the
-        // window in front even if another app's windows cover it.
-        NSApp.activate(ignoringOtherApps: true)
-        window.orderFrontRegardless()
-        window.makeKeyAndOrderFront(nil)
+        WindowPresenter.present(window, on: screen)
     }
 
     private func makeWindow() -> NSWindow {

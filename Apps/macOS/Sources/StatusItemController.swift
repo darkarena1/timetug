@@ -11,6 +11,10 @@ final class StatusItemController: NSObject {
     private let idleImage: NSImage?
     private let soonImage: NSImage?
     private var iconState = MenuBarIconState.idle
+    private var lastClickedScreen: NSScreen?
+
+    /// The display of the last menu bar click (fallbacks: the item's own screen, then the main screen).
+    var clickedScreen: NSScreen? { lastClickedScreen ?? item.button?.window?.screen ?? NSScreen.main }
 
     init(popoverContent: NSViewController, onOpenSettings: @escaping () -> Void, onOpenAbout: @escaping () -> Void) {
         self.onOpenSettings = onOpenSettings
@@ -49,6 +53,8 @@ final class StatusItemController: NSObject {
     }
 
     @objc private func clicked() {
+        lastClickedScreen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }
+            ?? item.button?.window?.screen ?? NSScreen.main
         if NSApp.currentEvent?.type == .rightMouseUp {
             showMenu()
         } else if popover.isShown {
