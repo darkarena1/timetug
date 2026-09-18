@@ -1,25 +1,23 @@
 import SwiftUI
 
 enum SettingsPane: String, CaseIterable, Hashable, Identifiable {
-    case takeover, calendars, menuBar, general
+    case general, calendars, tugRules
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .takeover: "Takeover"
-        case .calendars: "Calendars"
-        case .menuBar: "Menu Bar"
         case .general: "General"
+        case .calendars: "Calendars"
+        case .tugRules: "Tug Rules"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .takeover: "bolt.fill"
-        case .calendars: "calendar"
-        case .menuBar: "menubar.rectangle"
         case .general: "gearshape"
+        case .calendars: "calendar"
+        case .tugRules: "bolt.fill"
         }
     }
 }
@@ -28,7 +26,7 @@ enum SettingsPane: String, CaseIterable, Hashable, Identifiable {
 final class SettingsNavigation: ObservableObject {
     static let highlightDuration: Duration = .milliseconds(1500)
 
-    @Published var pane: SettingsPane = .takeover
+    @Published var pane: SettingsPane = .general
     @Published var highlightedID: String?
     private var clearTask: Task<Void, Never>?
 

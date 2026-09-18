@@ -8,13 +8,13 @@ struct CalendarsPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Choose which calendars can take over your screen.")
+            Text("Choose which calendars are allowed to tug you away from your work.")
                 .font(.callout).foregroundStyle(.secondary)
             Toggle(SettingsText.skipAllDay, isOn: $settings.takeover.skipAllDayEvents)
                 .settingsHighlight("skip-all-day", navigation: navigation)
             calendarList
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            Text("Takeover needs the calendar shown in the list: turning on Takeover shows it, and hiding it turns Takeover off.")
+            Text("Tugging needs the calendar shown in the list: turning on Tug shows it, and hiding it turns Tug off.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
         .padding(16)
@@ -32,7 +32,7 @@ struct CalendarsPane: View {
                         HStack {
                             Text(calendar.title)
                             Spacer()
-                            Toggle("Takeover", isOn: takeover(calendar.key))
+                            Toggle(SettingsText.tugCheckbox, isOn: takeover(calendar.key))
                             Toggle("Show in list", isOn: shown(calendar.key))
                         }
                         .toggleStyle(.checkbox)

@@ -11,7 +11,7 @@ and takes over every screen shortly before a meeting starts, so you don't hyperf
 - Reads Apple Calendar (iCloud, Google and Exchange accounts added to macOS) via EventKit
 - Full-screen takeover on every display at a configurable lead time (0 = "starting now"), with Join, Snooze and Dismiss
 - Detects Zoom, Meet, Teams, Webex and similar links for a one-click Join
-- Per-calendar opt-in for takeovers; never takes over for all-day events; skips declined and solo events by default
+- Per-calendar Tug opt-in; never takes over for all-day events; skips declined and solo events by default
 - Menu bar: icon only (default), next meeting, or countdown
 
 ## Build

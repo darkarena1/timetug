@@ -68,4 +68,39 @@ final class SettingsSearchTests: XCTestCase {
             XCTAssertTrue(SettingsPane.allCases.contains(item.pane), item.id)
         }
     }
+
+    func testPaneOrderAndTitles() {
+        XCTAssertEqual(SettingsPane.allCases, [.general, .calendars, .tugRules])
+        XCTAssertEqual(SettingsPane.allCases.map(\.title), ["General", "Calendars", "Tug Rules"])
+    }
+
+    @MainActor func testDefaultPaneIsGeneral() {
+        XCTAssertEqual(SettingsNavigation().pane, .general)
+    }
+
+    func testOldTakeoverTermStillFindsItems() {
+        let found = ids("takeover")
+        XCTAssertTrue(found.contains("lead-time"))
+        XCTAssertTrue(found.contains("test-takeover"))
+        XCTAssertTrue(ids("take over").contains("test-takeover"))
+        XCTAssertEqual(SettingsSearch.catalog.first { $0.id == "test-takeover" }?.title, "Test tug")
+    }
+
+    func testTugFindsTugRulesItems() {
+        let found = SettingsSearch.results(for: "tug", calendars: [])
+        XCTAssertTrue(found.contains { $0.id == "test-takeover" && $0.pane == .tugRules })
+        XCTAssertTrue(found.contains { $0.id == "lead-time" && $0.pane == .tugRules })
+    }
+
+    func testAboutIsInGeneral() {
+        let found = SettingsSearch.results(for: "about", calendars: [])
+        XCTAssertEqual(found.first { $0.id == "about" }?.pane, .general)
+        XCTAssertEqual(found.first { $0.id == "about" }?.title, "About TimeTug")
+    }
+
+    func testGeneralItemsLiveInGeneral() {
+        for id in ["menu-bar-text", "launch-at-login", "about"] {
+            XCTAssertEqual(SettingsSearch.catalog.first { $0.id == id }?.pane, .general, id)
+        }
+    }
 }

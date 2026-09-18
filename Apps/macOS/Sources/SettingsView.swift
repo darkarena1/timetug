@@ -4,7 +4,7 @@ struct SettingsView: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var model: AppModel
     @ObservedObject var navigation: SettingsNavigation
-    let onTestTakeover: () -> Void
+    let onTestTug: () -> Void
     @State private var query = ""
 
     var body: some View {
@@ -55,14 +55,12 @@ struct SettingsView: View {
 
     @ViewBuilder private var detail: some View {
         switch navigation.pane {
-        case .takeover:
-            TakeoverPane(settings: settings, navigation: navigation, onTestTakeover: onTestTakeover)
+        case .general:
+            GeneralPane(settings: settings, navigation: navigation)
         case .calendars:
             CalendarsPane(settings: settings, model: model, navigation: navigation)
-        case .menuBar:
-            MenuBarPane(settings: settings, navigation: navigation)
-        case .general:
-            GeneralPane(navigation: navigation)
+        case .tugRules:
+            TugRulesPane(settings: settings, navigation: navigation, onTestTug: onTestTug)
         }
     }
 }

@@ -23,7 +23,7 @@ final class AppCoordinator {
     private var statusItem: StatusItemController?
     private let overlay = OverlayController()
     private lazy var settingsWindow = SettingsWindowController { [unowned self] in
-        SettingsView(settings: settings, model: model, navigation: navigation, onTestTakeover: { [weak self] in self?.fireTest() })
+        SettingsView(settings: settings, model: model, navigation: navigation, onTestTug: { [weak self] in self?.fireTest() })
     }
 
     init() {
@@ -129,7 +129,7 @@ final class AppCoordinator {
         rearm()
     }
 
-    /// Settings' "Test takeover" button: a sample event that never touches the ledger.
+    /// Settings' "Test tug" button: a sample event that never touches the ledger.
     func fireTest() {
         let now = Date()
         let sample = CalendarEvent(

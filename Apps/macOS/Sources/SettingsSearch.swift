@@ -7,10 +7,13 @@ enum SettingsText {
     static let videoLink = "Only events with a video link"
     static let skipSolo = "Skip events with no other attendees"
     static let skipDeclined = "Skip declined events"
-    static let testTakeover = "Test takeover"
+    static let testTug = "Test tug"
     static let skipAllDay = "Skip all-day events"
     static let menuBarText = "Next to the icon"
     static let launchAtLogin = "Launch at login"
+    static let about = "About TimeTug"
+    static let aboutButton = "About TimeTug…"
+    static let tugCheckbox = "Tug"
 }
 
 struct SettingsSearchItem: Hashable, Identifiable {
@@ -25,21 +28,23 @@ enum SettingsSearch {
 
     static let catalog: [SettingsSearchItem] = [
         .init(id: "lead-time", title: SettingsText.leadTime,
-              keywords: ["before", "start", "minutes", "at start", "warning"], pane: .takeover),
+              keywords: ["tug", "takeover", "take over", "before", "start", "minutes", "at start", "warning"], pane: .tugRules),
         .init(id: "video-link", title: SettingsText.videoLink,
-              keywords: ["zoom", "meet", "teams", "conference"], pane: .takeover),
+              keywords: ["tug", "takeover", "take over", "zoom", "meet", "teams", "conference"], pane: .tugRules),
         .init(id: "skip-solo", title: SettingsText.skipSolo,
-              keywords: ["solo", "alone", "attendees"], pane: .takeover),
+              keywords: ["tug", "takeover", "take over", "solo", "alone", "attendees"], pane: .tugRules),
         .init(id: "skip-declined", title: SettingsText.skipDeclined,
-              keywords: ["declined", "rejected"], pane: .takeover),
-        .init(id: "test-takeover", title: SettingsText.testTakeover,
-              keywords: ["preview", "overlay", "try"], pane: .takeover),
+              keywords: ["tug", "takeover", "take over", "declined", "rejected"], pane: .tugRules),
+        .init(id: "test-takeover", title: SettingsText.testTug,
+              keywords: ["tug", "takeover", "take over", "preview", "overlay", "try"], pane: .tugRules),
         .init(id: "skip-all-day", title: SettingsText.skipAllDay,
-              keywords: ["list", "hide", "all day"], pane: .calendars),
+              keywords: ["list", "hide", "all day", "takeover", "take over", "tug"], pane: .calendars),
         .init(id: "menu-bar-text", title: SettingsText.menuBarText,
-              keywords: ["menu bar", "text", "next meeting", "countdown", "title"], pane: .menuBar),
+              keywords: ["menu bar", "text", "next meeting", "countdown", "title"], pane: .general),
         .init(id: "launch-at-login", title: SettingsText.launchAtLogin,
               keywords: ["startup", "open at login", "boot"], pane: .general),
+        .init(id: "about", title: SettingsText.about,
+              keywords: ["version", "license", "credits", "info"], pane: .general),
     ]
 
     static func results(for query: String, calendars: [CalendarInfo]) -> [SettingsSearchItem] {

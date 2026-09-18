@@ -1,9 +1,9 @@
 import SwiftUI
 
-struct TakeoverPane: View {
+struct TugRulesPane: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var navigation: SettingsNavigation
-    let onTestTakeover: () -> Void
+    let onTestTug: () -> Void
 
     var body: some View {
         Form {
@@ -19,7 +19,7 @@ struct TakeoverPane: View {
                 .settingsHighlight("skip-solo", navigation: navigation)
             Toggle(SettingsText.skipDeclined, isOn: $settings.takeover.skipDeclinedEvents)
                 .settingsHighlight("skip-declined", navigation: navigation)
-            Button(SettingsText.testTakeover, action: onTestTakeover)
+            Button(SettingsText.testTug, action: onTestTug)
                 .settingsHighlight("test-takeover", navigation: navigation)
         }
         .formStyle(.grouped)
