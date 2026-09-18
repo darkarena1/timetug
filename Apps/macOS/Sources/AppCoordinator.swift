@@ -27,7 +27,9 @@ final class AppCoordinator {
 
     func start() async {
         statusItem = StatusItemController(
-            popoverContent: NSHostingController(rootView: Text("TimeTug")),   // replaced in Task 9
+            popoverContent: NSHostingController(
+                rootView: DropdownView(model: model, onOpenSettings: { [weak self] in self?.openSettings() })
+            ),
             onOpenSettings: { [weak self] in self?.openSettings() }
         )
         _ = await eventKit.requestAccess()
