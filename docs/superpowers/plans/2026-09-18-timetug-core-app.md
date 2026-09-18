@@ -2508,7 +2508,7 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Denying calendar access shows the orange banner with a working "Open System Settings" link.
 - [ ] Popover: ended events greyed, in-progress bold with dot, all-day shows "All day".
 - [ ] Takeover fires at lead time on every connected display; lead time 0 fires at start.
-- [ ] Join opens the link and closes the overlay; Return joins; Esc dismisses; Snooze re-fires later.
+- [ ] On a real takeover, Join opens the link and closes the overlay; Return joins; Esc dismisses; Snooze re-fires later. (Settings' "Test takeover" Join only closes the overlay; it never opens the sample URL.)
 - [ ] Overlay covers a full-screen app and follows display plug/unplug.
 - [ ] Sleep the Mac through a meeting start; on wake with the meeting in progress the overlay appears with "Started N ago".
 - [ ] Changing the system clock/timezone recomputes the schedule.
