@@ -21,6 +21,9 @@ final class AppCoordinator {
     private var cancellables = Set<AnyCancellable>()
     private var statusItem: StatusItemController?
     private let overlay = OverlayController()
+    private lazy var settingsWindow = SettingsWindowController { [unowned self] in
+        SettingsView(settings: settings, model: model, onTestTakeover: { [weak self] in self?.fireTest() })
+    }
 
     init() {
         store = CalendarStore(sources: [eventKit])
@@ -140,5 +143,5 @@ final class AppCoordinator {
         ))
     }
 
-    func openSettings() {}                        // replaced in Task 11
+    func openSettings() { settingsWindow.show() }
 }
