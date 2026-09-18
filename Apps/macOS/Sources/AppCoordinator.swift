@@ -20,6 +20,7 @@ final class AppCoordinator {
     private var tickTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     private var statusItem: StatusItemController?
+    private let overlay = OverlayController()
 
     init() {
         store = CalendarStore(sources: [eventKit])
@@ -102,11 +103,42 @@ final class AppCoordinator {
         }
     }
 
-    // MARK: Stubs replaced in later tasks
+    private var isOverlayVisible: Bool { overlay.isVisible }
 
-    private var isOverlayVisible: Bool { false }
     private func present(_ request: TakeoverRequest) {
-        print("TAKEOVER:", request.event.title)   // replaced in Task 10
+        let event = request.event
+        overlay.show(request, actions: .init(
+            join: { [weak self] in
+                if let url = request.joinURL { NSWorkspace.shared.open(url) }
+                self?.closeOverlay()
+            },
+            snooze: { [weak self] seconds in
+                self?.ledger.snooze(event, for: seconds, now: Date())
+                self?.closeOverlay()
+            },
+            dismiss: { [weak self] in self?.closeOverlay() }
+        ))
     }
+
+    private func closeOverlay() {
+        overlay.hide()
+        rearm()
+    }
+
+    /// Settings' "Test takeover" button: a sample event that never touches the ledger.
+    func fireTest() {
+        let now = Date()
+        let sample = CalendarEvent(
+            sourceEventID: "test", sourceID: "test", calendarID: "test", title: "Sample meeting",
+            start: now.addingTimeInterval(settings.takeover.leadTime),
+            end: now.addingTimeInterval(settings.takeover.leadTime + 1800),
+            otherAttendeeCount: 1, conferenceURL: URL(string: "https://meet.google.com/aaa-bbbb-ccc"))
+        overlay.show(TakeoverRequest.make(for: sample, now: now), actions: .init(
+            join: { [weak self] in self?.overlay.hide() },
+            snooze: { [weak self] _ in self?.overlay.hide() },
+            dismiss: { [weak self] in self?.overlay.hide() }
+        ))
+    }
+
     func openSettings() {}                        // replaced in Task 11
 }
