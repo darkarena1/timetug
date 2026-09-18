@@ -44,6 +44,7 @@ final class AppCoordinator {
             onOpenSettings: { [weak self] in self?.openSettings() },
             onOpenAbout: { [weak self] in self?.aboutWindow.show(on: self?.statusItem?.clickedScreen) }
         )
+        model.popupCardStyle = settings.popupCardStyle
         _ = await eventKit.requestAccess()
         observeSystemEvents()
         settings.$takeover.dropFirst().sink { [weak self] _ in
@@ -51,6 +52,9 @@ final class AppCoordinator {
         }.store(in: &cancellables)
         settings.$appearanceMode.dropFirst().sink { mode in
             NSApp.appearance = mode.nsAppearance
+        }.store(in: &cancellables)
+        settings.$popupCardStyle.dropFirst().sink { [weak self] style in
+            self?.model.popupCardStyle = style
         }.store(in: &cancellables)
         settings.$menuBarMode.dropFirst().sink { [weak self] _ in
             Task { @MainActor in self?.updateUI() }

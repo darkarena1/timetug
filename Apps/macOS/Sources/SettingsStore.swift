@@ -11,6 +11,7 @@ final class SettingsStore: ObservableObject {
     private static let takeoverKey = "takeoverSettings.v1"
     private static let modeKey = "menuBarMode.v1"
     private static let appearanceKey = "appearanceMode.v1"
+    private static let cardStyleKey = "popupCardStyle.v1"
     private let defaults: UserDefaults
 
     @Published var takeover: TakeoverSettings {
@@ -22,6 +23,9 @@ final class SettingsStore: ObservableObject {
     @Published var appearanceMode: AppearanceMode {
         didSet { defaults.set(appearanceMode.rawValue, forKey: Self.appearanceKey) }
     }
+    @Published var popupCardStyle: PopupCardStyle {
+        didSet { defaults.set(popupCardStyle.rawValue, forKey: Self.cardStyleKey) }
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -31,6 +35,9 @@ final class SettingsStore: ObservableObject {
             .flatMap(MenuBarDisplayMode.init(rawValue:)) ?? .iconOnly
         self.appearanceMode = defaults.string(forKey: Self.appearanceKey)
             .flatMap(AppearanceMode.init(rawValue:)) ?? .auto
+        self.popupCardStyle = defaults.string(forKey: Self.cardStyleKey)
+            .flatMap(PopupCardStyle.init(rawValue:))
+            .flatMap { PopupCardStyle.available.contains($0) ? $0 : nil } ?? PopupCardStyle.defaultStyle
     }
 
     private func save() {

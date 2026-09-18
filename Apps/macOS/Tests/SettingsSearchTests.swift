@@ -132,4 +132,12 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertTrue(ids("video link").contains("video-link"))
         XCTAssertEqual(SettingsSearch.catalog.first { $0.id == "video-link" }?.title, "Require a video link")
     }
+
+    func testPopupCardStyleFoundByGlassAndFrosted() {
+        for query in ["glass", "frosted", "popup cards"] {
+            let hit = SettingsSearch.results(for: query, calendars: []).first { $0.id == "popup-card-style" }
+            XCTAssertEqual(hit?.pane, .general, query)
+            XCTAssertEqual(hit?.title, "Popup cards")
+        }
+    }
 }

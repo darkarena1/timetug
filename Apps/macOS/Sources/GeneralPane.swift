@@ -63,6 +63,17 @@ struct GeneralPane: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 4)
+                VStack(alignment: .leading, spacing: 4) {
+                    Picker(SettingsText.popupCards, selection: $settings.popupCardStyle) {
+                        ForEach(PopupCardStyle.available, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .settingsHighlight("popup-card-style", navigation: navigation)
+                    Text(PopupCardStyle.available.contains(.glass)
+                         ? "Glass uses the system's Liquid Glass. Frosted and Solid work everywhere."
+                         : "Frosted is translucent; Solid is opaque.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)

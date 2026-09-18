@@ -9,10 +9,18 @@ struct DropdownView: View {
     let onJoin: (URL) -> Void
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
     @State private var listHeight: CGFloat = 0
     @State private var chromeHeight: CGFloat = 0
 
     private var palette: PopupPalette { PopupPalette(scheme) }
+
+    private var cardStyle: PopupCardStyle {
+        if reduceTransparency || contrast == .increased { return .solid }
+        return PopupCardStyle.available.contains(model.popupCardStyle) ? model.popupCardStyle : PopupCardStyle.defaultStyle
+    }
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -49,14 +57,18 @@ struct DropdownView: View {
             } else {
                 if left == 0 { NoMoreMeetings() }
                 ScrollView {
-                    VStack(spacing: 6) {
-                        ForEach(Array(zip(rows, model.agenda.items)), id: \.0.id) { row, item in
-                            EventCard(row: row, event: item.event, now: now,
-                                      calendarTitle: calendarTitle(for: item.event),
-                                      palette: palette, onJoin: onJoin)
+                    CardGroup(style: cardStyle) {
+                        VStack(spacing: 8) {
+                            ForEach(Array(zip(rows, model.agenda.items)), id: \.0.id) { row, item in
+                                EventCard(row: row, event: item.event, now: now,
+                                          calendarTitle: calendarTitle(for: item.event),
+                                          palette: palette, style: cardStyle,
+                                          strongBorder: contrast == .increased, onJoin: onJoin)
+                            }
                         }
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 2)
+                    .animation(reduceMotion ? nil : .snappy, value: rows)
+                    .padding(.horizontal, 12).padding(.vertical, 4)
                     .measureHeight { listHeight = $0 }
                 }
                 .scrollIndicators(.automatic)
@@ -67,12 +79,12 @@ struct DropdownView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .frame(height: 16)
-                .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 10)
+                .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 12)
         }
     }
 
-    /// Footer text height (16) plus its vertical padding (8 + 10).
-    private var footerHeight: CGFloat { 34 }
+    /// Footer text height (16) plus its vertical padding (8 + 12).
+    private var footerHeight: CGFloat { 36 }
 
     private func header(now: Date, meetingsLeft: Int, totalTimed: Int) -> some View {
         HStack(spacing: 10) {
@@ -87,17 +99,9 @@ struct DropdownView: View {
                     .font(.system(size: 12)).foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
-            Button(action: onOpenSettings) {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 13, weight: .regular))
-                    .frame(width: 28, height: 28)
-                    .background(Color.secondary.opacity(0.16), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Settings")
+            GearButton(action: onOpenSettings)
         }
-        .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 10)
+        .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
     }
 
     private func calendarTitle(for event: CalendarEvent) -> String? {
@@ -193,27 +197,33 @@ private struct EventCard: View {
     let now: Date
     let calendarTitle: String?
     let palette: PopupPalette
+    let style: PopupCardStyle
+    let strongBorder: Bool
     let onJoin: (URL) -> Void
 
     private var isPast: Bool { row.kind == .past }
     private var isNext: Bool { row.kind == .next }
-    private var textColor: Color { isPast ? palette.secondary : palette.primary }
+    /// Fixed brand text colors only on the opaque style; glass and material use semantic colors.
+    private var titleColor: Color {
+        style == .solid ? (isPast ? palette.secondary : palette.primary) : (isPast ? .secondary : .primary)
+    }
+    private var secondaryColor: Color { style == .solid ? palette.secondary : .secondary }
     private var barColor: Color { Color(hex: row.colorHex) ?? palette.blue }
 
     var body: some View {
         VStack(spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
                 Text(row.timeText)
-                    .font(.system(size: 12).monospacedDigit())
-                    .foregroundStyle(palette.secondary)
+                    .font(.system(size: 12, weight: .medium).monospacedDigit())
+                    .foregroundStyle(secondaryColor)
                     .frame(width: 52, alignment: .trailing)
-                    .padding(.top, 2)
-                RoundedRectangle(cornerRadius: 1.5).fill(barColor).frame(width: 3)
+                    .padding(.top, 1)
+                Capsule().fill(barColor).frame(width: 4)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(row.title)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(textColor)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(titleColor)
                             .lineLimit(1)
                         if row.kind == .current { Pill(text: "Now", fg: palette.pillText, bg: palette.pillBackground) }
                         if isNext {
@@ -223,7 +233,7 @@ private struct EventCard: View {
                         Spacer(minLength: 0)
                     }
                     Text(row.metaText)
-                        .font(.system(size: 12)).foregroundStyle(palette.secondary).lineLimit(1)
+                        .font(.system(size: 12)).foregroundStyle(secondaryColor).lineLimit(1)
                     if row.kind == .current {
                         ProgressBar(fraction: PopupText.progress(start: row.start, end: row.end, now: now), palette: palette)
                             .padding(.top, 4)
@@ -237,14 +247,8 @@ private struct EventCard: View {
                 JoinButton(title: JoinLabel.text(for: url), url: url, eventTitle: row.title, fullWidth: true, palette: palette, onJoin: onJoin)
             }
         }
-        .padding(10)
-        .background(isNext ? palette.blue.opacity(0.07) : Color.clear)
-        .background(palette.cardFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(isNext ? palette.blue : palette.cardBorder, lineWidth: isNext ? 1 : 0.5)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(12)
+        .modifier(CardSurface(style: style, isNext: isNext, palette: palette, strongBorder: strongBorder))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityText)
     }
@@ -271,7 +275,7 @@ private struct Pill: View {
         Text(text)
             .font(.system(size: 11, weight: .semibold).monospacedDigit())
             .foregroundStyle(fg)
-            .padding(.horizontal, 7).padding(.vertical, 1.5)
+            .padding(.horizontal, 8).padding(.vertical, 2)
             .background(bg, in: Capsule())
             .fixedSize()
     }
@@ -309,11 +313,107 @@ private struct JoinButton: View {
             .foregroundStyle(palette.joinText)
             .padding(.horizontal, 12)
             .frame(maxWidth: fullWidth ? .infinity : nil)
-            .frame(height: fullWidth ? 30 : 28)
-            .background(palette.blue, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .frame(height: fullWidth ? 32 : 28)
+            .background(palette.blue, in: Capsule())
+            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle())
         .accessibilityLabel("Join \(eventTitle)")
+    }
+}
+
+// MARK: - Card surface
+
+/// The card's chrome for each style. `glass` is native Liquid Glass; `frosted` is a thin material with a
+/// hairline; `solid` is the opaque brand fill.
+private struct CardSurface: ViewModifier {
+    let style: PopupCardStyle
+    let isNext: Bool
+    let palette: PopupPalette
+    let strongBorder: Bool
+    @Environment(\.colorScheme) private var scheme
+
+    private static let radius: CGFloat = 20
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: Self.radius, style: .continuous) }
+
+    @ViewBuilder func body(content: Content) -> some View {
+        switch style {
+        case .glass:
+            if #available(macOS 26.0, *) {
+                content.glassEffect(isNext ? .regular.tint(palette.blue.opacity(0.35)) : .regular, in: shape)
+            } else {
+                frosted(content)
+            }
+        case .frosted:
+            frosted(content)
+        case .solid:
+            content
+                .background(isNext ? palette.blue.opacity(0.07) : Color.clear, in: shape)
+                .background(palette.cardFill, in: shape)
+                .overlay(shape.strokeBorder(isNext ? palette.blue : palette.cardBorder,
+                                            lineWidth: isNext ? 1 : (strongBorder ? 1.5 : 0.5)))
+        }
+    }
+
+    private func frosted(_ content: Content) -> some View {
+        content
+            .background(.ultraThinMaterial, in: shape)
+            .overlay(isNext ? shape.fill(palette.blue.opacity(0.16)) : nil)
+            .overlay(shape.strokeBorder(scheme == .dark ? Color.white.opacity(0.18) : Color.black.opacity(0.06), lineWidth: 0.5))
+            .overlay(isNext ? shape.strokeBorder(palette.blue, lineWidth: 1) : nil)
+    }
+}
+
+/// Lets neighbouring glass cards blend (macOS 26+); a plain pass-through otherwise.
+private struct CardGroup<Content: View>: View {
+    let style: PopupCardStyle
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        if #available(macOS 26.0, *), style == .glass {
+            GlassEffectContainer(spacing: 8) { content }
+        } else {
+            content
+        }
+    }
+}
+
+// MARK: - Buttons
+
+/// Hover and pressed feedback for the solid Join capsule.
+private struct PressableStyle: ButtonStyle {
+    @State private var hovering = false
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .brightness(configuration.isPressed ? -0.1 : (hovering ? 0.08 : 0))
+            .onHover { hovering = $0 }
+    }
+}
+
+/// Header gear: a glass button on macOS 26+ (it sits on the popover, not inside a card), a tinted fill before.
+private struct GearButton: View {
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            Button(action: action) {
+                Image(systemName: "gearshape").font(.system(size: 13)).frame(width: 28, height: 28)
+            }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .accessibilityLabel("Settings")
+        } else {
+            Button(action: action) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 13))
+                    .frame(width: 28, height: 28)
+                    .background(Color.secondary.opacity(hovering ? 0.26 : 0.16), in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering = $0 }
+            .accessibilityLabel("Settings")
+        }
     }
 }

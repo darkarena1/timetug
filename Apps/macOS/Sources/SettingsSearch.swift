@@ -10,6 +10,7 @@ enum SettingsText {
     static let testTug = "Test tug"
     static let skipAllDay = "Skip all-day events"
     static let appearance = "Appearance"
+    static let popupCards = "Popup cards"
     static let menuBarText = "Menu bar text"
     static let launchAtLogin = "Launch at login"
     static let tugCheckbox = "Tug"
@@ -40,6 +41,8 @@ enum SettingsSearch {
               keywords: ["list", "hide", "all day", "takeover", "take over", "tug"], pane: .calendars),
         .init(id: "appearance", title: SettingsText.appearance,
               keywords: ["theme", "light", "dark", "auto", "automatic", "mode", "dark mode", "color scheme"], pane: .general),
+        .init(id: "popup-card-style", title: SettingsText.popupCards,
+              keywords: ["glass", "frosted", "translucent", "solid", "bubbles", "cards", "style", "popup"], pane: .general),
         .init(id: "menu-bar-text", title: SettingsText.menuBarText,
               keywords: ["menu bar", "text", "next meeting", "countdown", "title", "next to the icon"], pane: .general),
         .init(id: "launch-at-login", title: SettingsText.launchAtLogin,
