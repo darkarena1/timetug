@@ -7,6 +7,7 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 |---|---|---|
 | 1 Scaffold + Core model | complete, review clean | fbcfdb2..37c62e8 |
 | 2 ConferenceLinkDetector | complete, review clean + hardening fix | 86eda30..85ee751 |
+| 3 TakeoverPolicy | complete, review clean | a92ec5e..749d9c9 |
 
 ## Notes
 - 2026-09-18: brand artwork added by the user (`artwork/`, `Apps/macOS/Resources/Assets.xcassets`, `docs/ARTWORK_USAGE.md`); plan Task 13 covers wiring it in plus README. `artwork/Source` boards and menu bar PNG exports were intentionally not committed (still in ~/Downloads/TimeTugAssets).
