@@ -32,12 +32,12 @@ struct CalendarsPane: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                VStack(spacing: 0) {
-                    headerRow
-                    Divider()
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 0) {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        // The header lives inside the scroll view (pinned) so it shares the
+                        // rows' width, including any space a legacy scroller takes.
+                        LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                            Section {
                                 ForEach(CalendarGrouping.groups(from: model.calendars)) { group in
                                     Text(group.account)
                                         .font(.caption.weight(.semibold))
@@ -49,12 +49,18 @@ struct CalendarsPane: View {
                                         calendarRow(calendar)
                                     }
                                 }
+                            } header: {
+                                VStack(spacing: 0) {
+                                    headerRow
+                                    Divider()
+                                }
+                                .background(.background)
                             }
-                            .padding(.bottom, 8)
                         }
-                        .onAppear { scroll(proxy, to: navigation.highlightedID) }
-                        .onChange(of: navigation.highlightedID) { _, id in scroll(proxy, to: id) }
+                        .padding(.bottom, 8)
                     }
+                    .onAppear { scroll(proxy, to: navigation.highlightedID) }
+                    .onChange(of: navigation.highlightedID) { _, id in scroll(proxy, to: id) }
                 }
             }
         }
