@@ -31,6 +31,7 @@ final class AppCoordinator {
     }
 
     func start() async {
+        NSApp.appearance = settings.appearanceMode.nsAppearance
         statusItem = StatusItemController(
             popoverContent: NSHostingController(
                 rootView: DropdownView(model: model, onOpenSettings: { [weak self] in self?.openSettings() })
@@ -41,6 +42,9 @@ final class AppCoordinator {
         observeSystemEvents()
         settings.$takeover.dropFirst().sink { [weak self] _ in
             Task { @MainActor in self?.rearm(); self?.updateUI() }
+        }.store(in: &cancellables)
+        settings.$appearanceMode.dropFirst().sink { mode in
+            NSApp.appearance = mode.nsAppearance
         }.store(in: &cancellables)
         settings.$menuBarMode.dropFirst().sink { [weak self] _ in
             Task { @MainActor in self?.updateUI() }

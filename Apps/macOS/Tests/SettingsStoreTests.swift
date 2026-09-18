@@ -15,6 +15,7 @@ final class SettingsStoreTests: XCTestCase {
         let store = SettingsStore(defaults: freshDefaults())
         XCTAssertEqual(store.takeover, TakeoverSettings())
         XCTAssertEqual(store.menuBarMode, .iconOnly)
+        XCTAssertEqual(store.appearanceMode, .auto)
     }
 
     func testPersistsChanges() {
@@ -23,10 +24,12 @@ final class SettingsStoreTests: XCTestCase {
         store.takeover.leadTime = 300
         store.takeover.takeoverCalendarKeys = ["eventkit/work"]
         store.menuBarMode = .countdown
+        store.appearanceMode = .dark
 
         let reloaded = SettingsStore(defaults: defaults)
         XCTAssertEqual(reloaded.takeover.leadTime, 300)
         XCTAssertEqual(reloaded.takeover.takeoverCalendarKeys, ["eventkit/work"])
         XCTAssertEqual(reloaded.menuBarMode, .countdown)
+        XCTAssertEqual(reloaded.appearanceMode, .dark)
     }
 }

@@ -13,6 +13,7 @@ and takes over every screen shortly before a meeting starts, so you don't hyperf
 - Detects Zoom, Meet, Teams, Webex and similar links for a one-click Join
 - Per-calendar Tug opt-in; never takes over for all-day events; skips declined and solo events by default
 - Menu bar: icon only (default), next meeting, or countdown
+- Light, Dark or Auto appearance
 
 ## Build
 Requires macOS 14+ and Xcode 27.

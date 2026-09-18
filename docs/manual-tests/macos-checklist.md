@@ -13,4 +13,6 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Declined, solo, all-day and non-opted-in events never take over.
 - [ ] Menu bar modes: icon only, next meeting (long titles truncated), countdown only.
 - [ ] Launch at login toggle works.
-- [ ] Settings sidebar order is General, Calendars, Tug Rules; General has "Menu bar" and "App" sections; "About TimeTug…" opens a sheet with logo, version and Done.
+- [ ] Settings sidebar order is General, Calendars, Tug Rules; General has "Appearance", "App" and "Menu bar" sections; "About TimeTug…" opens a sheet with logo, version and Done.
+- [ ] Appearance Auto/Light/Dark changes Settings, the popover and the About sheet; Auto follows the OS setting (the takeover overlay stays dark).
+- [ ] About sheet is readable in both Light and Dark appearance (logo lockup, tagline pill, version, Done).

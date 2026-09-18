@@ -40,10 +40,12 @@ final class SettingsSearchTests: XCTestCase {
     func testCalendarNameMatches() {
         let cal = CalendarInfo(sourceID: "eventkit", calendarID: "1", title: "Darkarena")
         let results = SettingsSearch.results(for: "dark", calendars: [cal])
-        XCTAssertEqual(results.count, 1)
+        // "dark" also matches the Appearance setting by keyword; the calendar title match ranks first.
+        XCTAssertEqual(results.count, 2)
         XCTAssertEqual(results.first?.pane, .calendars)
         XCTAssertEqual(results.first?.id, "calendar:eventkit/1")
         XCTAssertEqual(results.first?.title, "Darkarena")
+        XCTAssertEqual(results.last?.id, "appearance")
     }
 
     func testTitleMatchesRankBeforeKeywordOnlyMatches() {
@@ -56,6 +58,13 @@ final class SettingsSearchTests: XCTestCase {
 
     func testCatalogOrderAmongTitleMatches() {
         XCTAssertEqual(ids("skip"), ["skip-solo", "skip-declined", "skip-all-day"])
+    }
+
+    func testAppearanceFoundByDarkAndTheme() {
+        for query in ["dark", "theme"] {
+            let hit = SettingsSearch.results(for: query, calendars: []).first { $0.id == "appearance" }
+            XCTAssertEqual(hit?.pane, .general, query)
+        }
     }
 
     func testCatalogIDsAreUnique() {

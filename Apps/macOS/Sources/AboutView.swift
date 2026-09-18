@@ -3,11 +3,25 @@ import SwiftUI
 struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
 
-    private static let cream = Color(red: 1.0, green: 0.973, blue: 0.94)
-    private static let navy = Color(red: 0.11, green: 0.16, blue: 0.33)
-    private static let slate = Color(red: 0.36, green: 0.42, blue: 0.55)
-    private static let paleBlue = Color(red: 0.87, green: 0.92, blue: 1.0)
+    @Environment(\.colorScheme) private var colorScheme
+
+    private struct Palette {
+        let background, primary, secondary, pill: Color
+        static let light = Palette(
+            background: Color(red: 1.0, green: 0.973, blue: 0.94),
+            primary: Color(red: 0.11, green: 0.16, blue: 0.33),
+            secondary: Color(red: 0.36, green: 0.42, blue: 0.55),
+            pill: Color(red: 0.87, green: 0.92, blue: 1.0))
+        static let dark = Palette(
+            background: Color(red: 0.07, green: 0.10, blue: 0.19),
+            primary: Color(red: 0.94, green: 0.96, blue: 1.0),
+            secondary: Color(red: 0.65, green: 0.71, blue: 0.83),
+            pill: Color(red: 0.16, green: 0.24, blue: 0.42))
+    }
+
     private static let brandBlue = Color(red: 0.18, green: 0.48, blue: 0.96)
+
+    private var palette: Palette { colorScheme == .dark ? .dark : .light }
 
     var body: some View {
         VStack(spacing: 14) {
@@ -32,16 +46,16 @@ struct AboutView: View {
                 )
             Text("Never hyperfocus through another meeting.")
                 .font(.callout)
-                .foregroundStyle(Self.navy)
+                .foregroundStyle(palette.primary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 7)
-                .background(Capsule().fill(Self.paleBlue))
+                .background(Capsule().fill(palette.pill))
             if let version = Self.versionText {
-                Text(version).font(.callout).foregroundStyle(Self.slate)
+                Text(version).font(.callout).foregroundStyle(palette.secondary)
             }
             Text("Released under the MIT License.")
-                .font(.footnote).foregroundStyle(Self.slate)
+                .font(.footnote).foregroundStyle(palette.secondary)
             Button("Done") { dismiss() }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
@@ -50,8 +64,7 @@ struct AboutView: View {
         }
         .padding(24)
         .frame(width: 460)
-        .background(Self.cream)
-        .preferredColorScheme(.light)
+        .background(palette.background)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("About TimeTug")
     }
