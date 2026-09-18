@@ -27,24 +27,6 @@ struct SettingsView: View {
                 Button("Test takeover", action: onTestTakeover)
             }
 
-            Section("Calendars") {
-                if model.calendars.isEmpty {
-                    Text("No calendars found. Check calendar access in System Settings.")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(model.calendars) { calendar in
-                    HStack {
-                        Text(calendar.title)
-                        Spacer()
-                        Toggle("Takeover", isOn: membership(\.takeoverCalendarKeys, calendar.key))
-                        Toggle("Show in list", isOn: shown(calendar.key))
-                    }
-                    .toggleStyle(.checkbox)
-                }
-                Text("Takeover is opt-in per calendar. Calendars are shown in the list by default.")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
-
             Section("Menu bar") {
                 Picker("Next to the icon", selection: $settings.menuBarMode) {
                     Text("Icon only").tag(MenuBarDisplayMode.iconOnly)
@@ -76,6 +58,24 @@ struct SettingsView: View {
                         .foregroundStyle(.red)
                 }
             }
+
+            Section("Calendars") {
+                if model.calendars.isEmpty {
+                    Text("No calendars found. Check calendar access in System Settings.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(model.calendars) { calendar in
+                    HStack {
+                        Text(calendar.title)
+                        Spacer()
+                        Toggle("Takeover", isOn: takeover(calendar.key))
+                        Toggle("Show in list", isOn: shown(calendar.key))
+                    }
+                    .toggleStyle(.checkbox)
+                }
+                Text("Takeover needs the calendar shown in the list: turning on Takeover shows it, and hiding it turns Takeover off.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .frame(width: 520, height: 560)
@@ -95,19 +95,17 @@ struct SettingsView: View {
         )
     }
 
-    private func membership(_ keyPath: WritableKeyPath<TakeoverSettings, Set<String>>, _ key: String) -> Binding<Bool> {
+    private func takeover(_ key: String) -> Binding<Bool> {
         Binding(
-            get: { settings.takeover[keyPath: keyPath].contains(key) },
-            set: { on in
-                if on { settings.takeover[keyPath: keyPath].insert(key) }
-                else { settings.takeover[keyPath: keyPath].remove(key) }
-            }
+            get: { settings.takeover.takeoverCalendarKeys.contains(key) },
+            set: { settings.takeover.setTakeover($0, forCalendar: key) }
         )
     }
 
-    /// "Show in list" is the inverse of membership in `hiddenCalendarKeys`.
     private func shown(_ key: String) -> Binding<Bool> {
-        let hidden = membership(\.hiddenCalendarKeys, key)
-        return Binding(get: { !hidden.wrappedValue }, set: { hidden.wrappedValue = !$0 })
+        Binding(
+            get: { settings.takeover.isShownInList(key) },
+            set: { settings.takeover.setShownInList($0, forCalendar: key) }
+        )
     }
 }

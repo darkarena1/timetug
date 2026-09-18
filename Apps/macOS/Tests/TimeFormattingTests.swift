@@ -42,4 +42,8 @@ final class TimeFormattingTests: XCTestCase {
     func testStatusTitleNilWhenNoNextEvent() {
         XCTAssertNil(TimeFormatting.statusTitle(mode: .countdown, next: nil, now: Date()))
     }
+
+    func testStatusTitleNextMeetingShowsNoMeetingsWhenNoNextEvent() {
+        XCTAssertEqual(TimeFormatting.statusTitle(mode: .nextMeeting, next: nil, now: Date()), "No Meetings")
+    }
 }

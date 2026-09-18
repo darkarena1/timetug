@@ -17,9 +17,10 @@ enum TimeFormatting {
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 
-    /// Text next to the menu bar icon, or nil for icon-only / nothing upcoming.
+    /// Text next to the menu bar icon: nil for icon-only (or countdown with nothing upcoming), "No Meetings" for next-meeting mode with nothing upcoming.
     static func statusTitle(mode: MenuBarDisplayMode, next: CalendarEvent?, now: Date) -> String? {
-        guard mode != .iconOnly, let next else { return nil }
+        guard mode != .iconOnly else { return nil }
+        guard let next else { return mode == .nextMeeting ? "No Meetings" : nil }
         let remaining = compact(next.start.timeIntervalSince(now))
         switch mode {
         case .iconOnly: return nil
