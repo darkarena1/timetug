@@ -13,12 +13,13 @@ struct DropdownView: View {
             if model.agenda.items.isEmpty {
                 Text("No events today")
                     .foregroundStyle(.secondary)
-                    .padding(16)
+                    .padding(20)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(model.agenda.items) { EventRow(item: $0) }
                     }
+                    .padding(.vertical, 8)
                 }
                 .frame(maxHeight: 420)
             }
@@ -27,7 +28,8 @@ struct DropdownView: View {
                 Spacer()
                 Button("Settings…", action: onOpenSettings).buttonStyle(.link)
             }
-            .padding(10)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
         }
         .frame(width: 340)
     }
@@ -64,7 +66,8 @@ private struct ProblemRow: View {
                 .buttonStyle(.link)
             }
         }
-        .padding(10)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
         .background(.orange.opacity(0.12))
     }
 }
@@ -92,7 +95,7 @@ private struct EventRow: View {
                 Circle().fill(.tint).frame(width: 7, height: 7)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 18)
         .padding(.vertical, 6)
         .foregroundStyle(item.state == .past ? .secondary : .primary)
         .opacity(item.state == .past ? 0.55 : 1)
