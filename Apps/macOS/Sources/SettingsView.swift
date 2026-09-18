@@ -7,6 +7,10 @@ struct SettingsView: View {
     @ObservedObject var model: AppModel
     let onTestTakeover: () -> Void
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var launchError: String?
+    /// Set while we programmatically revert `launchAtLogin`, so the resulting
+    /// `.onChange` doesn't try to register/unregister again.
+    @State private var isReverting = false
 
     var body: some View {
         Form {
@@ -48,13 +52,39 @@ struct SettingsView: View {
                 }
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in
-                        if enabled { try? SMAppService.mainApp.register() }
-                        else { try? SMAppService.mainApp.unregister() }
+                        if isReverting {
+                            isReverting = false
+                            return
+                        }
+                        do {
+                            if enabled { try SMAppService.mainApp.register() }
+                            else { try SMAppService.mainApp.unregister() }
+                            launchError = nil
+                        } catch {
+                            launchError = "Couldn't change launch at login: \(error.localizedDescription)"
+                            let actual = SMAppService.mainApp.status == .enabled
+                            if actual != launchAtLogin {
+                                isReverting = true
+                                launchAtLogin = actual
+                            }
+                        }
                     }
+                if let launchError {
+                    Text(launchError)
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                }
             }
         }
         .formStyle(.grouped)
         .frame(width: 520, height: 560)
+        .onAppear {
+            let actual = SMAppService.mainApp.status == .enabled
+            if actual != launchAtLogin {
+                isReverting = true
+                launchAtLogin = actual
+            }
+        }
     }
 
     private var leadMinutes: Binding<Int> {
