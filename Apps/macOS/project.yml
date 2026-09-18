@@ -1,0 +1,54 @@
+name: TimeTug
+options:
+  bundleIdPrefix: com.timetug
+  deploymentTarget:
+    macOS: "14.0"
+packages:
+  TimeTugCore:
+    path: ../../Packages/TimeTugCore
+  EventKitSource:
+    path: ../../Packages/EventKitSource
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_IDENTITY: "-"
+    ENABLE_HARDENED_RUNTIME: YES
+targets:
+  TimeTug:
+    type: application
+    platform: macOS
+    sources: [Sources]
+    dependencies:
+      - package: TimeTugCore
+        product: TimeTugCore
+      - package: EventKitSource
+        product: EventKitSource
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleName: TimeTug
+        LSUIElement: true
+        NSCalendarsFullAccessUsageDescription: TimeTug reads your calendars to alert you before meetings start.
+    entitlements:
+      path: Sources/TimeTug.entitlements
+      properties:
+        com.apple.security.personal-information.calendars: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.timetug.app
+  TimeTugTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [Tests]
+    dependencies:
+      - target: TimeTug
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  TimeTug:
+    build:
+      targets:
+        TimeTug: all
+    test:
+      targets: [TimeTugTests]
