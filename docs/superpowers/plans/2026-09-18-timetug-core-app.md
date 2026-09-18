@@ -1234,6 +1234,15 @@ private func agenda(_ events: [CalendarEvent], settings: TakeoverSettings = opte
     #expect(result.items.map(\.event.sourceEventID) == ["b"])
 }
 
+@Test func mergedMeetingIsHiddenOnlyWhenAllItsCalendarsAreHidden() {
+    var merged = makeEvent("m", calendarID: "family")
+    merged.additionalCalendarKeys = ["fake/work"]
+    let hideFamilyOnly = optedIn { $0.hiddenCalendarKeys = ["fake/family"] }
+    let hideBoth = optedIn { $0.hiddenCalendarKeys = ["fake/family", "fake/work"] }
+    #expect(agenda([merged], settings: hideFamilyOnly).items.count == 1)
+    #expect(agenda([merged], settings: hideBoth).items.isEmpty)
+}
+
 @Test func includesEventsThatOverlapToday() {
     let overnight = makeEvent("n", start: "2026-09-17T23:30:00Z", minutes: 120)
     #expect(agenda([overnight]).items.count == 1)
@@ -1292,7 +1301,8 @@ public struct DayAgenda: Equatable, Sendable {
         let nextDayStart = calendar.date(byAdding: .day, value: 1, to: dayStart)!
 
         let items = events
-            .filter { !settings.hiddenCalendarKeys.contains($0.calendarKey) }
+            // A merged meeting is hidden only if every calendar it appears on is hidden.
+            .filter { !$0.allCalendarKeys.isSubset(of: settings.hiddenCalendarKeys) }
             .filter { event in
                 if event.end > dayStart && event.start < nextDayStart { return true }
                 // After-midnight events show only once inside their lead-time period.
