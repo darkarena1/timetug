@@ -1,15 +1,17 @@
 import AppKit
 import SwiftUI
 
-/// Owns the menu bar item. Left click toggles the popover; right click shows Settings/Quit.
+/// Owns the menu bar item. Left click toggles the popover; right click shows About/Settings/Quit.
 @MainActor
 final class StatusItemController: NSObject {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
     private let onOpenSettings: () -> Void
+    private let onOpenAbout: () -> Void
 
-    init(popoverContent: NSViewController, onOpenSettings: @escaping () -> Void) {
+    init(popoverContent: NSViewController, onOpenSettings: @escaping () -> Void, onOpenAbout: @escaping () -> Void) {
         self.onOpenSettings = onOpenSettings
+        self.onOpenAbout = onOpenAbout
         super.init()
         popover.behavior = .transient
         popover.contentViewController = popoverContent
@@ -43,15 +45,23 @@ final class StatusItemController: NSObject {
         }
     }
 
-    private func showMenu() {
+    /// The right-click menu, laid out like the macOS Apple menu.
+    static func makeMenu(target: AnyObject, about: Selector, settings: Selector) -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        menu.addItem(withTitle: "About TimeTug", action: about, keyEquivalent: "").target = target
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Settings…", action: settings, keyEquivalent: ",").target = target
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit TimeTug", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        item.menu = menu
+        return menu
+    }
+
+    private func showMenu() {
+        item.menu = Self.makeMenu(target: self, about: #selector(openAbout), settings: #selector(openSettings))
         item.button?.performClick(nil)
         item.menu = nil
     }
 
+    @objc private func openAbout() { onOpenAbout() }
     @objc private func openSettings() { onOpenSettings() }
 }

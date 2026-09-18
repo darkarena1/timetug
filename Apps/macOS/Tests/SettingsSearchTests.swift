@@ -101,14 +101,16 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertTrue(found.contains { $0.id == "lead-time" && $0.pane == .tugRules })
     }
 
-    func testAboutIsInGeneral() {
+    func testAboutIsNoLongerInSettingsSearch() {
         let found = SettingsSearch.results(for: "about", calendars: [])
-        XCTAssertEqual(found.first { $0.id == "about" }?.pane, .general)
-        XCTAssertEqual(found.first { $0.id == "about" }?.title, "About TimeTug")
+        XCTAssertFalse(found.contains { $0.pane == .general && $0.id == "about" })
+        let ids = SettingsSearch.catalog.map(\.id)
+        XCTAssertFalse(ids.contains("about"))
+        XCTAssertEqual(Set(ids).count, ids.count)
     }
 
     func testGeneralItemsLiveInGeneral() {
-        for id in ["menu-bar-text", "launch-at-login", "about"] {
+        for id in ["menu-bar-text", "launch-at-login"] {
             XCTAssertEqual(SettingsSearch.catalog.first { $0.id == id }?.pane, .general, id)
         }
     }

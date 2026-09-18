@@ -12,8 +12,6 @@ enum SettingsText {
     static let appearance = "Appearance"
     static let menuBarText = "Menu bar text"
     static let launchAtLogin = "Launch at login"
-    static let about = "About TimeTug"
-    static let aboutButton = "About TimeTug…"
     static let tugCheckbox = "Tug"
 }
 
@@ -46,8 +44,6 @@ enum SettingsSearch {
               keywords: ["menu bar", "text", "next meeting", "countdown", "title", "next to the icon"], pane: .general),
         .init(id: "launch-at-login", title: SettingsText.launchAtLogin,
               keywords: ["startup", "open at login", "boot"], pane: .general),
-        .init(id: "about", title: SettingsText.about,
-              keywords: ["version", "license", "credits", "info"], pane: .general),
     ]
 
     static func results(for query: String, calendars: [CalendarInfo]) -> [SettingsSearchItem] {

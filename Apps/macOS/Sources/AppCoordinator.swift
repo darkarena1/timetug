@@ -22,6 +22,7 @@ final class AppCoordinator {
     private var cancellables = Set<AnyCancellable>()
     private var statusItem: StatusItemController?
     private let overlay = OverlayController()
+    private lazy var aboutWindow = AboutWindowController()
     private lazy var settingsWindow = SettingsWindowController { [unowned self] in
         SettingsView(settings: settings, model: model, navigation: navigation, onTestTug: { [weak self] in self?.fireTest() })
     }
@@ -36,7 +37,8 @@ final class AppCoordinator {
             popoverContent: NSHostingController(
                 rootView: DropdownView(model: model, onOpenSettings: { [weak self] in self?.openSettings() })
             ),
-            onOpenSettings: { [weak self] in self?.openSettings() }
+            onOpenSettings: { [weak self] in self?.openSettings() },
+            onOpenAbout: { [weak self] in self?.aboutWindow.show() }
         )
         _ = await eventKit.requestAccess()
         observeSystemEvents()

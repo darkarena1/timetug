@@ -9,7 +9,6 @@ struct GeneralPane: View {
     /// Set while we programmatically revert `launchAtLogin`, so the resulting
     /// `.onChange` doesn't try to register/unregister again.
     @State private var isReverting = false
-    @State private var showingAbout = false
 
     var body: some View {
         Form {
@@ -39,8 +38,6 @@ struct GeneralPane: View {
                         .font(.callout)
                         .foregroundStyle(.red)
                 }
-                Button(SettingsText.aboutButton) { showingAbout = true }
-                    .settingsHighlight("about", navigation: navigation)
             }
             Section("Menu bar") {
                 Picker(SettingsText.menuBarText, selection: $settings.menuBarMode) {
@@ -69,7 +66,6 @@ struct GeneralPane: View {
             }
         }
         .formStyle(.grouped)
-        .sheet(isPresented: $showingAbout) { AboutView() }
         .onAppear {
             let actual = SMAppService.mainApp.status == .enabled
             if actual != launchAtLogin {

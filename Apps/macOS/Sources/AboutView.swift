@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AboutView: View {
-    @Environment(\.dismiss) private var dismiss
+    let onDone: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -56,7 +56,7 @@ struct AboutView: View {
             }
             Text("Released under the MIT License.")
                 .font(.footnote).foregroundStyle(palette.secondary)
-            Button("Done") { dismiss() }
+            Button("Done") { onDone() }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
                 .tint(Self.brandBlue)
