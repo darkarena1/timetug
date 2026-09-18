@@ -14,6 +14,7 @@ enum SettingsText {
     static let menuBarText = "Menu bar text"
     static let launchAtLogin = "Launch at login"
     static let tugCheckbox = "Tug"
+    static let popupShortcut = "Show today's meetings"
 }
 
 struct SettingsSearchItem: Hashable, Identifiable {
@@ -47,6 +48,8 @@ enum SettingsSearch {
               keywords: ["menu bar", "text", "next meeting", "countdown", "title", "next to the icon"], pane: .general),
         .init(id: "launch-at-login", title: SettingsText.launchAtLogin,
               keywords: ["startup", "open at login", "boot"], pane: .general),
+        .init(id: "popup-shortcut", title: SettingsText.popupShortcut,
+              keywords: ["hotkey", "shortcut", "keyboard", "global", "popup", "open", "toggle"], pane: .general),
     ]
 
     static func results(for query: String, calendars: [CalendarInfo]) -> [SettingsSearchItem] {

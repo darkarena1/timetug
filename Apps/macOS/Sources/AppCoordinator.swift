@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import EventKitSource
+import KeyboardShortcuts
 import SwiftUI
 import TimeTugCore
 
@@ -44,6 +45,9 @@ final class AppCoordinator {
             onOpenSettings: { [weak self] in self?.openSettings() },
             onOpenAbout: { [weak self] in self?.aboutWindow.show(on: self?.statusItem?.clickedScreen) }
         )
+        KeyboardShortcuts.onKeyUp(for: .togglePopup) { [weak self] in
+            Task { @MainActor in self?.statusItem?.togglePopover() }
+        }
         model.popupCardStyle = settings.popupCardStyle
         _ = await eventKit.requestAccess()
         observeSystemEvents()

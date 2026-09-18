@@ -15,6 +15,7 @@ and takes over every screen shortly before a meeting starts, so you don't hyperf
 - Menu bar icon turns color when a meeting is about to tug you
 - Menu bar: icon only (default), next meeting, or countdown
 - Light, Dark or Auto appearance
+- Optional global shortcut to show today's meetings
 
 ## Build
 Requires macOS 14+ and Xcode 27.
@@ -32,6 +33,9 @@ Core logic tests: `swift test --package-path Packages/TimeTugCore`
 ## Architecture
 `Packages/TimeTugCore` (portable logic), `Packages/EventKitSource` (Apple Calendar), `Apps/macOS` (the app).
 See `docs/architecture.md`. Agents and contributors: read `AGENTS.md`.
+
+## Third-party
+Uses KeyboardShortcuts by Sindre Sorhus (MIT).
 
 ## Status
 Early development.

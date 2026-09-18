@@ -1,3 +1,4 @@
+import KeyboardShortcuts
 import ServiceManagement
 import SwiftUI
 
@@ -37,6 +38,15 @@ struct GeneralPane: View {
                     Text(launchError)
                         .font(.callout)
                         .foregroundStyle(.red)
+                }
+            }
+            Section("Shortcut") {
+                VStack(alignment: .leading, spacing: 4) {
+                    KeyboardShortcuts.Recorder(SettingsText.popupShortcut, name: .togglePopup)
+                        .settingsHighlight("popup-shortcut", navigation: navigation)
+                    Text("Press a shortcut to show or hide the popup from anywhere. Click ✕ to clear it.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
             Section("Menu bar") {

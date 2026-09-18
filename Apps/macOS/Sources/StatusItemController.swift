@@ -63,12 +63,21 @@ final class StatusItemController: NSObject {
             ?? item.button?.window?.screen ?? NSScreen.main
         if NSApp.currentEvent?.type == .rightMouseUp {
             showMenu()
-        } else if popover.isShown {
-            popover.performClose(nil)
-        } else if let button = item.button {
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            popover.contentViewController?.view.window?.makeKey()
+        } else {
+            togglePopover()
         }
+    }
+
+    /// Shows or hides the popup. Used by the button click and the global shortcut.
+    func togglePopover() {
+        if popover.isShown {
+            popover.performClose(nil)
+            return
+        }
+        guard let button = item.button else { return }
+        NSApp.activate()
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
     }
 
     /// The right-click menu, laid out like the macOS Apple menu.

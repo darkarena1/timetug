@@ -28,4 +28,5 @@ TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
 ## Gotchas
 - App and EventKitSource use Swift 5 language mode; Core uses Swift 6.
 - Generated `*.xcodeproj` is git-ignored; regenerate after editing `project.yml`.
+- The app depends on the remote package KeyboardShortcuts, pinned exactly in `Apps/macOS/project.yml`; regenerate the project after changing it (first build needs network).
 - Calendar access needs the calendars entitlement and `NSCalendarsFullAccessUsageDescription`.

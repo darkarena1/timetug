@@ -1,3 +1,4 @@
+import KeyboardShortcuts
 import TimeTugCore
 import XCTest
 @testable import TimeTug
@@ -139,5 +140,17 @@ final class SettingsSearchTests: XCTestCase {
             XCTAssertEqual(hit?.pane, .general, query)
             XCTAssertEqual(hit?.title, "Popup cards")
         }
+    }
+
+    func testPopupShortcutFoundByHotkeyShortcutKeyboard() {
+        for query in ["hotkey", "shortcut", "keyboard"] {
+            let hit = SettingsSearch.results(for: query, calendars: []).first { $0.id == "popup-shortcut" }
+            XCTAssertEqual(hit?.pane, .general, query)
+            XCTAssertEqual(hit?.title, "Show today's meetings")
+        }
+    }
+
+    func testPopupShortcutNameIsStable() {
+        XCTAssertEqual(KeyboardShortcuts.Name.togglePopup.rawValue, "togglePopup")
     }
 }

@@ -9,6 +9,7 @@ Read `docs/superpowers/specs/2026-09-18-timetug-core-design.md` for the full des
   appears on multiple opted-in calendars so takeover opt-in on any calendar counts.
 - `Packages/EventKitSource`: Apple Calendar adapter. Only place EventKit is imported.
 - `Apps/macOS`: menu bar item, popover, overlay windows, settings, wiring (`AppCoordinator`).
+  The optional global popup shortcut uses the KeyboardShortcuts package (ADR 0005), app layer only.
 
 ## Flow
 EventKit -> `CalendarStore.refresh` (fetch window) -> `CalendarSnapshot` -> `Scheduler.next` -> one timer

@@ -31,3 +31,5 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] With Xcode (or any app) frontmost on the same display, right-click the icon: Settings and About open in front of it.
 - [ ] With Xcode full-screen on a display, invoke Settings/About from that display: they appear over it in the current Space.
 - [ ] With two displays, Settings/About open on the display whose menu bar icon you clicked.
+- [ ] Settings > General > Shortcut: record a shortcut; from another app press it: the popup appears under the menu bar icon and takes keyboard focus. Press it again: the popup closes.
+- [ ] Clear the shortcut with the recorder's ✕: pressing the old combination no longer does anything. A system-reserved combination shows the library's warning.
