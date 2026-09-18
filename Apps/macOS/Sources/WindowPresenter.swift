@@ -9,7 +9,7 @@ enum WindowPresenter {
         window.collectionBehavior.insert([.moveToActiveSpace, .fullScreenAuxiliary])
 
         if let target = screen ?? NSScreen.main ?? NSScreen.screens.first,
-           !window.isVisible || needsMove(windowFrame: window.frame, targetScreenFrame: target.frame) {
+           needsMove(windowFrame: window.frame, targetScreenFrame: target.frame) {
             window.setFrame(centeredFrame(size: window.frame.size, in: target.visibleFrame), display: false)
         }
 

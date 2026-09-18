@@ -52,4 +52,18 @@ final class WindowPresenterTests: XCTestCase {
         wait(for: [done], timeout: 3)
         XCTAssertEqual(window.level, .normal)
     }
+
+    func testPresentKeepsPositionWhenWindowIsAlreadyOnTheTargetScreen() throws {
+        guard let screen = NSScreen.main else { throw XCTSkip("No main screen") }
+        let origin = NSPoint(x: screen.frame.minX + 120, y: screen.frame.minY + 240)
+        let window = NSWindow(contentRect: NSRect(origin: origin, size: NSSize(width: 400, height: 300)),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.setFrameOrigin(origin)
+        WindowPresenter.present(window, on: screen)
+        defer { window.orderOut(nil) }
+
+        XCTAssertEqual(window.frame.origin.x, origin.x, accuracy: 0.5)
+        XCTAssertEqual(window.frame.origin.y, origin.y, accuracy: 0.5)
+    }
 }
