@@ -32,4 +32,7 @@ Core logic tests: `swift test --package-path Packages/TimeTugCore`
 See `docs/architecture.md`. Agents and contributors: read `AGENTS.md`.
 
 ## Status
-Early development. No license has been chosen yet.
+Early development.
+
+## License
+The source code is released under the [MIT License](LICENSE). Licensing for the brand artwork in `artwork/` and the app's asset catalog has not been decided separately yet.
