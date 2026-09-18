@@ -21,6 +21,7 @@ struct SettingsView: View {
                          : "Lead time: \(Int(settings.takeover.leadTime / 60)) min before")
                 }
                 Toggle("Only events with a video link", isOn: $settings.takeover.requireConferenceLink)
+                Toggle("Skip all-day events", isOn: $settings.takeover.skipAllDayEvents)
                 Toggle("Skip events with no other attendees", isOn: $settings.takeover.skipSoloEvents)
                 Toggle("Skip declined events", isOn: $settings.takeover.skipDeclinedEvents)
                 Button("Test takeover", action: onTestTakeover)
