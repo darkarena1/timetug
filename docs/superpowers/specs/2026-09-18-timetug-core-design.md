@@ -49,7 +49,7 @@ Contents:
 
 - **Model:** `CalendarEvent` (id, title, start, end, all-day, attendees, response status, location, notes, url, optional `conferenceURL`, calendar id), `CalendarInfo`.
 - **`CalendarSource` protocol:** list calendars, fetch events for a `DateInterval`, and a change stream. Returns normalized model only; EventKit types never leak. Reports a status: `ok`, `needsPermission`, `authExpired`, `failing(reason)`.
-- **`CalendarStore`:** merges and de-duplicates events from all sources (by source event id + start + title), keeps last-good events per source, publishes a snapshot.
+- **`CalendarStore`:** merges and de-duplicates events from all sources (by lowercased title + start + end, so one meeting on several calendars appears once), keeps last-good events per source, publishes a snapshot.
 - **`TakeoverPolicy`:** pure functions deciding whether an event qualifies (opt-in, filters).
 - **`Scheduler`:** given a snapshot, policy, lead time and injected clock, computes the next fire moment and emits `TakeoverRequest`.
 - **`ConferenceLinkDetector`:** see below.
