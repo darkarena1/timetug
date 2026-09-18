@@ -133,7 +133,7 @@ TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
 
 ## Rules
 - Core answers "what and when". The app answers "how it looks and where it lives". If code needs a window, tray or pixel, it belongs in the app.
-- Dependencies point one way: `Apps/macOS -> Sources -> Core`.
+- Dependencies point toward Core: `Apps/macOS -> EventKitSource -> TimeTugCore`, and the app also depends on Core directly. The app is the composition root: it owns source configuration UI and credential storage. Source packages contain no UI.
 - Time is always passed in (`now: Date`); never call `Date()` inside Core logic.
 - Core has no display strings. Formatting belongs to the front end.
 - Every Core behavior has a Swift Testing test. Write the failing test first.
