@@ -20,6 +20,14 @@ enum SettingsPane: String, CaseIterable, Hashable, Identifiable {
         case .tugRules: "bolt.fill"
         }
     }
+
+    var iconColor: Color {
+        switch self {
+        case .general: Color.gray
+        case .calendars: Color(red: 0.18, green: 0.48, blue: 0.96)
+        case .tugRules: Color(red: 1.0, green: 0.62, blue: 0.10)
+        }
+    }
 }
 
 @MainActor

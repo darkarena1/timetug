@@ -32,11 +32,11 @@ struct SettingsView: View {
                 Button { navigation.reveal(item) } label: {
                     Label {
                         VStack(alignment: .leading) {
-                            Text(item.title)
+                            Text(item.title).foregroundStyle(.primary)
                             Text(item.pane.title).font(.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
-                        Image(systemName: item.pane.systemImage)
+                        PaneIcon(pane: item.pane)
                     }
                 }
                 .buttonStyle(.plain)
@@ -48,7 +48,8 @@ struct SettingsView: View {
             }
         } else {
             List(SettingsPane.allCases, selection: $navigation.pane) { pane in
-                Label(pane.title, systemImage: pane.systemImage).tag(pane)
+                Label { Text(pane.title).foregroundStyle(.primary) } icon: { PaneIcon(pane: pane) }
+                    .tag(pane)
             }
         }
     }

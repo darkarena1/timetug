@@ -15,19 +15,25 @@ struct TugRulesPane: View {
                 }
                 .pickerStyle(.menu)
                 Text("How long before a meeting starts TimeTug tugs you.")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
             .settingsHighlight("lead-time", navigation: navigation)
-            Toggle(SettingsText.videoLink, isOn: $settings.takeover.requireConferenceLink)
-                .settingsHighlight("video-link", navigation: navigation)
-            if settings.takeover.requireConferenceLink {
-                Label {
-                    Text("Meetings without a link won't tug you.")
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            // Control and info line share one row so the grouped Form draws no divider between them
+            // (`listRowSeparator` is ignored for macOS grouped forms).
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle(SettingsText.videoLink, isOn: $settings.takeover.requireConferenceLink)
+                    .settingsHighlight("video-link", navigation: navigation)
+                if settings.takeover.requireConferenceLink {
+                    Label {
+                        Text("Meetings without a link won't tug you.")
+                            .foregroundStyle(.secondary)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange.opacity(0.85))
+                    }
+                    .font(.footnote)
                 }
-                .font(.callout)
             }
             Toggle(SettingsText.skipSolo, isOn: $settings.takeover.skipSoloEvents)
                 .settingsHighlight("skip-solo", navigation: navigation)
