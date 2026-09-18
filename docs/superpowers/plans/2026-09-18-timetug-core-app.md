@@ -4,7 +4,7 @@
 
 **Goal:** Build a macOS menu bar app that reads Apple Calendar, lists today's events, and takes over every screen before qualifying meetings.
 
-**Architecture:** A platform-neutral Swift package (`TimeTugCore`) holds the event model, takeover policy, scheduler, store and link detection. `EventKitSource` adapts Apple Calendar to Core's `CalendarSource` protocol. `Apps/macOS` is a thin AppKit/SwiftUI shell that owns all presentation. Dependencies point one way: `Apps/macOS -> EventKitSource -> TimeTugCore`.
+**Architecture:** A platform-neutral Swift package (`TimeTugCore`) holds the event model, takeover policy, scheduler, store and link detection. `EventKitSource` adapts Apple Calendar to Core's `CalendarSource` protocol. `Apps/macOS` is a thin AppKit/SwiftUI shell that owns all presentation. Dependencies point toward Core: `Apps/macOS -> EventKitSource -> TimeTugCore`, and the app also depends on Core directly.
 
 **Tech Stack:** Swift 6.4 / Xcode 27, Swift Package Manager, Swift Testing (`import Testing`), SwiftUI + AppKit, EventKit, XcodeGen (app project generated from `Apps/macOS/project.yml`).
 
@@ -14,7 +14,7 @@
 
 - Core (`Packages/TimeTugCore`) is pure Swift: it must not import AppKit, SwiftUI, EventKit or any UI framework, and must contain no display strings or menu bar mode enums.
 - Core answers "what and when"; the macOS app answers "how it looks and where it lives".
-- Dependency direction: `Apps/macOS -> Sources -> Core`. Core never imports the others.
+- Dependency direction: `Apps/macOS -> EventKitSource -> TimeTugCore` and `Apps/macOS -> TimeTugCore`. Core never imports the others; the app is the composition root and owns source configuration UI and credential storage.
 - Fetch window: local midnight today through next local midnight + lead time + 5 minute buffer (`CalendarStore.fetchBuffer = 300`).
 - Display window: today only; an event after midnight appears in the dropdown only once inside its lead-time period.
 - Takeover defaults: skip all-day, skip declined, skip events with no other attendees; optional "video link only" (default off). Per-calendar opt-in.

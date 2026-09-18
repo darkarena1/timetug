@@ -39,7 +39,7 @@ TimeTug/
     └── macOS/             # menu bar, dropdown, overlay, settings
 ```
 
-Dependency direction is one-way: `Apps/macOS -> Sources -> Core`. Core never imports the others.
+Dependencies point toward Core: `Apps/macOS -> EventKitSource -> TimeTugCore`, and `Apps/macOS -> TimeTugCore` directly. Core defines the `CalendarSource` protocol and imports nothing else; each source package implements it. The app is the composition root: it is the only place that knows which concrete sources exist, and it owns any source configuration UI (sign-in, server settings) and credential storage. Source packages contain no UI.
 
 ## TimeTugCore
 
