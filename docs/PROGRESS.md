@@ -12,6 +12,7 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 | 5 CalendarStore | complete (+ dedupe-merge fix so opt-in/links survive; re-review Importants were about the controller-ordered fix, adjudicated not defects) | 461ca02..cb44e8c |
 | 6 DayAgenda | complete, review clean (Core package done: 63 tests) | 3e61801..f656bd1 |
 | 7 EventKitSource | complete, review clean (build-only verification) | 8ee011c..399524c |
+| 8 macOS shell + coordinator | complete (build + 8 app tests verified by controller; GUI checks pending user) | 4a3bf7a..a920ac8 |
 
 ## Notes
 - 2026-09-18: brand artwork added by the user (`artwork/`, `Apps/macOS/Resources/Assets.xcassets`, `docs/ARTWORK_USAGE.md`); plan Task 13 covers wiring it in plus README. `artwork/Source` boards and menu bar PNG exports were intentionally not committed (still in ~/Downloads/TimeTugAssets).
@@ -23,3 +24,4 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 - Design change in Task 5: CalendarEvent.additionalCalendarKeys/allCalendarKeys; TakeoverPolicy opt-in passes if ANY calendar of a merged meeting is opted in; DayAgenda (Task 6) hides a merged meeting only if all its calendars are hidden (plan already updated).
 - Task 5 minors: sourceNames uniqueKeysWithValues traps on duplicate source ids; dedupe key uses raw doubles. Task 6 minors: force-unwrapped day arithmetic in DayAgenda.make.
 - Manual/visual verification steps (Tasks 8-11, checklist in docs/manual-tests) cannot be done by subagents: they build and run unit tests only; the user must do the manual checks.
+- Task 8: plan test inputs 300s->299s (compact(300) is "5m"); fireTest() is added in Task 10 not Task 8; DeepSeek flagged both, adjudicated not defects.
