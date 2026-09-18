@@ -11,6 +11,7 @@ final class AppCoordinator {
 
     let settings = SettingsStore()
     let model = AppModel()
+    let navigation = SettingsNavigation()
 
     private let eventKit = EventKitSource()
     private let store: CalendarStore
@@ -22,7 +23,7 @@ final class AppCoordinator {
     private var statusItem: StatusItemController?
     private let overlay = OverlayController()
     private lazy var settingsWindow = SettingsWindowController { [unowned self] in
-        SettingsView(settings: settings, model: model, onTestTakeover: { [weak self] in self?.fireTest() })
+        SettingsView(settings: settings, model: model, navigation: navigation, onTestTakeover: { [weak self] in self?.fireTest() })
     }
 
     init() {
@@ -52,7 +53,7 @@ final class AppCoordinator {
             Task { @MainActor in await self?.refresh() }
         }
         await refresh()
-        if settings.takeover.takeoverCalendarKeys.isEmpty { openSettings() }
+        if settings.takeover.takeoverCalendarKeys.isEmpty { openSettings(tab: .calendars) }
 
         for await _ in eventKit.changes() { await refresh() }
     }
@@ -143,5 +144,8 @@ final class AppCoordinator {
         ))
     }
 
-    func openSettings() { settingsWindow.show() }
+    func openSettings(tab: SettingsTab? = nil) {
+        if let tab { navigation.tab = tab }
+        settingsWindow.show()
+    }
 }

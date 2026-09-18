@@ -2,9 +2,17 @@ import ServiceManagement
 import SwiftUI
 import TimeTugCore
 
+enum SettingsTab: Hashable { case general, calendars }
+
+@MainActor
+final class SettingsNavigation: ObservableObject {
+    @Published var tab: SettingsTab = .general
+}
+
 struct SettingsView: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var model: AppModel
+    @ObservedObject var navigation: SettingsNavigation
     let onTestTakeover: () -> Void
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var launchError: String?
@@ -13,6 +21,18 @@ struct SettingsView: View {
     @State private var isReverting = false
 
     var body: some View {
+        TabView(selection: $navigation.tab) {
+            generalTab
+                .tabItem { Label("General", systemImage: "gearshape") }
+                .tag(SettingsTab.general)
+            calendarsTab
+                .tabItem { Label("Calendars", systemImage: "calendar") }
+                .tag(SettingsTab.calendars)
+        }
+        .frame(minWidth: 520, idealWidth: 560, minHeight: 460, idealHeight: 600)
+    }
+
+    private var generalTab: some View {
         Form {
             Section("Takeover") {
                 Stepper(value: leadMinutes, in: 0...30) {
@@ -57,14 +77,38 @@ struct SettingsView: View {
                         .foregroundStyle(.red)
                 }
             }
+        }
+        .formStyle(.grouped)
+        .onAppear {
+            let actual = SMAppService.mainApp.status == .enabled
+            if actual != launchAtLogin {
+                isReverting = true
+                launchAtLogin = actual
+            }
+        }
+    }
 
-            Section("Calendars") {
-                Toggle("Skip all-day events", isOn: $settings.takeover.skipAllDayEvents)
-                if model.calendars.isEmpty {
-                    Text("No calendars found. Check calendar access in System Settings.")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(model.calendars) { calendar in
+    private var calendarsTab: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Choose which calendars can take over your screen.")
+                .font(.callout).foregroundStyle(.secondary)
+            Toggle("Skip all-day events", isOn: $settings.takeover.skipAllDayEvents)
+            calendarList
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Text("Takeover needs the calendar shown in the list: turning on Takeover shows it, and hiding it turns Takeover off.")
+                .font(.footnote).foregroundStyle(.secondary)
+        }
+        .padding(16)
+    }
+
+    private var calendarList: some View {
+        Group {
+            if model.calendars.isEmpty {
+                Text("No calendars found. Check calendar access in System Settings.")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(model.calendars) { calendar in
                     HStack {
                         Text(calendar.title)
                         Spacer()
@@ -73,19 +117,11 @@ struct SettingsView: View {
                     }
                     .toggleStyle(.checkbox)
                 }
-                Text("Takeover needs the calendar shown in the list: turning on Takeover shows it, and hiding it turns Takeover off.")
-                    .font(.footnote).foregroundStyle(.secondary)
+                .listStyle(.plain)
             }
         }
-        .formStyle(.grouped)
-        .frame(width: 520, height: 560)
-        .onAppear {
-            let actual = SMAppService.mainApp.status == .enabled
-            if actual != launchAtLogin {
-                isReverting = true
-                launchAtLogin = actual
-            }
-        }
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator))
     }
 
     private var leadMinutes: Binding<Int> {

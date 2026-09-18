@@ -22,9 +22,10 @@ final class SettingsWindowController {
     private func makeWindow() -> NSWindow {
         let created = NSWindow(contentViewController: NSHostingController(rootView: content()))
         created.title = "TimeTug Settings"
-        created.styleMask = [.titled, .closable, .miniaturizable]
+        created.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         created.isReleasedWhenClosed = false
-        created.center()   // only on creation, so reopening keeps the user's placement
+        // Persist size/position; center only when there is no saved frame.
+        if !created.setFrameAutosaveName("TimeTugSettings") { created.center() }
         return created
     }
 }
