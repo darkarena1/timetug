@@ -13,14 +13,6 @@ struct GeneralPane: View {
 
     var body: some View {
         Form {
-            Section("Menu bar") {
-                Picker(SettingsText.menuBarText, selection: $settings.menuBarMode) {
-                    Text("Icon only").tag(MenuBarDisplayMode.iconOnly)
-                    Text("Next meeting").tag(MenuBarDisplayMode.nextMeeting)
-                    Text("Countdown only").tag(MenuBarDisplayMode.countdown)
-                }
-                .settingsHighlight("menu-bar-text", navigation: navigation)
-            }
             Section("App") {
                 Toggle(SettingsText.launchAtLogin, isOn: $launchAtLogin)
                     .settingsHighlight("launch-at-login", navigation: navigation)
@@ -49,6 +41,14 @@ struct GeneralPane: View {
                 }
                 Button(SettingsText.aboutButton) { showingAbout = true }
                     .settingsHighlight("about", navigation: navigation)
+            }
+            Section("Menu bar") {
+                Picker(SettingsText.menuBarText, selection: $settings.menuBarMode) {
+                    Text("Icon only").tag(MenuBarDisplayMode.iconOnly)
+                    Text("Next meeting").tag(MenuBarDisplayMode.nextMeeting)
+                    Text("Countdown only").tag(MenuBarDisplayMode.countdown)
+                }
+                .settingsHighlight("menu-bar-text", navigation: navigation)
             }
         }
         .formStyle(.grouped)
