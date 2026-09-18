@@ -15,7 +15,7 @@ TimeTug is a macOS menu bar app that reads calendars, lists the day's events, an
 |---|---|
 | Language / UI | Swift; SwiftUI + AppKit; Swift Package Manager modules |
 | Takeover style | Full-screen overlay on all displays at a configurable lead time; user can Join, Snooze or Dismiss. Lead time 0 = "meeting is starting now" |
-| Which events take over | Per-calendar opt-in, plus toggleable filters, default on: skip all-day, skip declined, skip events with no other attendees; optional "video link only" |
+| Which events take over | Per-calendar opt-in, plus toggleable filters, default on: skip all-day (which also hides all-day events from the day list; the other filters are takeover-only), skip declined, skip events with no other attendees; optional "video link only" |
 | Dropdown | All events on opted-in calendars for today; finished events greyed out |
 | Sources | Open-source repo; sources isolated behind a small `CalendarSource` protocol so runtime plugins and other front ends are possible later. No runtime plugin loading now |
 | Time window | Current local calendar day for display; fetch extends to next midnight + lead time + buffer for takeover scheduling |
@@ -89,7 +89,7 @@ Choices: allowlist rather than "any URL" (avoid a Join button that opens a Googl
 - **Status item:** icon only by default. Optional modes (off by default): next-meeting title, or countdown-only. The mac layer formats and truncates text; updates each minute, each second in the final minute.
 - **Left click:** dropdown (NSPopover or NSMenu, decided in planning) of today's events; finished greyed out, current emphasized, source problems at top. **Right click:** Settings, Quit.
 - **Overlay:** one borderless window per display at a high window level (covers full-screen apps), tracks display connect/disconnect. Primary display: title, time, live countdown, large **Join** (if link), **Snooze** (1/5/10 min, capped), **Dismiss**. Other displays: dimmed cover with title. Return joins, Esc dismisses; overlay takes key focus so stray keystrokes do not reach background apps. Shows "Started N min ago" for late fires. Respects reduce-motion and accessibility labels.
-- **Settings** (SwiftUI, stored in `UserDefaults` as the Core Codable model): lead time (0 labelled "at start"); per-calendar takeover opt-in and separate dropdown visibility (default on); filters (video-link only default off; skip all-day, skip solo and skip declined default on); menu bar display mode; launch at login; a "test takeover" button. Takeover and "Show in list" are coupled: turning takeover on shows the calendar in the list, and hiding a calendar turns its takeover off.
+- **Settings** (SwiftUI, stored in `UserDefaults` as the Core Codable model): lead time (0 labelled "at start"); per-calendar takeover opt-in and separate dropdown visibility (default on); filters (video-link only default off; skip all-day, skip solo and skip declined default on; skip all-day also hides all-day events from the day list, the others affect takeovers only); menu bar display mode; launch at login; a "test takeover" button. Takeover and "Show in list" are coupled: turning takeover on shows the calendar in the list, and hiding a calendar turns its takeover off.
 
 ## Testing
 
