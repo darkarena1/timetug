@@ -16,6 +16,7 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 | 9 Dropdown popover | complete, review clean (GUI check pending user) | c017000..f484b0a |
 | 10 Takeover overlay | complete (build + 8 tests verified by controller; GUI checks pending user; DeepSeek Important on fireTest Join adjudicated not a defect, plan wording fixed) | cb9c4c5..d292e70 |
 | 11 Settings window | complete (build + 8 tests verified; GUI checks pending user) | 0284da9..c47a1cd |
+| 12 Docs, ADRs, manual checklist | complete (controller spot-checked ADR 0004 vs code and fixed one inaccuracy) | d332148..baff5d9 |
 
 ## Notes
 - 2026-09-18: brand artwork added by the user (`artwork/`, `Apps/macOS/Resources/Assets.xcassets`, `docs/ARTWORK_USAGE.md`); plan Task 13 covers wiring it in plus README. `artwork/Source` boards and menu bar PNG exports were intentionally not committed (still in ~/Downloads/TimeTugAssets).
