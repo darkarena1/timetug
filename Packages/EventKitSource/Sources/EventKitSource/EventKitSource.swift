@@ -22,8 +22,17 @@ public final class EventKitSource: CalendarSource, @unchecked Sendable {
             let account = $0.source?.title.trimmingCharacters(in: .whitespacesAndNewlines)
             return CalendarInfo(
                 sourceID: id, calendarID: $0.calendarIdentifier, title: $0.title,
-                accountName: (account?.isEmpty ?? true) ? nil : account)
+                accountName: (account?.isEmpty ?? true) ? nil : account,
+                colorHex: Self.hex(from: $0.cgColor))
         }
+    }
+
+    private static func hex(from color: CGColor?) -> String? {
+        guard let color, let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let c = color.converted(to: space, intent: .defaultIntent, options: nil),
+              let comps = c.components, comps.count >= 3 else { return nil }
+        let v = comps.prefix(3).map { Int((min(max($0, 0), 1) * 255).rounded()) }
+        return String(format: "#%02X%02X%02X", v[0], v[1], v[2])
     }
 
     public func events(in interval: DateInterval) async throws -> [CalendarEvent] {
