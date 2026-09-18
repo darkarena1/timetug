@@ -5,3 +5,8 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 
 | Task | Status | Commits |
 |---|---|---|
+
+## Notes
+- 2026-09-18: brand artwork added by the user (`artwork/`, `Apps/macOS/Resources/Assets.xcassets`, `docs/ARTWORK_USAGE.md`); plan Task 13 covers wiring it in plus README. `artwork/Source` boards and menu bar PNG exports were intentionally not committed (still in ~/Downloads/TimeTugAssets).
+- Repo is to be published as a public GitHub project. No push has been done; no LICENSE chosen yet (ask the user).
+- DeepSeek is used for task reviews via a Haiku relay subagent (no secrets ever sent). Implementers run on Claude.

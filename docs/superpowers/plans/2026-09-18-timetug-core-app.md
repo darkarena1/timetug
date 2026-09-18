@@ -1,5 +1,7 @@
 # TimeTug Core App Implementation Plan
 
+> Public GitHub project: commit nothing private, no secrets. Task 13 (brand assets, README) was added after the initial plan; artwork is already in `artwork/`, `Apps/macOS/Resources/Assets.xcassets`, and `docs/ARTWORK_USAGE.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a macOS menu bar app that reads Apple Calendar, lists today's events, and takes over every screen before qualifying meetings.
@@ -2511,6 +2513,98 @@ Run before a release, and after touching overlay, status item or scheduling code
 ```bash
 git add docs
 git commit -m "docs: add architecture map, ADRs and macOS manual checklist" -m "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 13: Brand assets, README and public-repo hygiene
+
+The artwork is already copied into the repo (committed before this task): `artwork/Branding/`, `artwork/GitHub/`, `Apps/macOS/Resources/Assets.xcassets/` (AppIcon, MenuBarTemplate, MenuBarColor) and `docs/ARTWORK_USAGE.md`. Read `docs/ARTWORK_USAGE.md` first. The repo will be published publicly on GitHub, so nothing private may be committed.
+
+**Files:**
+- Modify: `Apps/macOS/project.yml` (add the `Resources` source and app icon setting)
+- Modify: `Apps/macOS/Sources/StatusItemController.swift` (use the `MenuBarTemplate` asset)
+- Create: `README.md`
+- Modify: `AGENTS.md` (artwork pointers)
+
+**Interfaces:**
+- Consumes: asset names `AppIcon`, `MenuBarTemplate`, `MenuBarColor`; `StatusItemController.init` from Task 8.
+- Produces: none.
+
+- [ ] **Step 1: Add the asset catalog to the app target**
+
+In `Apps/macOS/project.yml`, change the `TimeTug` target's `sources` to `[Sources, Resources]` and add under that target's `settings.base`:
+```yaml
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+```
+
+- [ ] **Step 2: Use the template menu bar icon**
+
+In `StatusItemController.init`, replace the SF Symbol line
+`button.image = NSImage(systemSymbolName: "alarm", accessibilityDescription: "TimeTug")` with:
+```swift
+            let image = NSImage(named: "MenuBarTemplate")
+                ?? NSImage(systemSymbolName: "alarm", accessibilityDescription: "TimeTug")
+            image?.isTemplate = true            // the OS tints it for light/dark menu bars
+            image?.accessibilityDescription = "TimeTug"
+            button.image = image
+```
+Do not use `MenuBarColor` yet: a "meeting soon" color state is a possible follow-up, not part of this plan.
+
+- [ ] **Step 3: Build and verify**
+
+Run: `xcodegen generate --spec Apps/macOS/project.yml`, then `xcodebuild -project Apps/macOS/TimeTug.xcodeproj -scheme TimeTug -destination 'platform=macOS' -derivedDataPath build/DerivedData build`
+Expected: `** BUILD SUCCEEDED **` with no asset catalog warnings. Confirm the built app bundle contains `Assets.car` and an `AppIcon` (`ls build/DerivedData/Build/Products/Debug/TimeTug.app/Contents/Resources`). Launch it: the menu bar shows the dog icon, tinted correctly in both light and dark menu bars.
+
+- [ ] **Step 4: Write `README.md`**
+
+Use this structure (plain, accurate to what the plan built; do not claim features that are not implemented):
+```markdown
+<p align="center">
+  <img src="artwork/GitHub/timetug-readme-banner.png" alt="TimeTug: a tug when time needs your attention">
+</p>
+
+# TimeTug
+
+A tug when time needs your attention. TimeTug lives in your macOS menu bar, lists today's meetings,
+and takes over every screen shortly before a meeting starts, so you don't hyperfocus through it.
+
+## Features
+- Reads Apple Calendar (iCloud, Google and Exchange accounts added to macOS) via EventKit
+- Full-screen takeover on every display at a configurable lead time (0 = "starting now"), with Join, Snooze and Dismiss
+- Detects Zoom, Meet, Teams, Webex and similar links for a one-click Join
+- Per-calendar opt-in for takeovers; skips all-day, declined and solo events by default
+- Menu bar: icon only (default), next meeting, or countdown
+
+## Build
+Requires macOS 14+ and Xcode 27.
+    xcodegen generate --spec Apps/macOS/project.yml
+    xcodebuild -project Apps/macOS/TimeTug.xcodeproj -scheme TimeTug -destination 'platform=macOS' build
+Core logic tests: `swift test --package-path Packages/TimeTugCore`
+
+## Architecture
+`Packages/TimeTugCore` (portable logic), `Packages/EventKitSource` (Apple Calendar), `Apps/macOS` (the app).
+See `docs/architecture.md`. Agents and contributors: read `AGENTS.md`.
+
+## Status
+Early development. No license has been chosen yet.
+```
+(Indent the two build commands as a fenced ```bash block in the real file.)
+
+- [ ] **Step 5: Public-repo hygiene check**
+
+Run: `git ls-files | grep -Ei '\.(env|pem|p12|key)$|secret|credential' ; grep -RIn --exclude-dir=.git --exclude-dir=.build --exclude-dir=build --exclude=*.png -E 'BEGIN [A-Z ]*PRIVATE KEY|sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}' .`
+Expected: no output. Also confirm `.gitignore` covers `.superpowers/`, `build/`, `*.xcodeproj`, `.build/`.
+
+- [ ] **Step 6: Add artwork pointers to `AGENTS.md`**
+
+Append under Layout: `- \`artwork/\`: brand images (see \`docs/ARTWORK_USAGE.md\`); the app's asset catalog is \`Apps/macOS/Resources/Assets.xcassets\`. Do not use the app icon for the menu bar; use the \`MenuBarTemplate\` template image.`
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add README.md AGENTS.md Apps/macOS/project.yml Apps/macOS/Sources/StatusItemController.swift
+git commit -m "feat(macos): use brand app icon and menu bar template image; add README" -m "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---
