@@ -103,10 +103,6 @@ Choices: allowlist rather than "any URL" (avoid a Join button that opens a Googl
 - ADRs in `docs/decisions/` for each decision in the table.
 - Small, single-purpose modules and files; strict typing; protocol boundaries; tests for all Core logic; conventions documented, not implied.
 
-## Environment note
-
-Xcode's license has not been accepted on the dev machine; `sudo xcodebuild -license` is needed before command-line builds work.
-
 ## Known simplifications
 
 - Display window is the current day only; may widen later (single parameter in the store).
