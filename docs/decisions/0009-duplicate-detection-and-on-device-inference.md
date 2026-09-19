@@ -13,7 +13,7 @@ The exact title+time merge misses real duplicates ("Scott: Doctor" vs "Intermoun
 - The takeover ledger and guard match on any member's content key so a late merge cannot re-fire a meeting.
 - Bounds: a merged group holds at most 4 events, the lesson book keeps at most 300 lessons, the verdict cache at most 1000 verdicts, a verdict lives 7 days, and notes sent to a model are cut to 500 characters.
 - Verdicts are kept by age (the 7-day TTL) and the cap, not by event end: the fetch window includes events that already ended today, and dropping their verdicts would put the pair back in the pending queue and re-judge it forever.
-- Current rule order in `DuplicateRules.decide`: exact match, same calendar, all-day, time gate, external UID, conference link, then a shared attendee or organizer email (merge), then same location (merge), then the vetoes (conflicting location, conference, attendees). The shared attendee/organizer merge therefore runs before the vetoes. This is flagged for review; it is unchanged here.
+- Current rule order in `DuplicateRules.decide`: exact match, same calendar, all-day, time gate, external UID (merge), conference link (merge), the vetoes (conflicting location, conflicting conference), shared attendee or organizer email (merge), same location (merge), attendee-disjoint veto, then ambiguous. Vetoes run before shared-attendee and same-location merges (user decision 2026-09-19).
 - A merged event takes the largest attendee count and the most-attending response of its copies, so merging never makes a meeting stop qualifying for takeover.
 
 ## Consequences

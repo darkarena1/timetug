@@ -26,12 +26,14 @@ Evaluated per pair of events, in this order:
 3. **Time gate (candidates only):** intervals overlap, |start difference| <= 30 min and
    |end difference| <= 60 min. Pairs outside the gate are separate. The end tolerance is
    deliberately looser because end times are uncertain and may include travel.
-4. **Strong match, merge** on any of: same conference URL or meeting ID; same iCal UID; a shared
-   attendee email; same normalized location.
+4. **Identity match, merge:** same conference URL or meeting ID, or same iCal UID.
 5. **Veto, separate:** a hard field present on BOTH events with different values (location,
-   conference link, attendee sets with no overlap). The veto never fires when a field is
-   absent on either side. Inference is not consulted.
-6. **Ambiguous:** none of the above decided the pair. This bucket may go to inference.
+   conference link). The veto never fires when a field is absent on either side. Inference is
+   not consulted. Vetoes run before the shared-attendee and same-location merges, so a shared
+   person or place merges two events only when nothing conflicts.
+6. **Weaker match, merge:** a shared attendee or organizer email; same normalized location.
+7. **Attendee veto, separate:** both sides have attendee emails and the sets are disjoint.
+8. **Ambiguous:** none of the above decided the pair. This bucket may go to inference.
 
 A **sparse** event has no location, conference link, attendees or notes. Inference may run when
 ONE event is sparse and the other rich (an official appointment plus a placeholder). The rich

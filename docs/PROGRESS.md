@@ -63,7 +63,7 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 
 ## Calendar dedup + on-device inference: execution log (plan: docs/superpowers/plans/2026-09-19-calendar-dedup-inference.md)
 - Task 1 complete (b43757d): model types, any-member ledger/guard. Core 112 tests.
-- Task 2 complete (05cfbbe): DuplicateRules pair rules. Core 123 tests. Open note: shared-attendee/organizer merge fires before vetoes (matches the requested rule; flagged for the user).
+- Task 2 complete (05cfbbe): DuplicateRules pair rules. Core 123 tests. Open note: shared-attendee/organizer merge fires before vetoes (superseded 2026-09-19: vetoes now run first).
 - Task 3 complete (f3f35b3): LessonBook. Core 130 tests.
 - Task 4 complete (ff08195): DuplicateAdjudicator interface + VerdictCache. Core 135 tests.
 - Task 5 complete (1b65ca3): DuplicateResolver. Core 147 tests.
