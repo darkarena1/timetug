@@ -35,6 +35,8 @@ jobs:
         run: swift test --package-path Packages/TimeTugCore
       - name: Build EventKitSource
         run: swift build --package-path Packages/EventKitSource
+      - name: Test AppleIntelligenceInference
+        run: swift test --package-path Packages/AppleIntelligenceInference
 
   app:
     runs-on: macos-26

@@ -47,3 +47,13 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Ledger file does not grow: after several days of use `~/Library/Application Support/TimeTug/takeover-ledger.json` only contains recent meetings.
 - [ ] Installer DMG (from a CI artifact or a release): opening it shows a cream window with the TimeTug icon on the left, the Applications shortcut on the right, a blue arrow between them and "Drag TimeTug to Applications"; no toolbar, sidebar or status bar.
 - [ ] Dragging TimeTug onto Applications copies the app (it then launches from /Applications); Eject works afterwards and the mounted volume shows the TimeTug icon.
+
+## Duplicate detection (beta)
+- [ ] Settings > Calendars: the on-device intelligence toggle is off by default and shows a Beta badge.
+- [ ] With it off, "Scott: Doctor" vs a detailed entry for the same appointment stay separate.
+- [ ] With it on and Apple Intelligence available, the pair merges and shows "Merged with Apple Intelligence".
+- [ ] "Not the same meeting" splits it, and it stays split after relaunch.
+- [ ] "Merge with..." on a separate look-alike merges it and shows "Merged manually".
+- [ ] On a Mac without Apple Intelligence, the status line says rules only and nothing is merged by the model.
+- [ ] A merged meeting takes over exactly once.
+- [ ] "Forget learned corrections" resets decisions.

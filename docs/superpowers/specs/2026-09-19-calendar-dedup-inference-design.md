@@ -37,6 +37,8 @@ A **sparse** event has no location, conference link, attendees or notes. Inferen
 ONE event is sparse and the other rich (an official appointment plus a placeholder). The rich
 event's details are evidence in the prompt. Inference may also run when both are sparse.
 
+All-day events merge only on an exact match and are never sent to inference. A learned `same` lesson still requires the time gate; a learned `different` lesson is consulted inside the gate too (outside it the rules already keep the pair separate).
+
 Grouping is conservative: a merge group is only extended when the candidate is consistent with
 every member (no member vetoes it). Group size is capped (default 4).
 
@@ -64,7 +66,8 @@ is never called. Core refuses non-on-device engines regardless of what the app i
 Foundation Models adapter with structured (guided) output. Reports `.available` only when
 `SystemLanguageModel.default` reports the model ready; otherwise `.unavailable` with a reason.
 Sends only: titles, times, location, attendee names (no emails), calendar and account names,
-notes truncated to about 500 characters, and lessons. The prompt builder is a pure function.
+notes truncated to about 500 characters, and lessons.
+`AdjudicationEvent` (Core) truncates notes to 500 characters and carries attendee names only; the prompt builder cannot see emails. The prompt builder is a pure function.
 The app is the composition root: it constructs the adapter and injects it. Other platforms add
 sibling packages later.
 
@@ -90,6 +93,7 @@ effect on the next refresh, and already-cached AI verdicts are ignored while it 
 
 ## 4. Merge result, provenance and user override
 
+- `mergedMembers` lists every original copy including the primary; the ledger, guard, unmerge and manual merge all work from it.
 - The richer event is the primary, so the official title and details win. The other calendar key
   goes into `additionalCalendarKeys` as today. Missing details are borrowed as today.
 - `MergeProvenance` on the event: `.rule`, `.inference(engineID, engineName)`, `.userConfirmed`.
@@ -116,6 +120,7 @@ signals summary, lastUsed }`. No notes, attendee names or emails are stored.
 Bounds: stored in a local file beside the takeover ledger; cap about 300 lessons (oldest first
 out); refreshing a recurring pair updates its lesson rather than adding one; lessons expire after
 about 6 months unused. Nothing leaves the device. Settings has "Forget learned corrections".
+Settings > Calendars has a 'Forget learned corrections' button.
 
 ## 5. Data model changes
 
