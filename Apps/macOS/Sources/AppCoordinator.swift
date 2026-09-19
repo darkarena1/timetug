@@ -1,4 +1,5 @@
 import AppKit
+import AppleIntelligenceInference
 import Combine
 import EventKitSource
 import KeyboardShortcuts
@@ -20,6 +21,7 @@ final class AppCoordinator {
     private let store: CalendarStore
     private var snapshot = CalendarSnapshot.empty
     private let ledgerStore = LedgerStore()
+    private let dedupStore = DedupStateStore()
     private var ledger: TakeoverLedger
     /// True until the first successful refresh after launch has acknowledged in-progress meetings.
     private var needsLaunchAcknowledge = true
@@ -30,11 +32,12 @@ final class AppCoordinator {
     private let overlay = OverlayController()
     private lazy var aboutWindow = AboutWindowController()
     private lazy var settingsWindow = SettingsWindowController { [unowned self] in
-        SettingsView(settings: settings, model: model, navigation: navigation, onTestTug: { [weak self] in self?.fireTest() })
+        SettingsView(settings: settings, model: model, navigation: navigation, onTestTug: { [weak self] in self?.fireTest() },
+                     onForgetCorrections: { [weak self] in self?.forgetCorrections() })
     }
 
     init() {
-        store = CalendarStore(sources: [eventKit])
+        store = CalendarStore(sources: [eventKit], adjudicator: AppleIntelligence.makeAdjudicator())
         var loaded = ledgerStore.load()
         loaded.prune(now: Date())
         ledger = loaded
@@ -80,6 +83,11 @@ final class AppCoordinator {
         Timer.scheduledTimer(withTimeInterval: Self.periodicRefresh, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
         }
+        await store.load(dedupStore.load())
+        _ = await store.setInferenceEnabled(settings.inferenceEnabled, now: Date())
+        settings.$inferenceEnabled.dropFirst().sink { [weak self] enabled in
+            Task { @MainActor in await self?.setInference(enabled) }
+        }.store(in: &cancellables)
         await refresh()
         if settings.takeover.takeoverCalendarKeys.isEmpty { openSettings(pane: .calendars) }
 
@@ -94,10 +102,17 @@ final class AppCoordinator {
     }
 
     func refresh() async {
-        snapshot = await store.refresh(now: Date(), leadTime: settings.takeover.leadTime)
+        apply(await store.refresh(now: Date(), leadTime: settings.takeover.leadTime))
+        await resolvePending()
+    }
+
+    /// Publishes a snapshot to the model, ledger bookkeeping, timers and UI.
+    private func apply(_ newSnapshot: CalendarSnapshot) {
+        snapshot = newSnapshot
         model.calendars = snapshot.calendars
         model.statuses = snapshot.statuses
         model.sourceNames = snapshot.sourceNames
+        model.candidates = snapshot.candidates
         if ledger.prune(now: Date()) { persistLedger() }
         if needsLaunchAcknowledge {
             // Meetings already underway at launch never take over (late fire is for wake-from-sleep).
@@ -108,6 +123,43 @@ final class AppCoordinator {
         }
         rearm()
         updateUI()
+    }
+
+    /// Asks the on-device model about look-alike pairs off the refresh path; each verdict republishes.
+    private func resolvePending() async {
+        model.inferenceStatus = await store.inferenceStatus()
+        while let updated = await store.resolvePending(now: Date()) { apply(updated) }
+        await persistDedup()
+    }
+
+    private func setInference(_ enabled: Bool) async {
+        apply(await store.setInferenceEnabled(enabled, now: Date()))
+        await resolvePending()
+    }
+
+    func unmerge(_ event: CalendarEvent) {
+        Task { @MainActor in
+            apply(await store.unmerge(event, now: Date()))
+            await persistDedup()
+        }
+    }
+
+    func merge(_ a: CalendarEvent, _ b: CalendarEvent) {
+        Task { @MainActor in
+            apply(await store.merge(a, b, now: Date()))
+            await persistDedup()
+        }
+    }
+
+    private func forgetCorrections() {
+        Task { @MainActor in
+            apply(await store.forgetLessons(now: Date()))
+            await persistDedup()
+        }
+    }
+
+    private func persistDedup() async {
+        dedupStore.save(await store.state())
     }
 
     /// Arms one timer for the next takeover. Skipped while an overlay is up (see Task 10).
@@ -143,7 +195,7 @@ final class AppCoordinator {
             TakeoverLog.suppressed(reason, event: event)
             rearm()
         case .present:
-            let current = snapshot.events.first { $0.id == event.id || $0.contentKey == event.contentKey } ?? event
+            let current = snapshot.events.first { $0.isSameMeeting(as: event) } ?? event
             let reason = ledger.isSnoozed(current) ? "snooze expired"
                 : now >= current.start.addingTimeInterval(Self.launchGrace) ? "late after wake" : "lead time"
             ledger.markFired(current, now: now)

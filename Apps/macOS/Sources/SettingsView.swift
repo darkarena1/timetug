@@ -5,6 +5,7 @@ struct SettingsView: View {
     @ObservedObject var model: AppModel
     @ObservedObject var navigation: SettingsNavigation
     let onTestTug: () -> Void
+    let onForgetCorrections: () -> Void
     @State private var query = ""
 
     var body: some View {
@@ -59,7 +60,7 @@ struct SettingsView: View {
         case .general:
             GeneralPane(settings: settings, navigation: navigation)
         case .calendars:
-            CalendarsPane(settings: settings, model: model, navigation: navigation)
+            CalendarsPane(settings: settings, model: model, navigation: navigation, onForgetCorrections: onForgetCorrections)
         case .tugRules:
             TugRulesPane(settings: settings, navigation: navigation, onTestTug: onTestTug)
         }
