@@ -25,11 +25,23 @@ permissions:
 jobs:
   release:
     runs-on: macos-26
+    # Requires approval from the repository owner (Settings > Environments > release) and only
+    # runs for master or v* tags.
+    environment: release
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Require the release commit to be on master
+        run: |
+          git fetch --quiet origin master
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "::error::Releases can only be cut from commits on master; $GITHUB_SHA is not."
+            exit 1
+          fi
       - name: Select newest Xcode
         run: scripts/ci/select-xcode.sh
       - name: Install XcodeGen
