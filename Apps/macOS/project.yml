@@ -32,7 +32,7 @@ targets:
       path: Sources/Info.plist
       properties:
         CFBundleName: TimeTug
-        CFBundleShortVersionString: "0.2.0"
+        CFBundleShortVersionString: "0.0.0-dev"
         CFBundleVersion: "1"
         LSUIElement: true
         NSCalendarsFullAccessUsageDescription: TimeTug reads your calendars to alert you before meetings start.

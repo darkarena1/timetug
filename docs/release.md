@@ -60,7 +60,7 @@ scripts/release/sign-and-notarize.sh app
 VERSION=0.1.0 scripts/release/make-dmg.sh
 scripts/release/sign-and-notarize.sh dmg         # signs, notarizes and staples dist/TimeTug-0.1.0.dmg
 ```
-Use `TAG=v0.1.0` to set the version for `build-release.sh`; without it the version comes from `Apps/macOS/project.yml`.
+Use `TAG=v0.1.0` to set the version for `build-release.sh`; without it the version comes from `Apps/macOS/project.yml` (a `0.0.0-dev` placeholder). The build number (`CFBundleVersion`) is stamped from `BUILD_NUMBER`, which defaults to the workflow run number. Never bump versions in the repo: the tag is the source of truth.
 
 ## Changing the runner label
 Workflows use `runs-on: macos-26` (the hosted image with Xcode 26 or newer). If that label is unavailable for your account, edit `runs-on` in the `core`, `app` and `dmg` jobs of `.github/workflows/ci.yml` and in `.github/workflows/release.yml` (for example to `macos-latest` once it ships Xcode 26, or a self-hosted label). `scripts/ci/select-xcode.sh` selects the newest Xcode installed on whatever runner is used.
