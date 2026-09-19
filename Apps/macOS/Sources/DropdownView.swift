@@ -268,7 +268,8 @@ private struct EventCard: View {
                             .accessibilityHint(isExpanded ? "Collapse merged events" : "Expand merged events")
                             .accessibilityAddTraits(.isButton)
                             Menu {
-                                Button("Not the same meeting") { onUnmerge(event) }
+                                Button("Unmerge all") { onUnmerge(event) }
+                                    .accessibilityLabel("Unmerge all events in this group")
                             } label: {
                                 Image(systemName: "ellipsis.circle")
                                     .font(.system(size: 11)).foregroundStyle(secondaryColor)
@@ -304,7 +305,10 @@ private struct EventCard: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityText)
         .contextMenu {
-            if row.isMerged { Button("Not the same meeting") { onUnmerge(event) } }
+            if row.isMerged {
+                Button("Unmerge all") { onUnmerge(event) }
+                    .accessibilityLabel("Unmerge all events in this group")
+            }
             ForEach(candidates) { other in
                 Button("Merge with \u{201C}\(other.title)\u{201D} (\(PopupText.clock(other.start)))") { onMerge(event, other) }
             }
@@ -329,9 +333,15 @@ private struct EventCard: View {
                     .font(.system(size: 10)).foregroundStyle(secondaryColor).lineLimit(1)
             }
             Spacer(minLength: 0)
-            Button("Not the same") { onSeparate(event, member.members) }
-                .buttonStyle(.link).font(.system(size: 10))
-                .accessibilityLabel("Not the same meeting: \(member.title)")
+            Button {
+                onSeparate(event, member.members)
+            } label: {
+                Label("Split off", systemImage: "arrow.triangle.branch").font(.system(size: 10))
+            }
+            .buttonStyle(.bordered).controlSize(.small)
+            .help("Show this as its own event")
+            .accessibilityLabel(member.copyCount > 1
+                ? "Split off: \(member.title), \(member.copyCount) copies" : "Split off: \(member.title)")
         }
         .accessibilityElement(children: .contain)
     }
