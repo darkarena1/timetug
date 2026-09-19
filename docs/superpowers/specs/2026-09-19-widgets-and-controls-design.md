@@ -54,3 +54,7 @@ Add two desktop widgets (Next Up, Today) and three Control Center toggles (Skip 
 - `DEVELOPMENT_TEAM` is not written into `project.yml` (it would trigger automatic provisioning for the ad-hoc CI build); signed builds pass it on the command line and the group id is a literal string.
 - Tapping a widget opens the join link when there is one, otherwise it just activates the app; there is no URL scheme for opening the popover.
 - No extra menu bar indicator for a disabled Tug: the icon never turns to the colour puppy, and the Settings and Control Center toggles show the state.
+- The spec's "merged flag" on snapshot events was dropped (YAGNI, nothing displays merge state).
+- KVO on the shared suite was not implemented; a missed Darwin notification self-heals because `refresh()` re-reads the shared values every 5 minutes.
+- `WidgetTimeline` is exposed as `changeDates` / `nextUp` / `today` (not `entries`).
+- The shared-suite migration runs on every launch (idempotent) rather than once.

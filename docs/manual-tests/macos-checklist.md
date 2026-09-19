@@ -68,7 +68,7 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Add each widget and size from the widget gallery: Next Up small and medium, Today medium and large.
 - [ ] Widgets show real meetings with the right calendar colours.
 - [ ] Next Up advances to the next meeting at a meeting's start and end without reloading the widget.
-- [ ] Today dims meetings that have already ended.
+- [ ] Today dims meetings that have already ended (visible on the large widget, or on the medium widget when the day has at most 2 meetings; medium shows 2 rows).
 - [ ] Deleting `agenda-snapshot.json` from `~/Library/Group Containers/YYA6ZKMD36.com.timetug.shared/` makes the widgets show the placeholder; it recovers when the app next publishes.
 - [ ] Clicking a widget with a meeting that has a Join link opens the link; without one it just activates the app.
 - [ ] Each of the three controls (Skip All Day Events, Use Intelligence, Disable Tug) flips the matching Settings toggle and behaves as expected (Disable Tug: no takeover fires while on).

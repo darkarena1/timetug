@@ -10,7 +10,8 @@ enum SettingsChangeSignal {
             CFNotificationCenterGetDarwinNotifyCenter(), CFNotificationName(name as CFString), nil, nil, true)
     }
 
-    /// The handler may be called on any thread.
+    /// The handler may be called on any thread. Registers an unretained pointer: keep the observer alive for the
+    /// process lifetime (or release it only when no notifications can be in flight).
     final class Observer {
         private let handler: () -> Void
 

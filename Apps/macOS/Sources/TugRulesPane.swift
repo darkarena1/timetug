@@ -10,7 +10,7 @@ struct TugRulesPane: View {
             VStack(alignment: .leading, spacing: 4) {
                 Toggle(SettingsText.disableTug, isOn: $settings.takeover.disabled)
                     .settingsHighlight("disable-tug", navigation: navigation)
-                Text("Pauses takeovers and pre-meeting popups. Your agenda and widgets keep working.")
+                Text("Pauses takeovers. Your agenda, menu bar and widgets keep working.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

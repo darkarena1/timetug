@@ -88,7 +88,7 @@ struct SkipAllDayControl: ControlWidget {
 struct UseIntelligenceControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "com.timetug.control.useIntelligence", provider: IntelligenceValueProvider()) { state in
-            ControlWidgetToggle("Use Intelligence", isOn: state.isOn, action: SetUseIntelligenceIntent()) { on in
+            ControlWidgetToggle("Use Intelligence", isOn: state.isOn && state.isAvailable, action: SetUseIntelligenceIntent()) { on in
                 Label(state.isAvailable ? (on ? "On" : "Off") : "Unavailable", systemImage: "sparkles")
             }
             .disabled(!state.isAvailable)

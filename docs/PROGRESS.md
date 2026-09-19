@@ -89,5 +89,6 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 Branch: claude/time-tug-widgets-controls-bbca3d. Ledger: `.superpowers/sdd/progress.md` (git-ignored).
 - Tasks 1-10: complete (implemented and reviewed): Core snapshot/timeline and Disable Tug, shared App Group code, settings mirroring, coordinator publishing and reloads, Next Up and Today widgets, Control Center controls, Settings toggle.
 - Task 11 (release scripts, docs, ADR 0010): complete. `build-release.sh` and `sign-and-notarize.sh` sign the appex inside-out, `verify-dmg.sh` checks it is embedded.
+- Final whole-branch review fix pass: complete (Today empty-state after a busy day, unavailable intelligence control, deterministic snapshot order, missed-signal self-heal, wording, docs).
 - PENDING the user (needs a team-signed build): the on-desktop visual check of the widgets and the Control Center manual checks (section "Widgets and controls" in `docs/manual-tests/macos-checklist.md`).
 - To resume: read ADR 0010 and the plan, check the ledger, then run the signed-build checks above.

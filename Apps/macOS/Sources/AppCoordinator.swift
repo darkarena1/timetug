@@ -119,6 +119,8 @@ final class AppCoordinator {
     }
 
     func refresh() async {
+        // Self-heals a dropped Darwin notification from the widget extension.
+        settings.reloadFromShared()
         apply(await store.refresh(now: Date(), leadTime: settings.takeover.leadTime))
         // Inference never blocks a refresh (or start / the change loop).
         Task { @MainActor [weak self] in await self?.resolvePending() }
