@@ -73,3 +73,4 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 - Task 9 complete (4dec703): inferenceEnabled setting (default off), DedupStateStore, InferenceStatusText, BetaBadge, search entry. App 127 tests.
 - Task 10 complete (caf39e6): Beta toggle, status line, Forget button, coordinator wiring (GUI unverified). Final fix pass queued: detach resolvePending with in-flight guard, prune on load, skip redundant persists, non-public error log, cancellation check, AppModel comment placement.
 - Task 11 complete (65c4859): merge badge (Merged with <engine> / Merged manually), Not-the-same-meeting and Merge-with actions in the popup. App 131 tests (GUI unverified).
+- Fix pass complete (3891c59, 3bdbc54, 4aa6cd6): in-flight guard, prune on snapshot, sort tie-break, non-public adapter logging + cancellation, non-blocking inference from refresh, deduped saves, badge a11y. Core 157, inference 5, app 131.
