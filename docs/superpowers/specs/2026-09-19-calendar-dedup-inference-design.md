@@ -71,9 +71,10 @@ notes truncated to about 500 characters, and lessons.
 The app is the composition root: it constructs the adapter and injects it. Other platforms add
 sibling packages later.
 
-Settings: a toggle "Use on-device intelligence to find duplicates", **off by default** (opt-in),
-marked with a **Beta** badge. When off, the app does not inject the adjudicator and behavior is
-rules-only, identical to the no-engine case (pair memory from lessons still applies). When on, a
+Settings: a toggle "Find duplicates with on-device intelligence", **off by default** (opt-in),
+marked with a **Beta** badge. The app always injects the adjudicator and Core gates on the enabled
+flag, so when off the adjudicator is never called and behavior is rules-only, identical to the
+no-engine case (pair memory from lessons still applies). When on, a
 status line shows the engine, or why none is available (the toggle stays visible but inert, and
 behavior remains rules-only). The setting is persisted in `SettingsStore`; toggling it takes
 effect on the next refresh, and already-cached AI verdicts are ignored while it is off.
