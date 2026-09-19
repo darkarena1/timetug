@@ -68,6 +68,10 @@ final class AppCoordinator {
         }
         model.popupCardStyle = settings.popupCardStyle
         _ = await eventKit.requestAccess()
+        // SPIKE (Task 1): removed in Task 8.
+        if let dir = AppGroup.containerURL {
+            try? "app wrote this at \(Date())".write(to: dir.appendingPathComponent("spike.txt"), atomically: true, encoding: .utf8)
+        }
         observeSystemEvents()
         settings.$takeover.dropFirst().sink { [weak self] _ in
             Task { @MainActor in self?.rearm(); self?.updateUI() }

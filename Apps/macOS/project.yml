@@ -22,8 +22,9 @@ targets:
   TimeTug:
     type: application
     platform: macOS
-    sources: [Sources, Resources]
+    sources: [Sources, Resources, Shared]
     dependencies:
+      - target: TimeTugWidgets
       - package: TimeTugCore
         product: TimeTugCore
       - package: EventKitSource
@@ -44,10 +45,35 @@ targets:
       path: Sources/TimeTug.entitlements
       properties:
         com.apple.security.personal-information.calendars: true
+        com.apple.security.application-groups: [YYA6ZKMD36.com.timetug.shared]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.timetug.app
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  TimeTugWidgets:
+    type: app-extension
+    platform: macOS
+    sources: [Widgets, Shared]
+    dependencies:
+      - package: TimeTugCore
+        product: TimeTugCore
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleName: TimeTugWidgets
+        CFBundleDisplayName: TimeTug
+        CFBundleShortVersionString: "0.0.0-dev"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widgets/TimeTugWidgets.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups: [YYA6ZKMD36.com.timetug.shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.timetug.app.widgets
   TimeTugTests:
     type: bundle.unit-test
     platform: macOS
