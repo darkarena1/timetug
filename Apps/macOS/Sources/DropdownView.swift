@@ -8,6 +8,7 @@ struct DropdownView: View {
     let onOpenSettings: () -> Void
     let onJoin: (URL) -> Void
     let onUnmerge: (CalendarEvent) -> Void
+    let onSeparate: (CalendarEvent, MergedMember) -> Void
     let onMerge: (CalendarEvent, CalendarEvent) -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -67,7 +68,7 @@ struct DropdownView: View {
                                           palette: palette, style: cardStyle,
                                           strongBorder: contrast == .increased,
                                           candidates: model.candidates[item.event.id] ?? [],
-                                          onUnmerge: onUnmerge, onMerge: onMerge, onJoin: onJoin)
+                                          onUnmerge: onUnmerge, onSeparate: onSeparate, onMerge: onMerge, onJoin: onJoin)
                             }
                         }
                     }
@@ -205,8 +206,11 @@ private struct EventCard: View {
     let strongBorder: Bool
     let candidates: [CalendarEvent]
     let onUnmerge: (CalendarEvent) -> Void
+    let onSeparate: (CalendarEvent, MergedMember) -> Void
     let onMerge: (CalendarEvent, CalendarEvent) -> Void
     let onJoin: (URL) -> Void
+
+    @State private var isExpanded = false
 
     private var isPast: Bool { row.kind == .past }
     private var isNext: Bool { row.kind == .next }
@@ -245,15 +249,41 @@ private struct EventCard: View {
                     }
                     Text(row.metaText)
                         .font(.system(size: 12)).foregroundStyle(secondaryColor).lineLimit(1)
-                    if let badge = row.mergeBadge {
-                        Menu {
-                            Button("Not the same meeting") { onUnmerge(event) }
-                        } label: {
-                            Label(badge, systemImage: mergeIcon)
-                                .font(.system(size: 11)).foregroundStyle(secondaryColor)
+                    if let summary = row.mergeSummaryText {
+                        HStack(spacing: 6) {
+                            Button { isExpanded.toggle() } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 9, weight: .semibold))
+                                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                                    Image(systemName: mergeIcon).font(.system(size: 11))
+                                    Text(summary).font(.system(size: 11)).lineLimit(1)
+                                }
+                                .foregroundStyle(secondaryColor)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .help(row.mergeTooltip ?? summary)
+                            .accessibilityLabel(summary)
+                            .accessibilityHint(isExpanded ? "Collapse merged events" : "Expand merged events")
+                            .accessibilityAddTraits(.isButton)
+                            Menu {
+                                Button("Not the same meeting") { onUnmerge(event) }
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                                    .font(.system(size: 11)).foregroundStyle(secondaryColor)
+                            }
+                            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                            .accessibilityLabel("\(summary). Actions")
                         }
-                        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                        .accessibilityLabel("\(badge). Actions")
+                        if isExpanded {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(row.memberRows) { member in
+                                    memberRow(member)
+                                }
+                            }
+                            .padding(.top, 2)
+                        }
                     }
                     if row.kind == .current {
                         ProgressBar(fraction: PopupText.progress(start: row.start, end: row.end, now: now), palette: palette)
@@ -281,6 +311,28 @@ private struct EventCard: View {
         }
     }
 
+    private func memberRow(_ member: MergedMemberRow) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 4) {
+                    Text(member.title)
+                        .font(.system(size: 11, weight: member.isShown ? .semibold : .regular))
+                        .foregroundStyle(titleColor).lineLimit(1)
+                    if member.isShown {
+                        Text("shown").font(.system(size: 10)).foregroundStyle(secondaryColor)
+                    }
+                }
+                Text([member.calendarLabel, member.timeText].filter { !$0.isEmpty }.joined(separator: " \u{00B7} "))
+                    .font(.system(size: 10)).foregroundStyle(secondaryColor).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            Button("Not the same") { onSeparate(event, member.member) }
+                .buttonStyle(.link).font(.system(size: 10))
+                .accessibilityLabel("Not the same meeting: \(member.title)")
+        }
+        .accessibilityElement(children: .contain)
+    }
+
     private var accessibilityText: String {
         var parts = [row.title]
         if row.kind == .allDay {
@@ -293,7 +345,7 @@ private struct EventCard: View {
         if row.kind == .current { parts.append("in progress") }
         if isPast { parts.append("finished") }
         if let calendarTitle { parts.append("\(calendarTitle) calendar") }
-        if let badge = row.mergeBadge { parts.append(badge) }
+        if let summary = row.mergeSummaryText { parts.append(summary) }
         return parts.joined(separator: ", ")
     }
 }
