@@ -142,4 +142,48 @@ final class SettingsStoreTests: XCTestCase {
         store.reloadFromShared()
         XCTAssertTrue(store.inferenceEnabled)
     }
+
+    func testReloadFromSharedDoesNotWriteBackToSharedSuite() {
+        let name = "TimeTugTests-\(UUID().uuidString)"
+        let defaults = RecordingDefaults(suiteName: name)!
+        addTeardownBlock { defaults.removePersistentDomain(forName: name) }
+        let store = SettingsStore(defaults: defaults)
+        store.shared.set(true, for: .disableTug)
+        store.shared.set(false, for: .skipAllDay)
+        store.shared.set(true, for: .useIntelligence)
+
+        defaults.recorded = []
+        defaults.isRecording = true
+        store.reloadFromShared()
+        defaults.isRecording = false
+
+        XCTAssertTrue(store.takeover.disabled)
+        XCTAssertFalse(store.takeover.skipAllDayEvents)
+        XCTAssertTrue(store.inferenceEnabled)
+        let shared: Set<String> = [
+            SharedSettings.Key.disableTug.rawValue,
+            SharedSettings.Key.skipAllDay.rawValue,
+            SharedSettings.Key.useIntelligence.rawValue,
+        ]
+        XCTAssertEqual(defaults.recorded.filter { shared.contains($0) }, [])
+    }
+}
+
+/// Records the keys written after `isRecording` is switched on.
+private final class RecordingDefaults: UserDefaults {
+    var isRecording = false
+    var recorded: [String] = []
+
+    override func set(_ value: Any?, forKey defaultName: String) {
+        if isRecording { recorded.append(defaultName) }
+        super.set(value, forKey: defaultName)
+    }
+    override func set(_ value: Bool, forKey defaultName: String) {
+        if isRecording { recorded.append(defaultName) }
+        super.set(value, forKey: defaultName)
+    }
+    override func removeObject(forKey defaultName: String) {
+        if isRecording { recorded.append(defaultName) }
+        super.removeObject(forKey: defaultName)
+    }
 }

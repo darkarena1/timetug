@@ -15,10 +15,13 @@ final class SettingsStore: ObservableObject {
     private static let inferenceKey = "dedupInference.v1"
     private let defaults: UserDefaults
     let shared: SharedSettings
+    /// True while `reloadFromShared()` assigns values that came from the suite; the observers must not write them back.
+    private var isApplyingSharedValues = false
 
     @Published var takeover: TakeoverSettings {
         didSet {
             save()
+            guard !isApplyingSharedValues else { return }
             // Mirror only what changed: unrelated edits must not overwrite a pending external toggle.
             if takeover.skipAllDayEvents != oldValue.skipAllDayEvents {
                 shared.set(takeover.skipAllDayEvents, for: .skipAllDay)
@@ -40,7 +43,7 @@ final class SettingsStore: ObservableObject {
     @Published var inferenceEnabled: Bool {
         didSet {
             defaults.set(inferenceEnabled, forKey: Self.inferenceKey)
-            if oldValue != inferenceEnabled {
+            if !isApplyingSharedValues, oldValue != inferenceEnabled {
                 shared.set(inferenceEnabled, for: .useIntelligence)
             }
         }
@@ -74,6 +77,8 @@ final class SettingsStore: ObservableObject {
         let skip = shared.bool(.skipAllDay)
         let disabled = shared.bool(.disableTug)
         let intelligence = shared.bool(.useIntelligence)
+        isApplyingSharedValues = true
+        defer { isApplyingSharedValues = false }
         var updated = takeover
         if let skip { updated.skipAllDayEvents = skip }
         if let disabled { updated.disabled = disabled }
