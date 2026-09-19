@@ -66,3 +66,4 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 - Task 2 complete (05cfbbe): DuplicateRules pair rules. Core 123 tests. Open note: shared-attendee/organizer merge fires before vetoes (matches the requested rule; flagged for the user).
 - Task 3 complete (f3f35b3): LessonBook. Core 130 tests.
 - Task 4 complete (ff08195): DuplicateAdjudicator interface + VerdictCache. Core 135 tests.
+- Task 5 complete (1b65ca3): DuplicateResolver. Core 147 tests.
