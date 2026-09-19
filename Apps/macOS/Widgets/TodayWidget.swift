@@ -28,7 +28,7 @@ struct TodayView: View {
     @ViewBuilder
     private func content(_ rows: [WidgetTimeline.TodayRow]) -> some View {
         // Hide finished meetings first when space is short, so the rest of the day stays visible.
-        let capacity = family == .systemLarge ? 8 : 3
+        let capacity = family == .systemLarge ? 8 : 2
         let visible = rows.count > capacity ? rows.filter { $0.state != .past } : rows
         VStack(alignment: .leading, spacing: 6) {
             Text(entry.date, format: .dateTime.weekday(.wide).month().day())

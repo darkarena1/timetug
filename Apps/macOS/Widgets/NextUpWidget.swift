@@ -31,11 +31,11 @@ struct NextUpView: View {
         let rest = result.current == nil ? Array(result.upcoming.dropFirst()) : result.upcoming
         if let hero {
             HStack(alignment: .top, spacing: 12) {
-                heroView(hero, isCurrent: result.current != nil)
+                heroView(hero, isCurrent: result.current != nil, now: entry.date)
                 if family == .systemMedium, !rest.isEmpty {
                     Divider()
                     VStack(alignment: .leading, spacing: 6) {
-                        ForEach(rest.prefix(3)) { row($0) }
+                        ForEach(rest.prefix(3)) { row($0, now: entry.date) }
                         Spacer(minLength: 0)
                     }
                 }
@@ -51,7 +51,15 @@ struct NextUpView: View {
         }
     }
 
-    private func heroView(_ event: WidgetEvent, isCurrent: Bool) -> some View {
+    /// Time only for same-day events; weekday plus time when the event is on another day.
+    private func startText(_ event: WidgetEvent, now: Date) -> Text {
+        if Calendar.current.isDate(event.start, inSameDayAs: now) {
+            return Text(event.start, style: .time)
+        }
+        return Text(event.start, format: .dateTime.weekday(.abbreviated).hour().minute())
+    }
+
+    private func heroView(_ event: WidgetEvent, isCurrent: Bool, now: Date) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(isCurrent ? "NOW" : "NEXT UP").font(.caption2.weight(.semibold)).foregroundStyle(Color(hex: event.colorHex))
             Text(event.title).font(.headline).lineLimit(3)
@@ -60,7 +68,7 @@ struct NextUpView: View {
                 Text("Ends \(Text(event.end, style: .time))").font(.caption)
             } else {
                 Text(event.start, style: .relative).font(.title3.monospacedDigit())
-                Text(event.start, style: .time).font(.caption).foregroundStyle(.secondary)
+                startText(event, now: now).font(.caption).foregroundStyle(.secondary)
             }
             if event.joinURL != nil {
                 Label("Join", systemImage: "video.fill").font(.caption2).foregroundStyle(.secondary)
@@ -69,12 +77,12 @@ struct NextUpView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func row(_ event: WidgetEvent) -> some View {
+    private func row(_ event: WidgetEvent, now: Date) -> some View {
         let label = HStack(spacing: 6) {
             Capsule().fill(Color(hex: event.colorHex)).frame(width: 3, height: 22)
             VStack(alignment: .leading, spacing: 0) {
                 Text(event.title).font(.caption.weight(.medium)).lineLimit(1)
-                Text(event.start, style: .time).font(.caption2).foregroundStyle(.secondary)
+                startText(event, now: now).font(.caption2).foregroundStyle(.secondary)
             }
         }
         return Group {
