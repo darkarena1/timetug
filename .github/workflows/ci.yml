@@ -26,7 +26,7 @@ jobs:
   core:
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Select newest Xcode
         run: scripts/ci/select-xcode.sh
       - name: Test TimeTugCore
@@ -37,7 +37,7 @@ jobs:
   app:
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Select newest Xcode
         id: xcode
         run: |
@@ -82,6 +82,6 @@ jobs:
     continue-on-error: true
     container: swift:6.0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Test TimeTugCore
         run: swift test --package-path Packages/TimeTugCore
