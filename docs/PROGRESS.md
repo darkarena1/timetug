@@ -67,3 +67,4 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 - Task 3 complete (f3f35b3): LessonBook. Core 130 tests.
 - Task 4 complete (ff08195): DuplicateAdjudicator interface + VerdictCache. Core 135 tests.
 - Task 5 complete (1b65ca3): DuplicateResolver. Core 147 tests.
+- Task 6 complete (8512931): resolver-backed CalendarStore, pending verdicts, decisions, state. Core 154 tests. Follow-ups queued for final fix pass: in-flight guard for resolvePending, prune on load.
