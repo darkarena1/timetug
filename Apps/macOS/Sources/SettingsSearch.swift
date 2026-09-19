@@ -3,6 +3,7 @@ import TimeTugCore
 
 /// Visible label strings, shared by the views and the search catalog so they cannot drift.
 enum SettingsText {
+    static let disableTug = "Disable Tug"
     static let leadTime = "Lead time"
     static let videoLink = "Require a video link"
     static let skipSolo = "Skip events with no other attendees"
@@ -29,6 +30,8 @@ enum SettingsSearch {
     static let calendarIDPrefix = "calendar:"
 
     static let catalog: [SettingsSearchItem] = [
+        .init(id: "disable-tug", title: SettingsText.disableTug,
+              keywords: ["pause", "off", "mute", "stop", "do not disturb", "focus", "takeover", "take over", "tug"], pane: .tugRules),
         .init(id: "lead-time", title: SettingsText.leadTime,
               keywords: ["tug", "takeover", "take over", "before", "start", "minutes", "at start", "warning"], pane: .tugRules),
         .init(id: "video-link", title: SettingsText.videoLink,
