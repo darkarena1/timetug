@@ -14,9 +14,10 @@ final class SettingsStore: ObservableObject {
     private static let cardStyleKey = "popupCardStyle.v1"
     private static let inferenceKey = "dedupInference.v1"
     private let defaults: UserDefaults
+    let shared: SharedSettings
 
     @Published var takeover: TakeoverSettings {
-        didSet { save() }
+        didSet { save(); mirrorToShared() }
     }
     @Published var menuBarMode: MenuBarDisplayMode {
         didSet { defaults.set(menuBarMode.rawValue, forKey: Self.modeKey) }
@@ -28,13 +29,21 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(popupCardStyle.rawValue, forKey: Self.cardStyleKey) }
     }
     @Published var inferenceEnabled: Bool {
-        didSet { defaults.set(inferenceEnabled, forKey: Self.inferenceKey) }
+        didSet {
+            defaults.set(inferenceEnabled, forKey: Self.inferenceKey)
+            shared.set(inferenceEnabled, for: .useIntelligence)
+        }
     }
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, shared: SharedSettings? = nil) {
         self.defaults = defaults
-        self.takeover = defaults.data(forKey: Self.takeoverKey)
+        let shared = shared ?? SharedSettings(defaults: defaults)
+        self.shared = shared
+        var loaded = defaults.data(forKey: Self.takeoverKey)
             .flatMap { try? JSONDecoder().decode(TakeoverSettings.self, from: $0) } ?? TakeoverSettings()
+        if let skip = shared.bool(.skipAllDay) { loaded.skipAllDayEvents = skip }
+        if let disabled = shared.bool(.disableTug) { loaded.disabled = disabled }
+        self.takeover = loaded
         self.menuBarMode = defaults.string(forKey: Self.modeKey)
             .flatMap(MenuBarDisplayMode.init(rawValue:)) ?? .iconOnly
         self.appearanceMode = defaults.string(forKey: Self.appearanceKey)
@@ -42,7 +51,28 @@ final class SettingsStore: ObservableObject {
         self.popupCardStyle = defaults.string(forKey: Self.cardStyleKey)
             .flatMap(PopupCardStyle.init(rawValue:))
             .flatMap { PopupCardStyle.available.contains($0) ? $0 : nil } ?? PopupCardStyle.defaultStyle
-        self.inferenceEnabled = defaults.bool(forKey: Self.inferenceKey)
+        self.inferenceEnabled = shared.bool(.useIntelligence) ?? defaults.bool(forKey: Self.inferenceKey)
+        // One-time migration: seed the suite so widgets and controls see current values.
+        mirrorToShared()
+        shared.set(inferenceEnabled, for: .useIntelligence)
+    }
+
+    /// Applies values a Control Center toggle wrote to the shared suite while the app was running.
+    func reloadFromShared() {
+        // Read everything first: assigning `takeover` mirrors back into the suite and would clobber unread keys.
+        let skip = shared.bool(.skipAllDay)
+        let disabled = shared.bool(.disableTug)
+        let intelligence = shared.bool(.useIntelligence)
+        var updated = takeover
+        if let skip { updated.skipAllDayEvents = skip }
+        if let disabled { updated.disabled = disabled }
+        if updated != takeover { takeover = updated }
+        if let intelligence, intelligence != inferenceEnabled { inferenceEnabled = intelligence }
+    }
+
+    private func mirrorToShared() {
+        shared.set(takeover.skipAllDayEvents, for: .skipAllDay)
+        shared.set(takeover.disabled, for: .disableTug)
     }
 
     private func save() {

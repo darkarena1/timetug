@@ -66,4 +66,53 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertTrue(SettingsStore(defaults: defaults).inferenceEnabled)
         XCTAssertEqual(defaults.object(forKey: "dedupInference.v1") as? Bool, true)
     }
+
+    func testInitSeedsSharedSuiteFromLegacyValues() {
+        let defaults = freshDefaults()
+        defaults.set(true, forKey: "dedupInference.v1")
+        let store = SettingsStore(defaults: defaults)
+        XCTAssertTrue(store.inferenceEnabled)
+        XCTAssertEqual(store.shared.bool(.useIntelligence), true)
+        XCTAssertEqual(store.shared.bool(.skipAllDay), true)
+        XCTAssertEqual(store.shared.bool(.disableTug), false)
+    }
+
+    func testSharedValuesWinOverSavedValuesOnInit() {
+        let defaults = freshDefaults()
+        let shared = SharedSettings(defaults: defaults)
+        shared.set(true, for: .disableTug)
+        shared.set(false, for: .skipAllDay)
+        shared.set(true, for: .useIntelligence)
+        let store = SettingsStore(defaults: defaults, shared: shared)
+        XCTAssertTrue(store.takeover.disabled)
+        XCTAssertFalse(store.takeover.skipAllDayEvents)
+        XCTAssertTrue(store.inferenceEnabled)
+    }
+
+    func testChangesMirrorIntoSharedSuite() {
+        let store = SettingsStore(defaults: freshDefaults())
+        store.takeover.disabled = true
+        store.takeover.skipAllDayEvents = false
+        store.inferenceEnabled = true
+        XCTAssertEqual(store.shared.bool(.disableTug), true)
+        XCTAssertEqual(store.shared.bool(.skipAllDay), false)
+        XCTAssertEqual(store.shared.bool(.useIntelligence), true)
+    }
+
+    func testReloadFromSharedAppliesExternalChanges() {
+        let store = SettingsStore(defaults: freshDefaults())
+        store.shared.set(true, for: .disableTug)
+        store.shared.set(false, for: .skipAllDay)
+        store.shared.set(true, for: .useIntelligence)
+        store.reloadFromShared()
+        XCTAssertTrue(store.takeover.disabled)
+        XCTAssertFalse(store.takeover.skipAllDayEvents)
+        XCTAssertTrue(store.inferenceEnabled)
+    }
+
+    func testDisabledPersistsAcrossReload() {
+        let defaults = freshDefaults()
+        SettingsStore(defaults: defaults).takeover.disabled = true
+        XCTAssertTrue(SettingsStore(defaults: defaults).takeover.disabled)
+    }
 }
