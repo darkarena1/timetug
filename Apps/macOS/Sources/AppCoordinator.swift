@@ -3,8 +3,10 @@ import AppleIntelligenceInference
 import Combine
 import EventKitSource
 import KeyboardShortcuts
+import OSLog
 import SwiftUI
 import TimeTugCore
+import WidgetKit
 
 /// Wires sources, store, scheduler and the UI. Holds no presentation logic itself.
 @MainActor
@@ -13,7 +15,7 @@ final class AppCoordinator {
     /// Meetings that started longer than this before launch are treated as already handled.
     private static let launchGrace: TimeInterval = 120
 
-    let settings = SettingsStore()
+    let settings = SettingsStore(shared: .appGroup)
     let model = AppModel()
     let navigation = SettingsNavigation()
 
@@ -31,6 +33,11 @@ final class AppCoordinator {
     private var tickTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     private var statusItem: StatusItemController?
+    private let snapshotStore = WidgetSnapshotStore()
+    private var lastWidgetEvents: [WidgetEvent]?
+    private var widgetReloadTask: Task<Void, Never>?
+    private var settingsSignal: SettingsChangeSignal.Observer?
+    private static let widgetLog = Logger(subsystem: "com.timetug.app", category: "widgets")
     private let overlay = OverlayController()
     private lazy var aboutWindow = AboutWindowController()
     private lazy var settingsWindow = SettingsWindowController { [unowned self] in
@@ -68,13 +75,9 @@ final class AppCoordinator {
         }
         model.popupCardStyle = settings.popupCardStyle
         _ = await eventKit.requestAccess()
-        // SPIKE (Task 1): removed in Task 8.
-        if let dir = AppGroup.containerURL {
-            try? "app wrote this at \(Date())".write(to: dir.appendingPathComponent("spike.txt"), atomically: true, encoding: .utf8)
-        }
         observeSystemEvents()
         settings.$takeover.dropFirst().sink { [weak self] _ in
-            Task { @MainActor in self?.rearm(); self?.updateUI() }
+            Task { @MainActor in self?.rearm(); self?.updateUI(); self?.publishWidgetSnapshot() }
         }.store(in: &cancellables)
         settings.$appearanceMode.dropFirst().sink { mode in
             NSApp.appearance = mode.nsAppearance
@@ -85,6 +88,9 @@ final class AppCoordinator {
         settings.$menuBarMode.dropFirst().sink { [weak self] _ in
             Task { @MainActor in self?.updateUI() }
         }.store(in: &cancellables)
+        settingsSignal = SettingsChangeSignal.Observer { [weak self] in
+            DispatchQueue.main.async { self?.settings.reloadFromShared() }
+        }
 
         tickTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.updateUI() }
@@ -135,11 +141,13 @@ final class AppCoordinator {
         }
         rearm()
         updateUI()
+        publishWidgetSnapshot()
     }
 
     /// Asks the on-device model about look-alike pairs off the refresh path; each verdict republishes.
     private func resolvePending() async {
         model.inferenceStatus = await store.inferenceStatus()
+        publishInferenceAvailability()
         // Bounded backstop: each pass drains a batch, but never loop forever if a verdict fails to stick.
         var passes = 0
         while passes < Self.maxResolvePasses, let updated = await store.resolvePending(now: Date()) {
@@ -147,7 +155,33 @@ final class AppCoordinator {
             passes += 1
         }
         model.inferenceStatus = await store.inferenceStatus()
+        publishInferenceAvailability()
         await persistDedup()
+    }
+
+    /// Writes the agenda snapshot for widgets; reloads their timelines only when the events changed.
+    private func publishWidgetSnapshot() {
+        let widgetSnapshot = WidgetSnapshot.make(
+            events: snapshot.events, calendars: snapshot.calendars, settings: settings.takeover,
+            now: Date(), calendar: .current)
+        do {
+            try snapshotStore.write(widgetSnapshot)
+        } catch {
+            Self.widgetLog.error("widget snapshot not written: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+        guard widgetSnapshot.events != lastWidgetEvents else { return }
+        lastWidgetEvents = widgetSnapshot.events
+        widgetReloadTask?.cancel()
+        widgetReloadTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+    }
+
+    private func publishInferenceAvailability() {
+        settings.shared.set(model.inferenceStatus.isAvailableOnThisMac, for: .inferenceAvailable)
     }
 
     private func setInference(_ enabled: Bool) async {
