@@ -20,7 +20,9 @@ private func request(lessons: [Lesson] = []) -> AdjudicationRequest {
         id: "r1",
         first: event("Intermountain Health", location: "1234 Main St", notes: "Bring card", calendar: "Work", account: "Exchange", names: ["Dr Lee"]),
         second: event("Scott: Doctor", calendar: "Personal", account: "iCloud"),
-        lessons: lessons)
+        lessons: lessons,
+        startOffsetMinutes: 15, endOffsetMinutes: -15, overlapMinutes: 30,
+        firstDetails: "location+notes", secondDetails: "bare", hasConflictingDetails: false)
 }
 
 @Test func promptListsBothEntriesWithTheirDetails() {
@@ -29,7 +31,7 @@ private func request(lessons: [Lesson] = []) -> AdjudicationRequest {
     #expect(prompt.contains("Scott: Doctor"))
     #expect(prompt.contains("1234 Main St"))
     #expect(prompt.contains("Bring card"))
-    #expect(prompt.contains("Work (Exchange)"))
+    #expect(prompt.contains("Calendar: Work"))
     #expect(prompt.contains("Dr Lee"))
 }
 
@@ -77,4 +79,48 @@ private func request(lessons: [Lesson] = []) -> AdjudicationRequest {
 @Test func instructionsAskForAConservativeAnswer() {
     #expect(PromptBuilder.instructions.contains("unsure"))
     #expect(PromptBuilder.instructions.contains("different people"))
+}
+
+@Test func promptNeverPrintsAccountNames() {
+    let prompt = PromptBuilder.prompt(for: request(), timeZone: TimeZone(identifier: "UTC")!)
+    #expect(!prompt.contains("Exchange"))
+    #expect(!prompt.contains("iCloud"))
+    #expect(!prompt.contains("(Exchange)"))
+}
+
+@Test func promptStatesTheRuleComputedFacts() {
+    let prompt = PromptBuilder.prompt(for: request(), timeZone: TimeZone(identifier: "UTC")!)
+    #expect(prompt.contains("Facts:"))
+    #expect(prompt.contains("Starts 15 min apart"))
+    #expect(prompt.contains("Ends 15 min apart"))
+    #expect(prompt.contains("Overlap 30 min"))
+    #expect(prompt.contains("Details: A has location+notes, B has none"))
+    #expect(prompt.contains("No conflicting details were found"))
+    #expect(!prompt.contains("@"))
+}
+
+@Test func factsUseWordsForZeroAndBothBareAndConflicts() {
+    var r = request()
+    r.startOffsetMinutes = 0
+    r.endOffsetMinutes = 0
+    r.firstDetails = "bare"
+    r.hasConflictingDetails = true
+    let prompt = PromptBuilder.prompt(for: r, timeZone: TimeZone(identifier: "UTC")!)
+    #expect(prompt.contains("Start at the same time"))
+    #expect(prompt.contains("End at the same time"))
+    #expect(prompt.contains("Details: neither has any"))
+    #expect(prompt.contains("Conflicting details were found"))
+    #expect(!prompt.contains("No conflicting details"))
+}
+
+@Test func instructionsExplainMissingDetailsLengthsAndCarryWorkedExamples() {
+    let text = PromptBuilder.instructions
+    #expect(text.contains("missing detail"))
+    #expect(text.contains("not evidence"))
+    #expect(text.lowercased().contains("different lengths"))
+    #expect(text.contains("Example 1"))
+    #expect(text.contains("Example 2"))
+    #expect(text.contains("Example 3"))
+    #expect(text.contains("Kristin: Logan Dance"))
+    #expect(text.contains("Team offsite"))
 }
