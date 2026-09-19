@@ -7,6 +7,8 @@ struct DropdownView: View {
     @ObservedObject var model: AppModel
     let onOpenSettings: () -> Void
     let onJoin: (URL) -> Void
+    let onUnmerge: (CalendarEvent) -> Void
+    let onMerge: (CalendarEvent, CalendarEvent) -> Void
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -63,7 +65,9 @@ struct DropdownView: View {
                                 EventCard(row: row, event: item.event, now: now,
                                           calendarTitle: calendarTitle(for: item.event),
                                           palette: palette, style: cardStyle,
-                                          strongBorder: contrast == .increased, onJoin: onJoin)
+                                          strongBorder: contrast == .increased,
+                                          candidates: model.candidates[item.event.id] ?? [],
+                                          onUnmerge: onUnmerge, onMerge: onMerge, onJoin: onJoin)
                             }
                         }
                     }
@@ -199,6 +203,9 @@ private struct EventCard: View {
     let palette: PopupPalette
     let style: PopupCardStyle
     let strongBorder: Bool
+    let candidates: [CalendarEvent]
+    let onUnmerge: (CalendarEvent) -> Void
+    let onMerge: (CalendarEvent, CalendarEvent) -> Void
     let onJoin: (URL) -> Void
 
     private var isPast: Bool { row.kind == .past }
@@ -209,6 +216,10 @@ private struct EventCard: View {
     }
     private var secondaryColor: Color { style == .solid ? palette.secondary : .secondary }
     private var barColor: Color { Color(hex: row.colorHex) ?? palette.blue }
+    private var mergeIcon: String {
+        if case .inference = event.mergeProvenance { return "sparkles" }
+        return "checkmark.circle"
+    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -234,6 +245,16 @@ private struct EventCard: View {
                     }
                     Text(row.metaText)
                         .font(.system(size: 12)).foregroundStyle(secondaryColor).lineLimit(1)
+                    if let badge = row.mergeBadge {
+                        Menu {
+                            Button("Not the same meeting") { onUnmerge(event) }
+                        } label: {
+                            Label(badge, systemImage: mergeIcon)
+                                .font(.system(size: 11)).foregroundStyle(secondaryColor)
+                        }
+                        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                        .accessibilityLabel("\(badge). Actions")
+                    }
                     if row.kind == .current {
                         ProgressBar(fraction: PopupText.progress(start: row.start, end: row.end, now: now), palette: palette)
                             .padding(.top, 4)
@@ -252,6 +273,12 @@ private struct EventCard: View {
         .modifier(CardSurface(style: style, isNext: isNext, palette: palette, strongBorder: strongBorder))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityText)
+        .contextMenu {
+            if row.isMerged { Button("Not the same meeting") { onUnmerge(event) } }
+            ForEach(candidates) { other in
+                Button("Merge with \u{201C}\(other.title)\u{201D}") { onMerge(event, other) }
+            }
+        }
     }
 
     private var accessibilityText: String {

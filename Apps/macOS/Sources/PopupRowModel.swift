@@ -14,6 +14,8 @@ struct PopupRowModel: Identifiable, Equatable {
     let joinURL: URL?
     let start: Date
     let end: Date
+    var mergeBadge: String? = nil
+    var isMerged = false
 
     /// Rows for every agenda item, in order. Kinds come from the agenda's own state; `now` is kept for
     /// callers that build rows on a timer.
@@ -44,7 +46,8 @@ struct PopupRowModel: Identifiable, Equatable {
                 timeText: kind == .allDay ? "All day" : PopupText.clock(e.start, locale: locale, timeZone: timeZone),
                 title: e.title, metaText: meta, colorHex: calendar?.colorHex,
                 joinURL: (kind == .current || kind == .next) ? e.conferenceURL : nil,
-                start: e.start, end: e.end)
+                start: e.start, end: e.end,
+                mergeBadge: MergeBadge.text(e.mergeProvenance), isMerged: e.mergedMembers.count > 1)
         }
     }
 

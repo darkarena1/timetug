@@ -52,7 +52,9 @@ final class AppCoordinator {
                 DropdownView(
                     model: model,
                     onOpenSettings: { [weak self] in self?.openSettings() },
-                    onJoin: { [weak self] url in self?.statusItem?.join(url) }
+                    onJoin: { [weak self] url in self?.statusItem?.join(url) },
+                    onUnmerge: { [weak self] event in self?.unmerge(event) },
+                    onMerge: { [weak self] a, b in self?.merge(a, b) }
                 )
             ),
             onOpenSettings: { [weak self] in self?.openSettings() },

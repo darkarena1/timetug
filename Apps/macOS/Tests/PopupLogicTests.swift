@@ -193,4 +193,25 @@ final class PopupLogicTests: XCTestCase {
         XCTAssertNil(Color(hex: ""))
         XCTAssertNil(Color(hex: "#FF80001"))
     }
+
+    func testMergedRowsCarryBadgeAndFlag() {
+        var merged = event("1", "Intermountain Health", at(10), at(11))
+        merged.mergedMembers = [
+            MergedMember(title: "Intermountain Health", calendarKey: "src/work", contentKey: "k1", details: "location"),
+            MergedMember(title: "Scott: Doctor", calendarKey: "src/home", contentKey: "k2", details: "bare"),
+        ]
+        merged.mergeProvenance = .inference(engineID: "apple-intelligence", engineName: "Apple Intelligence")
+        let row = rows([merged], now: at(9)).first!
+        XCTAssertEqual(row.mergeBadge, "Merged with Apple Intelligence")
+        XCTAssertTrue(row.isMerged)
+
+        merged.mergeProvenance = .rule
+        let ruleRow = rows([merged], now: at(9)).first!
+        XCTAssertNil(ruleRow.mergeBadge)
+        XCTAssertTrue(ruleRow.isMerged)                       // still offers "Not the same meeting"
+
+        let plain = rows([event("2", "Standup", at(11), at(12))], now: at(9)).first!
+        XCTAssertNil(plain.mergeBadge)
+        XCTAssertFalse(plain.isMerged)
+    }
 }
