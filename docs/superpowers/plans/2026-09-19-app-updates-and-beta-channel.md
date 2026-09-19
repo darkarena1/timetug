@@ -1292,7 +1292,7 @@ One-time setup, to be written in the doc verbatim:
   - Against a test appcast (`SUFeedURL` overridden with `defaults write com.timetug.app SUFeedURL <url>`): a newer stable item is offered; a beta item is offered only with Beta updates on; turning it off and checking again offers only stable.
   - Installing an update relaunches the app and widgets still load (team-signed build).
 
-- [ ] **Step 5: Spec correction.** In the spec's App changes, change "`includeBetas` (stored in `SharedSettings`; ...)" to "`includeBetas` (stored in the app's `UserDefaults`, key `updates.includeBetas.v1`; the widgets do not need it; ...)".
+- [x] **Step 5: Spec correction.** Already applied to the spec (`includeBetas` lives in `UserDefaults`); nothing to do.
 
 - [ ] **Step 6: Commit**
 
