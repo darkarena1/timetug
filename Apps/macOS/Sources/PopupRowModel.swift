@@ -12,8 +12,11 @@ struct PopupRowModel: Identifiable, Equatable {
     let metaText: String
     let colorHex: String?
     let joinURL: URL?
+    /// Tug time and end: the progress bar and countdown follow these.
     let start: Date
     let end: Date
+    /// Where the displayed range starts (a merged event shows its longer copy); equals `start` otherwise.
+    var shownStart: Date? = nil
     var mergeBadge: String? = nil
     var isMerged = false
 
@@ -32,21 +35,21 @@ struct PopupRowModel: Identifiable, Equatable {
             else if e.id == agenda.next?.id { kind = .next }
             else { kind = .upcoming }
 
-            let range = PopupText.range(e.start, e.end, locale: locale, timeZone: timeZone)
+            let range = PopupText.range(e.shownStart, e.end, locale: locale, timeZone: timeZone)
             let withCalendar = [range, calendar?.title].compactMap { $0 }.joined(separator: " · ")
             let meta: String
             switch kind {
             case .allDay: meta = ["All day", calendar?.title].compactMap { $0 }.joined(separator: " · ")
-            case .past: meta = PopupText.duration(e.end.timeIntervalSince(e.start)) + " · done"
+            case .past: meta = PopupText.duration(e.end.timeIntervalSince(e.shownStart)) + " · done"
             case .current: meta = "Ends " + PopupText.clock(e.end, locale: locale, timeZone: timeZone)
             case .next, .upcoming: meta = withCalendar
             }
             return PopupRowModel(
                 id: item.id, kind: kind,
-                timeText: kind == .allDay ? "All day" : PopupText.clock(e.start, locale: locale, timeZone: timeZone),
+                timeText: kind == .allDay ? "All day" : PopupText.clock(e.shownStart, locale: locale, timeZone: timeZone),
                 title: e.title, metaText: meta, colorHex: calendar?.colorHex,
                 joinURL: (kind == .current || kind == .next) ? e.conferenceURL : nil,
-                start: e.start, end: e.end,
+                start: e.start, end: e.end, shownStart: e.shownStart,
                 mergeBadge: MergeBadge.text(e.mergeProvenance), isMerged: e.mergedMembers.count > 1)
         }
     }

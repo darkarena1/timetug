@@ -33,7 +33,7 @@ struct OverlayView: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .accessibilityAddTraits(.isHeader)
-                Text(TakeoverText.details(start: event.start, end: event.end, calendarTitle: calendarTitle,
+                Text(TakeoverText.details(start: event.shownStart, end: event.end, calendarTitle: calendarTitle,
                                           otherAttendees: event.otherAttendeeCount))
                     .font(.system(size: 16))
                     .foregroundStyle(TakeoverColors.muted)

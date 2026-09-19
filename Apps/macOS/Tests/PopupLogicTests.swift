@@ -40,6 +40,17 @@ final class PopupLogicTests: XCTestCase {
 
     // MARK: rows
 
+    func testMergedEventShowsTheLongerRangeButKeepsTheTugStart() {
+        var merged = event("m", "Sync", at(13), at(13, 45), conference: "https://zoom.us/j/9")
+        merged.displayStart = at(12, 30)
+        let r = rows([merged], now: at(8))[0]
+        XCTAssertEqual(r.timeText, "12:30 PM")
+        XCTAssertEqual(r.metaText, "12:30 – 1:45 PM · Work")
+        XCTAssertEqual(r.start, at(13))
+        XCTAssertEqual(r.end, at(13, 45))
+        XCTAssertEqual(r.shownStart, at(12, 30))
+    }
+
     func testKindsAndMetaTexts() {
         let now = at(15, 20)
         let evs = [

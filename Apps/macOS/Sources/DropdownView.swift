@@ -286,7 +286,7 @@ private struct EventCard: View {
         if row.kind == .allDay {
             parts.append("all day")
         } else {
-            let r = PopupText.range(row.start, row.end).replacingOccurrences(of: " – ", with: " to ")
+            let r = PopupText.range(row.shownStart ?? row.start, row.end).replacingOccurrences(of: " – ", with: " to ")
             parts.append(r)
         }
         if isNext { parts.append("in " + PopupText.spokenDuration(row.start.timeIntervalSince(now))) }
