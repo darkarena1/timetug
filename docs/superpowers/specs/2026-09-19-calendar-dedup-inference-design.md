@@ -68,8 +68,12 @@ notes truncated to about 500 characters, and lessons. The prompt builder is a pu
 The app is the composition root: it constructs the adapter and injects it. Other platforms add
 sibling packages later.
 
-Settings: a toggle "Use on-device intelligence to find duplicates", default on when available,
-with a status line showing the engine or why it is unavailable.
+Settings: a toggle "Use on-device intelligence to find duplicates", **off by default** (opt-in),
+marked with a **Beta** badge. When off, the app does not inject the adjudicator and behavior is
+rules-only, identical to the no-engine case (pair memory from lessons still applies). When on, a
+status line shows the engine, or why none is available (the toggle stays visible but inert, and
+behavior remains rules-only). The setting is persisted in `SettingsStore`; toggling it takes
+effect on the next refresh, and already-cached AI verdicts are ignored while it is off.
 
 ## 3. Async flow and caching
 
@@ -128,7 +132,8 @@ about 6 months unused. Nothing leaves the device. Settings has "Forget learned c
 - Core (Swift Testing, test first): exact match unchanged; same-calendar separation; time gate
   boundaries (30 min start, 60 min end, overlap); each strong-match rule; veto including "absent
   on one side is not a veto"; sparse+rich and sparse+sparse reaching the adjudicator; conservative
-  grouping and size cap; rules-only when there is no adjudicator, `.unavailable`, or a non-on-device
+  grouping and size cap; the setting defaults to off and persists, and off means the adjudicator is
+  never called and cached AI verdicts are ignored; rules-only when there is no adjudicator, `.unavailable`, or a non-on-device
   engine; `unsure` and `different` do not merge; verdict cache hit, miss and invalidation on edit;
   lesson storage, bounds, expiry, similarity selection and pair memory priority; user override
   outranks everything; takeover any-member ledger rule. All with a `FakeAdjudicator`.
