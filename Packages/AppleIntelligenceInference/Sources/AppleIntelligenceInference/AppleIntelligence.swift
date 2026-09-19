@@ -41,6 +41,7 @@ struct FoundationModelsAdjudicator: DuplicateAdjudicator {
     func judge(_ requests: [AdjudicationRequest]) async -> [AdjudicationVerdict] {
         var verdicts: [AdjudicationVerdict] = []
         for request in requests {
+            if Task.isCancelled { break }
             do {
                 let session = LanguageModelSession(instructions: PromptBuilder.instructions)
                 let response = try await session.respond(
@@ -52,8 +53,10 @@ struct FoundationModelsAdjudicator: DuplicateAdjudicator {
                 }
                 verdicts.append(AdjudicationVerdict(requestID: request.id, answer: answer))
             } catch {
-                // No verdict is cached, so the pair is retried on a later refresh. Titles are not logged.
-                Self.log.error("On-device judgment failed: \(String(describing: error), privacy: .public)")
+                if error is CancellationError { break }
+                // No verdict is cached, so the pair is retried on a later refresh. Only the error type is
+                // logged: model errors can embed event content.
+                Self.log.error("On-device judgment failed: \(String(describing: type(of: error)), privacy: .public)")
             }
         }
         return verdicts
