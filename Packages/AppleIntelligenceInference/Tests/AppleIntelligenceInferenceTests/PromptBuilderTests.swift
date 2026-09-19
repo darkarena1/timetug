@@ -38,6 +38,25 @@ private func request(lessons: [Lesson] = []) -> AdjudicationRequest {
     #expect(!prompt.contains("@"))
 }
 
+@Test func promptNeverContainsAnEmailShapedAttendeeName() {
+    let leaky = AdjudicationRequest(
+        id: "r2",
+        first: event("Sync", names: ["kristin@example.com", "Dr Lee"]),
+        second: event("Sync copy"), lessons: [])
+    let prompt = PromptBuilder.prompt(for: leaky, timeZone: TimeZone(identifier: "UTC")!)
+    #expect(!prompt.contains("@"))
+    #expect(prompt.contains("Dr Lee"))
+}
+
+@Test func promptFormatsTimesInTheGivenTimeZone() {
+    // 1_800_000_000 is 2027-01-15 08:00:00 UTC; the fixture lasts one hour.
+    let utc = PromptBuilder.prompt(for: request(), timeZone: TimeZone(identifier: "UTC")!)
+    #expect(utc.contains("Time: 2027-01-15 08:00 to 09:00"))
+    let denver = PromptBuilder.prompt(for: request(), timeZone: TimeZone(identifier: "America/Denver")!)
+    #expect(denver.contains("Time: 2027-01-15 01:00 to 02:00"))
+    #expect(denver != utc)
+}
+
 @Test func promptOmitsMissingFieldsAndLessonsSectionWhenEmpty() {
     let prompt = PromptBuilder.prompt(for: request(), timeZone: TimeZone(identifier: "UTC")!)
     #expect(!prompt.contains("Earlier corrections"))

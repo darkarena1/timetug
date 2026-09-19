@@ -20,27 +20,34 @@ public enum PromptBuilder {
             lines += request.lessons.map { "- " + describe($0) }
             lines.append("")
         }
+        let formats = Formatters(timeZone: timeZone)
         lines.append("Entry A (more detail):")
-        lines += describe(request.first, timeZone: timeZone)
+        lines += describe(request.first, formats)
         lines.append("")
         lines.append("Entry B:")
-        lines += describe(request.second, timeZone: timeZone)
+        lines += describe(request.second, formats)
         lines.append("")
         lines.append("Are A and B the same appointment? Answer same, different or unsure.")
         return lines.joined(separator: "\n")
     }
 
-    private static func describe(_ event: AdjudicationEvent, timeZone: TimeZone) -> [String] {
+    /// Built once per prompt; DateFormatter is expensive to create.
+    private struct Formatters {
         let day = DateFormatter()
-        day.locale = Locale(identifier: "en_US_POSIX")
-        day.timeZone = timeZone
-        day.dateFormat = "yyyy-MM-dd HH:mm"
         let clock = DateFormatter()
-        clock.locale = day.locale
-        clock.timeZone = timeZone
-        clock.dateFormat = "HH:mm"
 
-        var lines = ["  Title: \(event.title)", "  Time: \(day.string(from: event.start)) to \(clock.string(from: event.end))"]
+        init(timeZone: TimeZone) {
+            day.locale = Locale(identifier: "en_US_POSIX")
+            day.timeZone = timeZone
+            day.dateFormat = "yyyy-MM-dd HH:mm"
+            clock.locale = day.locale
+            clock.timeZone = timeZone
+            clock.dateFormat = "HH:mm"
+        }
+    }
+
+    private static func describe(_ event: AdjudicationEvent, _ formats: Formatters) -> [String] {
+        var lines = ["  Title: \(event.title)", "  Time: \(formats.day.string(from: event.start)) to \(formats.clock.string(from: event.end))"]
         if let calendar = event.calendarTitle {
             lines.append("  Calendar: " + [calendar, event.accountName.map { "(\($0))" }].compactMap { $0 }.joined(separator: " "))
         }
