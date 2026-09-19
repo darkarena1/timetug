@@ -3,6 +3,8 @@
 # Jobs:
 #   core        Swift Testing suite for Packages/TimeTugCore and a build of Packages/EventKitSource (macOS).
 #   app         Generates the Xcode project with XcodeGen, then builds and runs the app's XCTest suite (macOS).
+#   dmg         Builds the release app and the unsigned drag-to-install DMG, verifies it and uploads it
+#               as the `TimeTug-dmg` artifact (a fresh installer from every run).
 #   core-linux  Runs the Core tests on Linux to prove Core stays portable. Allowed to fail (see below).
 #
 # The macOS jobs need an Xcode with the macOS 26 SDK or newer (Liquid Glass APIs behind #available).
@@ -73,6 +75,31 @@ jobs:
           name: TestResults
           path: build/TestResults.xcresult
           if-no-files-found: ignore
+
+  dmg:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select newest Xcode
+        run: scripts/ci/select-xcode.sh
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build Release app
+        run: scripts/ci/build-release.sh
+      - name: Package unsigned DMG
+        run: |
+          VERSION="$(cat dist/version.txt)" DMG_SUFFIX=-unsigned scripts/release/make-dmg.sh
+      - name: Verify DMG
+        run: scripts/release/verify-dmg.sh dist/TimeTug-*-unsigned.dmg
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: TimeTug-dmg
+          path: |
+            dist/TimeTug-*-unsigned.dmg
+            dist/TimeTug-*-unsigned.dmg.sha256
+          retention-days: 14
+          if-no-files-found: error
 
   # Core is meant to be portable (no Apple-only imports). This job checks that on Linux.
   # It is allowed to fail (continue-on-error) until Linux support is confirmed; once it is
