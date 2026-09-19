@@ -6,8 +6,9 @@ Read this first if a session ran out of tokens. Branch: `claude/calendar-dedup-a
 - All 12 plan tasks done and reviewed; final whole-branch review + 3 fix passes done; CI on PR #6 was green (app, core, core-linux, dmg) before the later commits below.
 - Post-PR commits from the user's manual test (in order): `1c8384d` (Fix A, see below), then Fix B in progress (may or may not be committed; check `git log` / `git status`).
 - Fix A DONE (1c8384d). Fix B DONE (7929860, 89ff2f3, df371d6, 9c981a9). Fix C DONE (da52f4e, 7a0bd36, plus the docs commit that follows).
-- Last known counts: Core 205, AppleIntelligenceInference 11, app 133.
-- Next: push, watch CI on PR #6, user re-tests in Xcode.
+- Fix D DONE (9188d2a, 4b3a98b, 8603ba1, plus the docs commit that follows): expandable merged-events list, tooltip, per-member "Not the same" (`CalendarStore.separate`).
+- Last known counts: Core 209, AppleIntelligenceInference 11, app 137.
+- Next: push, watch CI on PR #6, user re-tests in Xcode. PR #6 stays open; never merge without the user's explicit go-ahead.
 
 ## The user's test finding and fixes
 Real data: three identical "Mando (X1102)'s Upcoming Appointment" (13:00-13:30, same location) on three calendars all named "O'Bryan Shared" (Exchange, Gmail, Cloud accounts) plus a bare placeholder "Mando Spem Collection" 12:45-13:45 (Test Calendar, Gmail). The model answered same, same, different for Spem vs the three identical copies; the old resolver joined Spem to two copies and left the third exact duplicate as its own card.

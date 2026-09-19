@@ -20,6 +20,8 @@ The exact title+time merge misses real duplicates ("Scott: Doctor" vs "Intermoun
 - The model is asked once per pair of groups, from the richest copy of each (ties: earliest index), so identical copies cannot get different answers. The request fingerprint excludes calendar keys. The prompt carries rule-computed facts (offsets, overlap, detail fields, no conflicts) and calendar titles but never account names; its instructions say a missing detail is not a mismatch and give worked examples.
 - A merged event displays the longer copy's time range (`CalendarEvent.displayStart`, read through `shownStart`). Its tug time (`start`, which everything schedules on) is the start of the copy carrying a conference link, else the start of the longer copy.
 
+- Merged cards expand to show each merged event (title, calendar, own time; `MergedMember` carries `start`/`end`). A per-member "Not the same" (`CalendarStore.separate`) records pairwise `different` lessons between that member and every other member, so a wrong member can be split off without undoing the rest. Lessons key on normalized title plus calendar, so two copies with the same title on the same calendar cannot be told apart and are separated together.
+
 ## Consequences
 - `CalendarEvent` gained attendees, organizer, external UID and merge data; EventKit supplies them (emails are often missing).
 - A wrong AI merge is visible (badge) and reversible in one click.

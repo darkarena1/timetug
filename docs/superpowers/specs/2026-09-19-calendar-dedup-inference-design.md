@@ -124,6 +124,12 @@ effect on the next refresh, and already-cached AI verdicts are ignored while it 
   Core holds data only; the app produces text ("Merged with Apple Intelligence", "Merged
   manually") and the badge. `.rule` merges have no badge.
 - AI merges are automatic (no confirmation), badged, with one-click **Not the same meeting**.
+  Every merged card (more than one member) has a disclosure ("Merged with Apple Intelligence · 4 events",
+  or "N events merged" for rule merges) that expands a compact list of the merged events: title, calendar and
+  account, the copy's own time range (`MergedMember.start`/`end`), and a "shown" tag on the primary. Hovering
+  the disclosure shows the titles joined with " + ". Each row has its own **Not the same** action
+  (`CalendarStore.separate`), which records a `different` lesson between that member and every other member,
+  so the rest stay merged. The card-level **Not the same meeting** still splits everything.
   Separate pairs that were candidates get a **Merge** action. Both create lessons and persist
   across relaunch. A user decision outranks rules and AI.
 

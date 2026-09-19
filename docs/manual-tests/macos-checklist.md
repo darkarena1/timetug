@@ -57,4 +57,8 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] On a Mac without Apple Intelligence, the status line says rules only and nothing is merged by the model.
 - [ ] A merged meeting takes over exactly once.
 - [ ] A merged meeting with a longer placeholder copy: the list shows the longer time range; the takeover fires at the appointment's start when a copy has a conference link, otherwise at the longer copy's start.
+- [ ] A merged card shows a chevron with "Merged with Apple Intelligence · N events" (or "N events merged"); clicking expands one row per merged event with its calendar, account and own time range, and the shown copy is tagged. The popup grows and shrinks with it.
+- [ ] Hovering the merged-events line shows the titles joined with " + ".
+- [ ] With a placeholder merged into identical copies, "Not the same" on the placeholder row leaves the copies merged and the placeholder as its own card; it stays that way after relaunch.
+- [ ] "Not the same" on one identical copy splits just that copy; the others stay merged.
 - [ ] "Forget learned corrections" resets decisions and clears cached AI verdicts.
