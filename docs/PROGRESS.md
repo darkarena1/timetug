@@ -60,3 +60,6 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 - 2026-09-18: GitHub setup prepared (4bbc021, 6360b4e, 7deceb0): CI (core, app, core-linux allowed to fail) on macos-26, tag-triggered release workflow that publishes an UNSIGNED prerelease zip until Apple signing secrets are added (then signs with Developer ID, notarizes, staples, DMG), scripts in scripts/ci and scripts/release, community files, artwork all-rights-reserved (artwork/LICENSE.md), code MIT, docs/release.md lists the 6 secrets to add later (MACOS_CERTIFICATE_P12_BASE64, MACOS_CERTIFICATE_PASSWORD, APPLE_TEAM_ID, NOTARY_API_KEY_ID, NOTARY_API_ISSUER_ID, NOTARY_API_KEY_P8_BASE64). Repo: github.com/darkarena1/timetug (public, default branch master). UNVERIFIED until first run: macos-26 label/Xcode, cache paths, linux job, gh release create flags, signing/notarization.
 
 - 2026-09-18: DMG installer merged (dmgbuild, branded background, verify-dmg, CI dmg job). Verified visually in Finder. CI verified green on first run; license detected as MIT. Not pushed.
+
+## Calendar dedup + on-device inference: execution log (plan: docs/superpowers/plans/2026-09-19-calendar-dedup-inference.md)
+- Task 1 complete (b43757d): model types, any-member ledger/guard. Core 112 tests.
