@@ -170,6 +170,7 @@ final class AppCoordinator {
             Self.widgetLog.error("widget snapshot not written: \(error.localizedDescription, privacy: .public)")
             return
         }
+        if #available(macOS 26.0, *) { ControlCenter.shared.reloadAllControls() }
         guard widgetSnapshot.events != lastWidgetEvents else { return }
         lastWidgetEvents = widgetSnapshot.events
         widgetReloadTask?.cancel()
@@ -182,6 +183,7 @@ final class AppCoordinator {
 
     private func publishInferenceAvailability() {
         settings.shared.set(model.inferenceStatus.isAvailableOnThisMac, for: .inferenceAvailable)
+        if #available(macOS 26.0, *) { ControlCenter.shared.reloadAllControls() }
     }
 
     private func setInference(_ enabled: Bool) async {
