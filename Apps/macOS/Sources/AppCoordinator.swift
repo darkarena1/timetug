@@ -22,6 +22,7 @@ final class AppCoordinator {
     private var snapshot = CalendarSnapshot.empty
     private let ledgerStore = LedgerStore()
     private let dedupStore = DedupStateStore()
+    private var lastSavedDedupState: DedupState?
     private var ledger: TakeoverLedger
     /// True until the first successful refresh after launch has acknowledged in-progress meetings.
     private var needsLaunchAcknowledge = true
@@ -105,7 +106,8 @@ final class AppCoordinator {
 
     func refresh() async {
         apply(await store.refresh(now: Date(), leadTime: settings.takeover.leadTime))
-        await resolvePending()
+        // Inference never blocks a refresh (or start / the change loop).
+        Task { @MainActor [weak self] in await self?.resolvePending() }
     }
 
     /// Publishes a snapshot to the model, ledger bookkeeping, timers and UI.
@@ -131,6 +133,7 @@ final class AppCoordinator {
     private func resolvePending() async {
         model.inferenceStatus = await store.inferenceStatus()
         while let updated = await store.resolvePending(now: Date()) { apply(updated) }
+        model.inferenceStatus = await store.inferenceStatus()
         await persistDedup()
     }
 
@@ -157,11 +160,15 @@ final class AppCoordinator {
         Task { @MainActor in
             apply(await store.forgetLessons(now: Date()))
             await persistDedup()
+            await resolvePending()
         }
     }
 
     private func persistDedup() async {
-        dedupStore.save(await store.state())
+        let state = await store.state()
+        guard state != lastSavedDedupState else { return }
+        dedupStore.save(state)
+        lastSavedDedupState = state
     }
 
     /// Arms one timer for the next takeover. Skipped while an overlay is up (see Task 10).

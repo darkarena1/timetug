@@ -276,7 +276,7 @@ private struct EventCard: View {
         .contextMenu {
             if row.isMerged { Button("Not the same meeting") { onUnmerge(event) } }
             ForEach(candidates) { other in
-                Button("Merge with \u{201C}\(other.title)\u{201D}") { onMerge(event, other) }
+                Button("Merge with \u{201C}\(other.title)\u{201D} (\(PopupText.clock(other.start)))") { onMerge(event, other) }
             }
         }
     }
@@ -293,6 +293,7 @@ private struct EventCard: View {
         if row.kind == .current { parts.append("in progress") }
         if isPast { parts.append("finished") }
         if let calendarTitle { parts.append("\(calendarTitle) calendar") }
+        if let badge = row.mergeBadge { parts.append(badge) }
         return parts.joined(separator: ", ")
     }
 }
