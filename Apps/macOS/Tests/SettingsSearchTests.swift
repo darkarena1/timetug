@@ -151,4 +151,11 @@ final class SettingsSearchTests: XCTestCase {
     func testPopupShortcutNameIsStable() {
         XCTAssertEqual(KeyboardShortcuts.Name.togglePopup.rawValue, "togglePopup")
     }
+
+    func testDedupInferenceLivesInCalendarsAndIsFoundByAliases() {
+        XCTAssertEqual(SettingsSearch.catalog.first { $0.id == "dedup-inference" }?.pane, .calendars)
+        for query in ["duplicate", "merge", "apple intelligence", "beta"] {
+            XCTAssertTrue(SettingsSearch.results(for: query, calendars: []).contains { $0.id == "dedup-inference" }, query)
+        }
+    }
 }

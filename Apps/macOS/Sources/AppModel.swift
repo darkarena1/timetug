@@ -11,5 +11,9 @@ final class AppModel: ObservableObject {
     /// Takeover lead time, shown in the popup footer.
     @Published var leadTime: TimeInterval = 60
     /// How the popup cards are drawn; mirrors the setting.
+    /// State of the optional on-device duplicate finder, for the Calendars pane.
+    @Published var inferenceStatus: InferenceStatus = .disabled
+    /// Look-alike events kept separate (event id -> others), for the popup's manual "Merge".
+    @Published var candidates: [String: [CalendarEvent]] = [:]
     @Published var popupCardStyle: PopupCardStyle = .defaultStyle
 }

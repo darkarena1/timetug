@@ -58,4 +58,12 @@ final class SettingsStoreTests: XCTestCase {
         if PopupCardStyle.available.contains(.glass) { XCTAssertEqual(style, .glass) }
         else { XCTAssertEqual(style, PopupCardStyle.defaultStyle) }
     }
+
+    func testInferenceIsOffByDefaultAndPersists() {
+        let defaults = freshDefaults()
+        XCTAssertFalse(SettingsStore(defaults: defaults).inferenceEnabled)
+        SettingsStore(defaults: defaults).inferenceEnabled = true
+        XCTAssertTrue(SettingsStore(defaults: defaults).inferenceEnabled)
+        XCTAssertEqual(defaults.object(forKey: "dedupInference.v1") as? Bool, true)
+    }
 }
