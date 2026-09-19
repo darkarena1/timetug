@@ -124,9 +124,8 @@ effect on the next refresh, and already-cached AI verdicts are ignored while it 
   Core holds data only; the app produces text ("Merged with Apple Intelligence", "Merged
   manually") and the badge. `.rule` merges have no badge.
 - AI merges are automatic (no confirmation), badged, with one-click **Unmerge all**.
-  Every merged card (more than one member) has a disclosure ("Merged with Apple Intelligence · 4 events",
-  "Merged manually · 2 events", "N events merged" for rule merges, or "N copies merged" when everything merged
-  is one identical event) that expands a compact list of the merged events. The count is distinct events:
+  Every merged card with two or more distinct events has a disclosure ("Merged with Apple Intelligence · 4 events",
+  "Merged manually · 2 events", "N events merged" for rule merges) that expands a compact list of the merged events. The count is distinct events; a group of only identical copies (one distinct event) is presented like a plain event with no disclosure, badge or "Unmerge all":
   copies with the same `contentKey` (title, start, end) collapse into one row with a "×N" mark and a joined
   calendar label ("Work · Exchange, Personal · Gmail", or "Shared · Exchange, Gmail, Cloud" when the calendar
   title repeats). Each row shows the copy's own time range (`MergedMember.start`/`end`) and a "shown" tag on

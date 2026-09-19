@@ -346,7 +346,7 @@ final class PopupLogicTests: XCTestCase {
         XCTAssertEqual(rows[0].calendarLabel, "Work \u{00B7} Exchange, Personal \u{00B7} Gmail, c")
     }
 
-    func testSummaryCountsDistinctEventsAndCopies() {
+    func testSummaryCountsDistinctEvents() {
         let ai = MergeProvenance.inference(engineID: "a", engineName: "Apple Intelligence")
         XCTAssertEqual(rows([identicalCopies(provenance: ai, extra: true)], now: at(9))[0].mergeSummaryText,
                        "Merged with Apple Intelligence \u{00B7} 2 events")
@@ -354,10 +354,26 @@ final class PopupLogicTests: XCTestCase {
                        "Merged manually \u{00B7} 2 events")
         XCTAssertEqual(rows([identicalCopies(provenance: .rule, extra: true)], now: at(9))[0].mergeSummaryText,
                        "2 events merged")
-        XCTAssertEqual(rows([identicalCopies(provenance: .rule)], now: at(9))[0].mergeSummaryText, "3 copies merged")
-        XCTAssertEqual(rows([identicalCopies(provenance: ai)], now: at(9))[0].mergeSummaryText,
-                       "Merged with Apple Intelligence \u{00B7} 3 copies")
         XCTAssertEqual(rows([identicalCopies(provenance: .rule, extra: true)], now: at(9))[0].mergeTooltip,
                        "Mando (X1102)'s Upcoming Appointment + Mando Spem Collection")
+    }
+
+    func testIdenticalOnlyGroupIsPresentedAsPlainEvent() {
+        let ai = MergeProvenance.inference(engineID: "a", engineName: "Apple Intelligence")
+        for provenance in [MergeProvenance.rule, .userConfirmed, ai] {
+            let row = rows([identicalCopies(provenance: provenance)], now: at(9))[0]
+            XCTAssertNil(row.mergeSummaryText)
+            XCTAssertNil(row.mergeTooltip)
+            XCTAssertTrue(row.memberRows.isEmpty)
+            XCTAssertFalse(row.isMerged)
+        }
+    }
+
+    func testIdenticalCopiesPlusDistinctEventShowTwoRows() {
+        let row = rows([identicalCopies(provenance: .rule, extra: true)], now: at(9))[0]
+        XCTAssertTrue(row.isMerged)
+        XCTAssertEqual(row.memberRows.count, 2)
+        XCTAssertEqual(row.memberRows.map(\.copyCount), [3, 1])
+        XCTAssertEqual(row.mergeSummaryText, "2 events merged")
     }
 }

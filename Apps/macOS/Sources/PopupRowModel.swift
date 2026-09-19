@@ -33,6 +33,8 @@ struct PopupRowModel: Identifiable, Equatable {
         return agenda.items.map { item in
             let e = item.event
             let calendar = byKey[e.calendarKey]
+            // Identical copies count as one event: only 2+ distinct events present as a merge.
+            let showsMerge = distinctMembers(e).count > 1
             let kind: Kind
             if e.isAllDay { kind = .allDay }
             else if item.state == .past { kind = .past }
@@ -55,9 +57,9 @@ struct PopupRowModel: Identifiable, Equatable {
                 title: e.title, metaText: meta, colorHex: calendar?.colorHex,
                 joinURL: (kind == .current || kind == .next) ? e.conferenceURL : nil,
                 start: e.start, end: e.end, shownStart: e.shownStart,
-                mergeBadge: MergeBadge.text(e.mergeProvenance), isMerged: e.mergedMembers.count > 1,
+                mergeBadge: showsMerge ? MergeBadge.text(e.mergeProvenance) : nil, isMerged: showsMerge,
                 mergeSummaryText: mergeSummary(e), mergeTooltip: mergeTooltip(e),
-                memberRows: e.mergedMembers.count > 1
+                memberRows: showsMerge
                     ? MergedMemberRow.rows(for: e, calendars: calendars, locale: locale, timeZone: timeZone) : [])
         }
     }
@@ -69,22 +71,18 @@ struct PopupRowModel: Identifiable, Equatable {
     }
 
     private static func mergeSummary(_ e: CalendarEvent) -> String? {
-        let total = e.mergedMembers.count
-        guard total > 1 else { return nil }
-        let badge = MergeBadge.text(e.mergeProvenance)
         let distinct = distinctMembers(e).count
-        if distinct == 1 {
-            return badge.map { "\($0) \u{00B7} \(total) copies" } ?? "\(total) copies merged"
-        }
-        if let badge { return "\(badge) \u{00B7} \(distinct) events" }
+        guard distinct > 1 else { return nil }
+        if let badge = MergeBadge.text(e.mergeProvenance) { return "\(badge) \u{00B7} \(distinct) events" }
         return "\(distinct) events merged"
     }
 
     private static let tooltipLimit = 120
 
     private static func mergeTooltip(_ e: CalendarEvent) -> String? {
-        guard e.mergedMembers.count > 1 else { return nil }
-        let text = distinctMembers(e).map(\.title).joined(separator: " + ")
+        let distinct = distinctMembers(e)
+        guard distinct.count > 1 else { return nil }
+        let text = distinct.map(\.title).joined(separator: " + ")
         return text.count <= tooltipLimit ? text : String(text.prefix(tooltipLimit - 1)) + "\u{2026}"
     }
 
