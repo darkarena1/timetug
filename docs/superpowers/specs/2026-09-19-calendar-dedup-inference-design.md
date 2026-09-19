@@ -41,11 +41,16 @@ event's details are evidence in the prompt. Inference may also run when both are
 
 All-day events merge only on an exact match and are never sent to inference. A learned `same` lesson still requires the time gate; a learned `different` lesson is consulted inside the gate too (outside it the rules already keep the pair separate).
 
-Grouping runs in two phases and never merges across a hard block (a rules veto or a learned
-`different`). Phase 1 applies the certain links (rules and learned `same`) with no size cap, so any
-number of exact duplicates across accounts and calendars collapse into one card. Phase 2 treats each
-model verdict as a vote between two groups: they merge when `same` votes outnumber `different` votes
-(a tie stays separate) and the result would join at most 4 phase 1 clusters (`maxGroupSize`, default 4).
+Grouping runs in three literal phases, each finished before the next starts, and never merges across a
+hard block (a rules `.separate` or a learned `different`, checked across all members of both groups):
+1. Merge all identical items (`.exactMatch`), no size cap.
+2. Merge those groups by the other rules (external UID, conference link, shared attendee, same location)
+   and by learned `same` lessons, no size cap. Any number of duplicates across accounts collapse into one card.
+3. Treat each model verdict as a vote between two groups: they merge when `same` votes outnumber `different`
+   votes (a tie stays separate) and the result would join at most 4 clusters (`maxGroupSize`, default 4).
+
+Links inside a phase are processed in index order, and exact matches are all unioned before any other rule
+link, so the result does not depend on input order.
 
 ## 2. Inference boundary
 
@@ -102,6 +107,13 @@ effect on the next refresh, and already-cached AI verdicts are ignored while it 
 - `mergedMembers` lists every original copy including the primary; the ledger, guard, unmerge and manual merge all work from it.
 - The richer event is the primary, so the official title and details win. The other calendar key
   goes into `additionalCalendarKeys` as today. Missing details are borrowed as today.
+- Time span: the merged event **displays the longer copy's range** (greatest duration; tie: the primary,
+  then the earliest start). `start`/`end` is the tug time: `end` is the longer copy's end and `start` is the
+  start of the copy that carries a conference link (the primary if it has one, else the earliest linked
+  copy), or the longer copy's start when no copy has a link. `CalendarEvent.displayStart` holds the longer
+  copy's start when it differs from `start` (nil otherwise; `shownStart` reads it). The scheduler, policy,
+  guard, menu bar state, agenda and ledger all key off `start`/`end` and so follow the tug time unchanged;
+  only the displayed range (list, overlay details line) uses `shownStart`.
 - `MergeProvenance` on the event: `.rule`, `.inference(engineID, engineName)`, `.userConfirmed`.
   Core holds data only; the app produces text ("Merged with Apple Intelligence", "Merged
   manually") and the badge. `.rule` merges have no badge.
