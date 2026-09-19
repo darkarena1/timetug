@@ -9,6 +9,7 @@
 #   TAG        release tag such as v1.2.3 (falls back to GITHUB_REF_NAME when it looks like v*)
 #   DIST_DIR   output directory (default: dist)
 #   BUILD_DIR  scratch directory for DerivedData and the archive (default: build)
+#   BUILD_NUMBER  CFBundleVersion to stamp (default: GITHUB_RUN_NUMBER, else the project's value)
 #
 # Version: from the tag (v1.2.3 -> 1.2.3), else CFBundleShortVersionString in Apps/macOS/project.yml.
 # Outputs: dist/TimeTug.app and dist/version.txt (the resolved version).
@@ -52,11 +53,23 @@ xcodebuild archive \
 APP="$DIST_DIR/TimeTug.app"
 ditto "$BUILD_DIR/TimeTug.xcarchive/Products/Applications/TimeTug.app" "$APP"
 
-# The plist has a fixed version; stamp the release version and re-sign ad hoc if it differs.
+# The plist has fixed values; stamp the release version and build number, re-signing ad hoc on change.
 PLIST="$APP/Contents/Info.plist"
+BUILD_NUMBER="${BUILD_NUMBER:-${GITHUB_RUN_NUMBER:-}}"
+changed=0
 current="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")"
 if [ "$current" != "$VERSION" ]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
+  changed=1
+fi
+if [ -n "$BUILD_NUMBER" ]; then
+  current="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")"
+  if [ "$current" != "$BUILD_NUMBER" ]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$PLIST"
+    changed=1
+  fi
+fi
+if [ "$changed" = 1 ]; then
   codesign --force --sign - --options runtime \
     --entitlements Apps/macOS/Sources/TimeTug.entitlements "$APP"
 fi
