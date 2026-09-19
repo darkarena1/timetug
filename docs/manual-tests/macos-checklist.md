@@ -52,13 +52,13 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Settings > Calendars: the on-device intelligence toggle is off by default and shows a Beta badge.
 - [ ] With it off, "Scott: Doctor" vs a detailed entry for the same appointment stay separate.
 - [ ] With it on and Apple Intelligence available, the pair merges and shows "Merged with Apple Intelligence".
-- [ ] "Not the same meeting" splits it, and it stays split after relaunch.
+- [ ] "Unmerge all" (card menu or right-click) splits it, and it stays split after relaunch.
 - [ ] "Merge with..." on a separate look-alike merges it and shows "Merged manually".
 - [ ] On a Mac without Apple Intelligence, the status line says rules only and nothing is merged by the model.
 - [ ] A merged meeting takes over exactly once.
 - [ ] A merged meeting with a longer placeholder copy: the list shows the longer time range; the takeover fires at the appointment's start when a copy has a conference link, otherwise at the longer copy's start.
-- [ ] A merged card shows a chevron with "Merged with Apple Intelligence · N events" (or "N events merged"); clicking expands one row per merged event with its calendar, account and own time range, and the shown copy is tagged. The popup grows and shrinks with it.
+- [ ] A merged card shows a chevron with "Merged with Apple Intelligence · N events" (or "N events merged", or "N copies merged" for identical copies); clicking expands one row per distinct event, with identical copies collapsed into one row marked "×N" with its calendar, account and own time range, and the shown copy is tagged. The popup grows and shrinks with it.
 - [ ] Hovering the merged-events line shows the titles joined with " + ".
-- [ ] With a placeholder merged into identical copies, "Not the same" on the placeholder row leaves the copies merged and the placeholder as its own card; it stays that way after relaunch.
-- [ ] "Not the same" on one identical copy splits just that copy; the others stay merged.
+- [ ] With a placeholder merged into identical copies, "Split off" on the placeholder row leaves the copies merged and the placeholder as its own card; it stays that way after relaunch.
+- [ ] Three identical copies plus a placeholder show two rows; "Split off" on the copies row (×3) leaves the placeholder as its own card and the copies merged. The Split off button reads correctly with VoiceOver ("Split off: <title>, 3 copies").
 - [ ] "Forget learned corrections" resets decisions and clears cached AI verdicts.

@@ -123,13 +123,17 @@ effect on the next refresh, and already-cached AI verdicts are ignored while it 
 - `MergeProvenance` on the event: `.rule`, `.inference(engineID, engineName)`, `.userConfirmed`.
   Core holds data only; the app produces text ("Merged with Apple Intelligence", "Merged
   manually") and the badge. `.rule` merges have no badge.
-- AI merges are automatic (no confirmation), badged, with one-click **Not the same meeting**.
+- AI merges are automatic (no confirmation), badged, with one-click **Unmerge all**.
   Every merged card (more than one member) has a disclosure ("Merged with Apple Intelligence · 4 events",
-  or "N events merged" for rule merges) that expands a compact list of the merged events: title, calendar and
-  account, the copy's own time range (`MergedMember.start`/`end`), and a "shown" tag on the primary. Hovering
-  the disclosure shows the titles joined with " + ". Each row has its own **Not the same** action
-  (`CalendarStore.separate`), which records a `different` lesson between that member and every other member,
-  so the rest stay merged. The card-level **Not the same meeting** still splits everything.
+  "Merged manually · 2 events", "N events merged" for rule merges, or "N copies merged" when everything merged
+  is one identical event) that expands a compact list of the merged events. The count is distinct events:
+  copies with the same `contentKey` (title, start, end) collapse into one row with a "×N" mark and a joined
+  calendar label ("Work · Exchange, Personal · Gmail", or "Shared · Exchange, Gmail, Cloud" when the calendar
+  title repeats). Each row shows the copy's own time range (`MergedMember.start`/`end`) and a "shown" tag on
+  the row holding the primary. Hovering the disclosure shows the distinct titles joined with " + ". Each row
+  has its own **Split off** action ("Show this as its own event"), `CalendarStore.separate(_:from:now:)`,
+  which records a `different` lesson between each of the row's copies and every participant not in the row;
+  copies within the row stay together. The card-level **Unmerge all** (menu and context menu) splits everything.
   Separate pairs that were candidates get a **Merge** action. Both create lessons and persist
   across relaunch. A user decision outranks rules and AI.
 
