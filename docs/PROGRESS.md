@@ -68,3 +68,4 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 - Task 4 complete (ff08195): DuplicateAdjudicator interface + VerdictCache. Core 135 tests.
 - Task 5 complete (1b65ca3): DuplicateResolver. Core 147 tests.
 - Task 6 complete (8512931): resolver-backed CalendarStore, pending verdicts, decisions, state. Core 154 tests. Follow-ups queued for final fix pass: in-flight guard for resolvePending, prune on load.
+- Task 7 complete (a378067): EventKit supplies attendees, organizer, external UID.
