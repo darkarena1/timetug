@@ -1,0 +1,87 @@
+# Continuous integration for TimeTug. Runs on every push to master and on every pull request.
+#
+# Jobs:
+#   core        Swift Testing suite for Packages/TimeTugCore and a build of Packages/EventKitSource (macOS).
+#   app         Generates the Xcode project with XcodeGen, then builds and runs the app's XCTest suite (macOS).
+#   core-linux  Runs the Core tests on Linux to prove Core stays portable. Allowed to fail (see below).
+#
+# The macOS jobs need an Xcode with the macOS 26 SDK or newer (Liquid Glass APIs behind #available).
+# If the `macos-26` runner label is not available to your account, change `runs-on` in both macOS jobs
+# (see docs/release.md, "Changing the runner label").
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select newest Xcode
+        run: scripts/ci/select-xcode.sh
+      - name: Test TimeTugCore
+        run: swift test --package-path Packages/TimeTugCore
+      - name: Build EventKitSource
+        run: swift build --package-path Packages/EventKitSource
+
+  app:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select newest Xcode
+        id: xcode
+        run: |
+          scripts/ci/select-xcode.sh
+          echo "version=$(xcodebuild -version | tr '\n' ' ' | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate --spec Apps/macOS/project.yml
+      - name: Cache SwiftPM and DerivedData
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/DerivedData/SourcePackages
+            build/DerivedData/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+          key: spm-${{ runner.os }}-${{ steps.xcode.outputs.version }}-${{ hashFiles('Apps/macOS/project.yml') }}
+          restore-keys: |
+            spm-${{ runner.os }}-${{ steps.xcode.outputs.version }}-
+      - name: Build and test
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Apps/macOS/TimeTug.xcodeproj \
+            -scheme TimeTug \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData \
+            -resultBundlePath build/TestResults.xcresult \
+            test
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults
+          path: build/TestResults.xcresult
+          if-no-files-found: ignore
+
+  # Core is meant to be portable (no Apple-only imports). This job checks that on Linux.
+  # It is allowed to fail (continue-on-error) until Linux support is confirmed; once it is
+  # green on master, remove `continue-on-error` so regressions block merges.
+  core-linux:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    container: swift:6.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test TimeTugCore
+        run: swift test --package-path Packages/TimeTugCore
