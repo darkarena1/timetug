@@ -67,8 +67,8 @@ private func request(lessons: [Lesson] = []) -> AdjudicationRequest {
 
 @Test func promptIncludesLessonsAsOneLineEach() {
     var book = LessonBook()
-    book.record(MergedMember(title: "Doctor", calendarKey: "s/a", contentKey: "k1", details: "bare"),
-                MergedMember(title: "Clinic", calendarKey: "s/b", contentKey: "k2", details: "location"),
+    book.record(MergedMember(title: "Doctor", calendarKey: "s/a", contentKey: "k1", details: "bare", start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 3600)),
+                MergedMember(title: "Clinic", calendarKey: "s/b", contentKey: "k2", details: "location", start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 3600)),
                 decision: .same, now: Date(timeIntervalSince1970: 1_800_000_000))
     let prompt = PromptBuilder.prompt(for: request(lessons: book.lessons), timeZone: TimeZone(identifier: "UTC")!)
     #expect(prompt.contains("Earlier corrections"))
