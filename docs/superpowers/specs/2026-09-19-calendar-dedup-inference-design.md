@@ -86,7 +86,7 @@ effect on the next refresh, and already-cached AI verdicts are ignored while it 
 - `CalendarStore.refresh` returns the rules-merged snapshot immediately and never awaits inference.
 - Ambiguous pairs go to a background resolver. Verdicts are cached on disk (same pattern as
   `LedgerStore`), keyed by a fingerprint of both events' relevant content, so an edited event is
-  re-judged. Stale entries are pruned (ended events, TTL, size cap).
+  re-judged. Verdicts are kept by age (7-day TTL) and the 1000-entry cap, not by event end: an ended meeting still in the fetch window must not be re-judged.
 - When a verdict lands that changes the merge result, the store publishes an updated snapshot.
 - A pending or missing verdict means "not merged".
 - **Takeover safety:** a merged `CalendarEvent` carries the `contentKey` of every member.

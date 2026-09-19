@@ -56,4 +56,4 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] "Merge with..." on a separate look-alike merges it and shows "Merged manually".
 - [ ] On a Mac without Apple Intelligence, the status line says rules only and nothing is merged by the model.
 - [ ] A merged meeting takes over exactly once.
-- [ ] "Forget learned corrections" resets decisions.
+- [ ] "Forget learned corrections" resets decisions and clears cached AI verdicts.
