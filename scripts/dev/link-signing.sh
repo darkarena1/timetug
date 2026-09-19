@@ -10,7 +10,7 @@
 # Environment: TIMETUG_SIGNING_XCCONFIG overrides the source path.
 set -euo pipefail
 
-SRC="${TIMETUG_SIGNING_XCCONFIG:-$HOME/.config/timetug/signing.xcconfig}"
+SRC="${TIMETUG_SIGNING_XCCONFIG:-${HOME:-/nonexistent}/.config/timetug/signing.xcconfig}"
 DEST="$(cd "$(dirname "$0")/../.." && pwd)/Apps/macOS/Config/Local.xcconfig"
 
 if [ ! -f "$SRC" ]; then
