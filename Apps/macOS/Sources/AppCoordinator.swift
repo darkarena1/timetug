@@ -56,7 +56,7 @@ final class AppCoordinator {
                     onOpenSettings: { [weak self] in self?.openSettings() },
                     onJoin: { [weak self] url in self?.statusItem?.join(url) },
                     onUnmerge: { [weak self] event in self?.unmerge(event) },
-                    onSeparate: { [weak self] event, member in self?.separate(event, member: member) },
+                    onSeparate: { [weak self] event, members in self?.separate(event, members: members) },
                     onMerge: { [weak self] a, b in self?.merge(a, b) }
                 )
             ),
@@ -158,9 +158,9 @@ final class AppCoordinator {
         }
     }
 
-    func separate(_ event: CalendarEvent, member: MergedMember) {
+    func separate(_ event: CalendarEvent, members: [MergedMember]) {
         Task { @MainActor in
-            apply(await store.separate(member, from: event, now: Date()))
+            apply(await store.separate(members, from: event, now: Date()))
             await persistDedup()
         }
     }

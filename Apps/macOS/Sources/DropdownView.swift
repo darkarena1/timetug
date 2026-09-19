@@ -8,7 +8,7 @@ struct DropdownView: View {
     let onOpenSettings: () -> Void
     let onJoin: (URL) -> Void
     let onUnmerge: (CalendarEvent) -> Void
-    let onSeparate: (CalendarEvent, MergedMember) -> Void
+    let onSeparate: (CalendarEvent, [MergedMember]) -> Void
     let onMerge: (CalendarEvent, CalendarEvent) -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -206,7 +206,7 @@ private struct EventCard: View {
     let strongBorder: Bool
     let candidates: [CalendarEvent]
     let onUnmerge: (CalendarEvent) -> Void
-    let onSeparate: (CalendarEvent, MergedMember) -> Void
+    let onSeparate: (CalendarEvent, [MergedMember]) -> Void
     let onMerge: (CalendarEvent, CalendarEvent) -> Void
     let onJoin: (URL) -> Void
 
@@ -318,6 +318,9 @@ private struct EventCard: View {
                     Text(member.title)
                         .font(.system(size: 11, weight: member.isShown ? .semibold : .regular))
                         .foregroundStyle(titleColor).lineLimit(1)
+                    if member.copyCount > 1 {
+                        Text("\u{00D7}\(member.copyCount)").font(.system(size: 10)).foregroundStyle(secondaryColor)
+                    }
                     if member.isShown {
                         Text("shown").font(.system(size: 10)).foregroundStyle(secondaryColor)
                     }
@@ -326,7 +329,7 @@ private struct EventCard: View {
                     .font(.system(size: 10)).foregroundStyle(secondaryColor).lineLimit(1)
             }
             Spacer(minLength: 0)
-            Button("Not the same") { onSeparate(event, member.member) }
+            Button("Not the same") { onSeparate(event, member.members) }
                 .buttonStyle(.link).font(.system(size: 10))
                 .accessibilityLabel("Not the same meeting: \(member.title)")
         }

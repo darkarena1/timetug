@@ -219,7 +219,7 @@ final class PopupLogicTests: XCTestCase {
         merged.mergeProvenance = .rule
         let ruleRow = rows([merged], now: at(9)).first!
         XCTAssertNil(ruleRow.mergeBadge)
-        XCTAssertTrue(ruleRow.isMerged)                       // still offers "Not the same meeting"
+        XCTAssertTrue(ruleRow.isMerged)                       // still offers "Unmerge all"
 
         let plain = rows([event("2", "Standup", at(11), at(12))], now: at(9)).first!
         XCTAssertNil(plain.mergeBadge)
@@ -283,6 +283,7 @@ final class PopupLogicTests: XCTestCase {
         XCTAssertEqual(rows.map(\.id), ["k2", "k1", "c2"])
         XCTAssertEqual(rows[0].title, "Scott: Doctor")
         XCTAssertEqual(rows[0].calendarLabel, "Personal")
+        XCTAssertEqual(rows[0].copyCount, 1)
         XCTAssertEqual(rows[0].timeText, "12:45 \u{2013} 1:45 PM")
         XCTAssertFalse(rows[0].isShown)
         XCTAssertEqual(rows[1].calendarLabel, "Work \u{00B7} Acme")
@@ -296,5 +297,67 @@ final class PopupLogicTests: XCTestCase {
         let r = rows([mergedEvent(provenance: .rule)], now: at(9))[0]
         XCTAssertEqual(r.memberRows.count, 2)
         XCTAssertEqual(r.memberRows.first { $0.isShown }?.title, "Intermountain Health")
+    }
+
+    // MARK: identical copies collapse
+
+    private func identicalCopies(provenance: MergeProvenance?, extra: Bool = false) -> CalendarEvent {
+        var merged = event("1", "Mando (X1102)'s Upcoming Appointment", at(13), at(13, 30), calendarID: "a")
+        var members = ["a", "b", "c"].map {
+            MergedMember(title: "Mando (X1102)'s Upcoming Appointment", calendarKey: "src/\($0)", contentKey: "same",
+                         details: "bare", start: at(13), end: at(13, 30))
+        }
+        if extra {
+            members.append(MergedMember(title: "Mando Spem Collection", calendarKey: "src/s", contentKey: "other",
+                                        details: "bare", start: at(12, 45), end: at(13, 45)))
+        }
+        merged.mergedMembers = members
+        merged.mergeProvenance = provenance
+        return merged
+    }
+
+    func testIdenticalCopiesCollapseIntoOneRowWithJoinedLabel() {
+        let infos = [
+            CalendarInfo(sourceID: "src", calendarID: "a", title: "Shared", accountName: "Exchange"),
+            CalendarInfo(sourceID: "src", calendarID: "b", title: "Shared", accountName: "Gmail"),
+            CalendarInfo(sourceID: "src", calendarID: "c", title: "Shared", accountName: "Cloud"),
+            CalendarInfo(sourceID: "src", calendarID: "s", title: "Work", accountName: "Acme"),
+        ]
+        let rows = MergedMemberRow.rows(for: identicalCopies(provenance: .rule, extra: true), calendars: infos,
+                                        locale: posix, timeZone: utc)
+        XCTAssertEqual(rows.map(\.id), ["same", "other"])
+        XCTAssertEqual(rows[0].copyCount, 3)
+        XCTAssertEqual(rows[0].members.count, 3)
+        XCTAssertEqual(rows[0].calendarLabel, "Shared \u{00B7} Exchange, Gmail, Cloud")
+        XCTAssertTrue(rows[0].isShown)
+        XCTAssertEqual(rows[1].copyCount, 1)
+        XCTAssertEqual(rows[1].calendarLabel, "Work \u{00B7} Acme")
+        XCTAssertFalse(rows[1].isShown)
+    }
+
+    func testDifferentlyNamedCalendarsAreListedSeparately() {
+        let infos = [
+            CalendarInfo(sourceID: "src", calendarID: "a", title: "Work", accountName: "Exchange"),
+            CalendarInfo(sourceID: "src", calendarID: "b", title: "Personal", accountName: "Gmail"),
+        ]
+        let rows = MergedMemberRow.rows(for: identicalCopies(provenance: .rule), calendars: infos,
+                                        locale: posix, timeZone: utc)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].calendarLabel, "Work \u{00B7} Exchange, Personal \u{00B7} Gmail, c")
+    }
+
+    func testSummaryCountsDistinctEventsAndCopies() {
+        let ai = MergeProvenance.inference(engineID: "a", engineName: "Apple Intelligence")
+        XCTAssertEqual(rows([identicalCopies(provenance: ai, extra: true)], now: at(9))[0].mergeSummaryText,
+                       "Merged with Apple Intelligence \u{00B7} 2 events")
+        XCTAssertEqual(rows([identicalCopies(provenance: .userConfirmed, extra: true)], now: at(9))[0].mergeSummaryText,
+                       "Merged manually \u{00B7} 2 events")
+        XCTAssertEqual(rows([identicalCopies(provenance: .rule, extra: true)], now: at(9))[0].mergeSummaryText,
+                       "2 events merged")
+        XCTAssertEqual(rows([identicalCopies(provenance: .rule)], now: at(9))[0].mergeSummaryText, "3 copies merged")
+        XCTAssertEqual(rows([identicalCopies(provenance: ai)], now: at(9))[0].mergeSummaryText,
+                       "Merged with Apple Intelligence \u{00B7} 3 copies")
+        XCTAssertEqual(rows([identicalCopies(provenance: .rule, extra: true)], now: at(9))[0].mergeTooltip,
+                       "Mando (X1102)'s Upcoming Appointment + Mando Spem Collection")
     }
 }

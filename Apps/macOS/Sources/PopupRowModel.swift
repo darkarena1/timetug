@@ -62,18 +62,29 @@ struct PopupRowModel: Identifiable, Equatable {
         }
     }
 
+    /// Distinct events (by content) among the merged copies, in first-appearance order.
+    private static func distinctMembers(_ e: CalendarEvent) -> [MergedMember] {
+        var seen = Set<String>()
+        return e.mergedMembers.filter { seen.insert($0.contentKey).inserted }
+    }
+
     private static func mergeSummary(_ e: CalendarEvent) -> String? {
-        let count = e.mergedMembers.count
-        guard count > 1 else { return nil }
-        if let badge = MergeBadge.text(e.mergeProvenance) { return "\(badge) \u{00B7} \(count) events" }
-        return "\(count) events merged"
+        let total = e.mergedMembers.count
+        guard total > 1 else { return nil }
+        let badge = MergeBadge.text(e.mergeProvenance)
+        let distinct = distinctMembers(e).count
+        if distinct == 1 {
+            return badge.map { "\($0) \u{00B7} \(total) copies" } ?? "\(total) copies merged"
+        }
+        if let badge { return "\(badge) \u{00B7} \(distinct) events" }
+        return "\(distinct) events merged"
     }
 
     private static let tooltipLimit = 120
 
     private static func mergeTooltip(_ e: CalendarEvent) -> String? {
         guard e.mergedMembers.count > 1 else { return nil }
-        let text = e.mergedMembers.map(\.title).joined(separator: " + ")
+        let text = distinctMembers(e).map(\.title).joined(separator: " + ")
         return text.count <= tooltipLimit ? text : String(text.prefix(tooltipLimit - 1)) + "\u{2026}"
     }
 
@@ -83,33 +94,64 @@ struct PopupRowModel: Identifiable, Equatable {
     }
 }
 
-/// One original copy inside a merged card, with all text decided.
+/// One distinct event inside a merged card (identical copies on several calendars collapse into one row),
+/// with all text decided.
 struct MergedMemberRow: Identifiable, Equatable {
+    /// The copies' shared `contentKey`.
     let id: String
     let title: String
     let calendarLabel: String
     let timeText: String
-    /// The copy whose title and details the card shows.
+    /// How many identical copies this row stands for; the view shows "\u{00D7}N" when above 1.
+    let copyCount: Int
+    /// The row contains the copy whose title and details the card shows.
     let isShown: Bool
-    let member: MergedMember
+    let members: [MergedMember]
 
     static func rows(for event: CalendarEvent, calendars: [CalendarInfo],
                      locale: Locale = .current, timeZone: TimeZone = .current) -> [MergedMemberRow] {
         let byKey = Dictionary(calendars.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+        var order: [String] = []
+        var groups: [String: [MergedMember]] = [:]
+        for member in event.mergedMembers {
+            if groups[member.contentKey] == nil { order.append(member.contentKey) }
+            groups[member.contentKey, default: []].append(member)
+        }
         var shownFound = false
-        return event.mergedMembers.map { member in
-            let label: String
-            if let info = byKey[member.calendarKey] {
-                label = [info.title, info.accountName].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " \u{00B7} ")
-            } else {
-                label = member.calendarKey.split(separator: "/", maxSplits: 1).last.map(String.init) ?? member.calendarKey
-            }
-            let shown = !shownFound && member.title == event.title && member.calendarKey == event.calendarKey
+        return order.map { key in
+            let members = groups[key] ?? []
+            let first = members[0]
+            let shown = !shownFound && members.contains { $0.title == event.title && $0.calendarKey == event.calendarKey }
             if shown { shownFound = true }
             return MergedMemberRow(
-                id: member.contentKey, title: member.title, calendarLabel: label,
-                timeText: PopupText.range(member.start, member.end, locale: locale, timeZone: timeZone),
-                isShown: shown, member: member)
+                id: key, title: first.title, calendarLabel: label(members, byKey: byKey),
+                timeText: PopupText.range(first.start, first.end, locale: locale, timeZone: timeZone),
+                copyCount: members.count, isShown: shown, members: members)
         }
+    }
+
+    /// Calendar titles in first-appearance order, each with its accounts: "Work \u{00B7} Exchange, Personal \u{00B7} Gmail",
+    /// or one title with several accounts: "Shared \u{00B7} Exchange, Gmail".
+    private static func label(_ members: [MergedMember], byKey: [String: CalendarInfo]) -> String {
+        var titles: [String] = []
+        var accounts: [String: [String]] = [:]
+        for member in members {
+            let title: String
+            var account: String?
+            if let info = byKey[member.calendarKey] {
+                title = info.title
+                account = info.accountName
+            } else {
+                title = member.calendarKey.split(separator: "/", maxSplits: 1).last.map(String.init) ?? member.calendarKey
+            }
+            if accounts[title] == nil { titles.append(title) }
+            var list = accounts[title] ?? []
+            if let account, !account.isEmpty, !list.contains(account) { list.append(account) }
+            accounts[title] = list
+        }
+        return titles.map { title in
+            let list = accounts[title] ?? []
+            return list.isEmpty ? title : title + " \u{00B7} " + list.joined(separator: ", ")
+        }.joined(separator: ", ")
     }
 }
