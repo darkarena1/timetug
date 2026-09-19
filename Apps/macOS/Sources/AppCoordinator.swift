@@ -21,6 +21,7 @@ final class AppCoordinator {
     private let store: CalendarStore
     private var snapshot = CalendarSnapshot.empty
     private let ledgerStore = LedgerStore()
+    private static let maxResolvePasses = 10
     private let dedupStore = DedupStateStore()
     private var lastSavedDedupState: DedupState?
     private var ledger: TakeoverLedger
@@ -86,7 +87,9 @@ final class AppCoordinator {
         Timer.scheduledTimer(withTimeInterval: Self.periodicRefresh, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
         }
-        await store.load(dedupStore.load())
+        let loadedDedup = dedupStore.load()
+        lastSavedDedupState = loadedDedup
+        await store.load(loadedDedup)
         _ = await store.setInferenceEnabled(settings.inferenceEnabled, now: Date())
         settings.$inferenceEnabled.dropFirst().sink { [weak self] enabled in
             Task { @MainActor in await self?.setInference(enabled) }
@@ -132,7 +135,12 @@ final class AppCoordinator {
     /// Asks the on-device model about look-alike pairs off the refresh path; each verdict republishes.
     private func resolvePending() async {
         model.inferenceStatus = await store.inferenceStatus()
-        while let updated = await store.resolvePending(now: Date()) { apply(updated) }
+        // Bounded backstop: each pass drains a batch, but never loop forever if a verdict fails to stick.
+        var passes = 0
+        while passes < Self.maxResolvePasses, let updated = await store.resolvePending(now: Date()) {
+            apply(updated)
+            passes += 1
+        }
         model.inferenceStatus = await store.inferenceStatus()
         await persistDedup()
     }
