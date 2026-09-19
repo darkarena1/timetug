@@ -115,4 +115,31 @@ final class SettingsStoreTests: XCTestCase {
         SettingsStore(defaults: defaults).takeover.disabled = true
         XCTAssertTrue(SettingsStore(defaults: defaults).takeover.disabled)
     }
+
+    func testUnrelatedTakeoverEditDoesNotOverwritePendingExternalDisable() {
+        let store = SettingsStore(defaults: freshDefaults())
+        store.shared.set(true, for: .disableTug)
+        store.takeover.leadTime = 300
+        XCTAssertEqual(store.shared.bool(.disableTug), true)
+        store.reloadFromShared()
+        XCTAssertTrue(store.takeover.disabled)
+    }
+
+    func testUnrelatedTakeoverEditDoesNotOverwritePendingExternalSkipAllDay() {
+        let store = SettingsStore(defaults: freshDefaults())
+        store.shared.set(false, for: .skipAllDay)
+        store.takeover.leadTime = 300
+        XCTAssertEqual(store.shared.bool(.skipAllDay), false)
+        store.reloadFromShared()
+        XCTAssertFalse(store.takeover.skipAllDayEvents)
+    }
+
+    func testSameValueInferenceAssignmentDoesNotOverwritePendingExternalChange() {
+        let store = SettingsStore(defaults: freshDefaults())
+        store.shared.set(true, for: .useIntelligence)
+        store.inferenceEnabled = false
+        XCTAssertEqual(store.shared.bool(.useIntelligence), true)
+        store.reloadFromShared()
+        XCTAssertTrue(store.inferenceEnabled)
+    }
 }

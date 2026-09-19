@@ -17,7 +17,16 @@ final class SettingsStore: ObservableObject {
     let shared: SharedSettings
 
     @Published var takeover: TakeoverSettings {
-        didSet { save(); mirrorToShared() }
+        didSet {
+            save()
+            // Mirror only what changed: unrelated edits must not overwrite a pending external toggle.
+            if takeover.skipAllDayEvents != oldValue.skipAllDayEvents {
+                shared.set(takeover.skipAllDayEvents, for: .skipAllDay)
+            }
+            if takeover.disabled != oldValue.disabled {
+                shared.set(takeover.disabled, for: .disableTug)
+            }
+        }
     }
     @Published var menuBarMode: MenuBarDisplayMode {
         didSet { defaults.set(menuBarMode.rawValue, forKey: Self.modeKey) }
@@ -31,7 +40,9 @@ final class SettingsStore: ObservableObject {
     @Published var inferenceEnabled: Bool {
         didSet {
             defaults.set(inferenceEnabled, forKey: Self.inferenceKey)
-            shared.set(inferenceEnabled, for: .useIntelligence)
+            if oldValue != inferenceEnabled {
+                shared.set(inferenceEnabled, for: .useIntelligence)
+            }
         }
     }
 
