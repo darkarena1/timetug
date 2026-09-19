@@ -39,14 +39,12 @@ final class SettingsSearchTests: XCTestCase {
     }
 
     func testCalendarNameMatches() {
-        let cal = CalendarInfo(sourceID: "eventkit", calendarID: "1", title: "Darkarena")
-        let results = SettingsSearch.results(for: "dark", calendars: [cal])
-        // "dark" also matches the Appearance setting by keyword; the calendar title match ranks first.
-        XCTAssertEqual(results.count, 2)
+        let cal = CalendarInfo(sourceID: "eventkit", calendarID: "1", title: "Personal")
+        let results = SettingsSearch.results(for: "person", calendars: [cal])
+        XCTAssertEqual(results.count, 1)
         XCTAssertEqual(results.first?.pane, .calendars)
         XCTAssertEqual(results.first?.id, "calendar:eventkit/1")
-        XCTAssertEqual(results.first?.title, "Darkarena")
-        XCTAssertEqual(results.last?.id, "appearance")
+        XCTAssertEqual(results.first?.title, "Personal")
     }
 
     func testTitleMatchesRankBeforeKeywordOnlyMatches() {

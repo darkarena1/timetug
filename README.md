@@ -4,6 +4,9 @@
 
 # TimeTug
 
+[![CI](https://github.com/darkarena1/timetug/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/darkarena1/timetug/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A tug when time needs your attention. TimeTug lives in your macOS menu bar, lists today's meetings,
 and takes over every screen shortly before a meeting starts, so you don't hyperfocus through it.
 
@@ -17,8 +20,13 @@ and takes over every screen shortly before a meeting starts, so you don't hyperf
 - Light, Dark or Auto appearance
 - Optional global shortcut to show today's meetings
 
+## Install
+Download the latest build from the [Releases page](https://github.com/darkarena1/timetug/releases). Until Apple
+Developer signing is set up, releases are unsigned prereleases: on first open, right-click TimeTug and choose Open.
+
 ## Build
-Requires macOS 14+ and Xcode 27.
+Requires macOS 14+ to run and Xcode 26 or newer to build (needs [XcodeGen](https://github.com/yonaskolb/XcodeGen):
+`brew install xcodegen`). The Liquid Glass style needs the macOS 26 SDK.
 
 ```bash
 xcodegen generate --spec Apps/macOS/project.yml
@@ -40,5 +48,9 @@ Uses KeyboardShortcuts by Sindre Sorhus (MIT).
 ## Status
 Early development.
 
-## License
-The source code is released under the [MIT License](LICENSE). Licensing for the brand artwork in `artwork/` and the app's asset catalog has not been decided separately yet.
+## Licensing
+The source code is released under the [MIT License](LICENSE).
+
+The brand artwork is ALL RIGHTS RESERVED and is not covered by the MIT license: the `artwork/` directory and the
+artwork-derived images in `Apps/macOS/Resources/Assets.xcassets` (app icon, menu bar icons, logo lockups, hero
+images). Please ask before reuse; see [artwork/LICENSE.md](artwork/LICENSE.md).

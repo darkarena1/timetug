@@ -31,3 +31,9 @@ TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
 - The app depends on the remote package KeyboardShortcuts, pinned exactly in `Apps/macOS/project.yml`; regenerate the project after changing it (first build needs network).
 - Calendar access needs the calendars entitlement and `NSCalendarsFullAccessUsageDescription`.
 - Takeover decisions are logged (titles redacted). Read them with ``log show --predicate 'subsystem == "com.timetug.app" AND category == "takeover"' --last 1h``. The persisted ledger is `~/Library/Application Support/TimeTug/takeover-ledger.json`; delete it to reset "already shown" memory.
+
+## CI and releases
+- `.github/workflows/ci.yml`: on push to `master` and every PR. Jobs: `core` (Core tests + EventKitSource build), `app` (XcodeGen + app tests, uploads the `.xcresult` on failure), `core-linux` (allowed to fail; proves Core portability).
+- `.github/workflows/release.yml`: on `v*` tags. Builds via `scripts/ci/build-release.sh`; signed DMG when the Apple secrets exist, otherwise an unsigned prerelease zip (`scripts/release/`). Process and secrets: `docs/release.md`; rationale: ADR 0007.
+- When CI fails: reproduce with the Commands above; for the app job download the `TestResults` artifact. Runner label or Xcode problems: `scripts/ci/select-xcode.sh` and the `runs-on` lines. Keep logic in the scripts, not in YAML.
+- Never commit certificates or keys (`*.p12`, `*.p8`, ...); they are git-ignored.

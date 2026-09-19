@@ -6,3 +6,16 @@ DerivedData/
 *.xcodeproj
 xcuserdata/
 build/
+
+# Release output and signing material: never commit these
+dist/
+*.xcarchive
+*.dmg
+*.xcresult
+*.p12
+*.p8
+*.cer
+*.mobileprovision
+*.pem
+.env
+.env.*

@@ -1,0 +1,61 @@
+name: Bug report
+description: Something in TimeTug does not work as expected
+labels: [bug]
+body:
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "e.g. macOS 26.0"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: TimeTug version
+      description: Shown in Settings > About, or the release you downloaded.
+      placeholder: "e.g. 0.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: account
+    attributes:
+      label: Calendar account type involved (if any)
+      options:
+        - Not calendar related
+        - iCloud
+        - Google
+        - Exchange / Microsoft 365
+        - Other or local calendar
+        - Several account types
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional)
+      description: |
+        Run this in Terminal and paste the relevant lines:
+        `log show --predicate 'subsystem == "com.timetug.app"' --last 1h`
+        Event titles are redacted as private by default, but please check the output and remove anything
+        private (meeting titles, names, links) before posting.
+      render: text
