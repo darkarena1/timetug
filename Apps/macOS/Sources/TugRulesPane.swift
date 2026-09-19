@@ -8,6 +8,13 @@ struct TugRulesPane: View {
     var body: some View {
         Form {
             VStack(alignment: .leading, spacing: 4) {
+                Toggle(SettingsText.disableTug, isOn: $settings.takeover.disabled)
+                    .settingsHighlight("disable-tug", navigation: navigation)
+                Text("Pauses takeovers. Your agenda, menu bar and widgets keep working.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            VStack(alignment: .leading, spacing: 4) {
                 Picker(SettingsText.leadTime, selection: leadMinutes) {
                     ForEach(LeadTimeOptions.options(including: settings.takeover.leadTime)) { option in
                         Text(option.title).tag(option.minutes)

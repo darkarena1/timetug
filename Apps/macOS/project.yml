@@ -1,6 +1,7 @@
 name: TimeTug
 options:
   bundleIdPrefix: com.timetug
+  preGenCommand: ../../scripts/dev/link-signing.sh
   deploymentTarget:
     macOS: "14.0"
 packages:
@@ -13,17 +14,20 @@ packages:
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
     exactVersion: 2.4.0
+configFiles:
+  Debug: Config/Signing.xcconfig
+  Release: Config/Signing.xcconfig
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    CODE_SIGN_IDENTITY: "-"
     ENABLE_HARDENED_RUNTIME: YES
 targets:
   TimeTug:
     type: application
     platform: macOS
-    sources: [Sources, Resources]
+    sources: [Sources, Resources, Shared]
     dependencies:
+      - target: TimeTugWidgets
       - package: TimeTugCore
         product: TimeTugCore
       - package: EventKitSource
@@ -37,17 +41,42 @@ targets:
       properties:
         CFBundleName: TimeTug
         CFBundleShortVersionString: "0.0.0-dev"
-        CFBundleVersion: "1"
+        CFBundleVersion: "2"
         LSUIElement: true
         NSCalendarsFullAccessUsageDescription: TimeTug reads your calendars to alert you before meetings start.
     entitlements:
       path: Sources/TimeTug.entitlements
       properties:
         com.apple.security.personal-information.calendars: true
+        com.apple.security.application-groups: [YYA6ZKMD36.com.timetug.shared]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.timetug.app
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  TimeTugWidgets:
+    type: app-extension
+    platform: macOS
+    sources: [Widgets, Shared]
+    dependencies:
+      - package: TimeTugCore
+        product: TimeTugCore
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleName: TimeTugWidgets
+        CFBundleDisplayName: TimeTug
+        CFBundleShortVersionString: "0.0.0-dev"
+        CFBundleVersion: "2"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widgets/TimeTugWidgets.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups: [YYA6ZKMD36.com.timetug.shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.timetug.app.widgets
   TimeTugTests:
     type: bundle.unit-test
     platform: macOS

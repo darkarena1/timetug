@@ -19,3 +19,6 @@ dist/
 *.pem
 .env
 .env.*
+
+# Per-checkout signing override (see Apps/macOS/Config/Signing.xcconfig)
+Apps/macOS/Config/Local.xcconfig

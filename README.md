@@ -21,6 +21,9 @@ Created by [Scott O'Bryan](https://github.com/darkarena1).
 - Menu bar icon turns color when a meeting is about to tug you
 - Menu bar: icon only (default), next meeting, or countdown
 - Light, Dark or Auto appearance
+- Widgets: Next Up (small, medium) and Today (medium, large)
+- Control Center controls on macOS 26: Skip All Day Events, Use Intelligence, Disable Tug (widgets and controls need a team-signed build)
+- Disable Tug: one setting (Tug Rules) that stops all takeovers
 - Optional global shortcut to show today's meetings
 
 ## Event merging

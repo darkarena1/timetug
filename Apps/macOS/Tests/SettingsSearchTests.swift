@@ -158,4 +158,10 @@ final class SettingsSearchTests: XCTestCase {
             XCTAssertTrue(SettingsSearch.results(for: query, calendars: []).contains { $0.id == "dedup-inference" }, query)
         }
     }
+
+    func testDisableTugIsSearchable() {
+        XCTAssertEqual(ids("disable tug").first, "disable-tug")
+        XCTAssertTrue(ids("pause").contains("disable-tug"))
+        XCTAssertEqual(SettingsSearch.catalog.first { $0.id == "disable-tug" }?.pane, .tugRules)
+    }
 }

@@ -1,0 +1,11 @@
+// Signing defaults for every configuration (referenced from project.yml `configFiles`).
+//
+// Default: ad-hoc signing. It is what CI and fresh checkouts use; the app runs, but widgets and
+// Control Center controls need an App Group container, which only a team-signed build has.
+CODE_SIGN_IDENTITY = -
+
+// Optional overrides, later files win; a missing file is silently ignored (`#include?`).
+// Local.xcconfig is git-ignored. scripts/dev/link-signing.sh (run by xcodegen's preGenCommand) links it to
+// ~/.config/timetug/signing.xcconfig when that file exists, so one per-user file signs every worktree.
+// (Xcode cannot include a file by $(HOME) directly.) You may also write a real Local.xcconfig by hand.
+#include? "Local.xcconfig"

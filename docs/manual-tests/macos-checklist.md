@@ -63,3 +63,15 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] With a placeholder merged into identical copies, "Split off" on the placeholder row leaves the copies merged and the placeholder as its own card; it stays that way after relaunch.
 - [ ] Three identical copies plus a placeholder show two rows; "Split off" on the copies row (×3) leaves the placeholder as its own card and the copies merged. The Split off button reads correctly with VoiceOver ("Split off: <title>, 3 copies").
 - [ ] "Forget learned corrections" resets decisions and clears cached AI verdicts.
+
+## Widgets and controls (needs a team-signed build)
+- [ ] Set up local signing once: `~/.config/timetug/signing.xcconfig` (see AGENTS.md "Widgets and controls"), run `xcodegen generate --spec Apps/macOS/project.yml`, then a `clean` build/Run in Xcode. Confirm `codesign -d --entitlements - TimeTug.app` shows the `YYA6ZKMD36.com.timetug.shared` group on the app and on `PlugIns/TimeTugWidgets.appex`.
+- [ ] Add each widget and size from the widget gallery: Next Up small and medium, Today medium and large.
+- [ ] Widgets show real meetings with the right calendar colours.
+- [ ] Next Up advances to the next meeting at a meeting's start and end without reloading the widget.
+- [ ] Today dims meetings that have already ended (visible on the large widget, or on the medium widget when the day has at most 2 meetings; medium shows 2 rows).
+- [ ] Deleting `agenda-snapshot.json` from `~/Library/Group Containers/YYA6ZKMD36.com.timetug.shared/` makes the widgets show the placeholder; it recovers when the app next publishes.
+- [ ] Clicking a widget with a meeting that has a Join link opens the link; without one it just activates the app.
+- [ ] Each of the three controls (Skip All Day Events, Use Intelligence, Disable Tug) flips the matching Settings toggle and behaves as expected (Disable Tug: no takeover fires while on).
+- [ ] Toggling each setting in Settings updates the matching control in Control Center.
+- [ ] An ad-hoc build runs normally, with no widgets loading and no crash.
