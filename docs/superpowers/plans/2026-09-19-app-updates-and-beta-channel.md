@@ -18,6 +18,7 @@ Spec: `docs/superpowers/specs/2026-09-19-app-updates-and-beta-channel-design.md`
 - Beta display version: `<base>-beta.<PR number>.<run number>`; stable: tag without `v`. `<base>` is `CFBundleShortVersionString` in `Apps/macOS/project.yml`.
 - Betas are Developer-ID signed, NOT notarized. Every zip carries a Sparkle EdDSA signature.
 - Keep the newest 5 betas.
+- The base version in `project.yml` (`CFBundleShortVersionString`, currently `0.0.0-dev`) may carry a suffix; the beta version is `<base>-beta.<PR>.<run>` and validators must accept it.
 - Secrets never enter PR-authored code: `SPARKLE_PRIVATE_KEY` and the certificate are used only by workflows that run default-branch scripts.
 - Never commit certificates, keys or the Sparkle private key.
 - Keep logic in scripts, not YAML (AGENTS.md).
@@ -76,6 +77,7 @@ BUILD_NUMBER=202609191430" ] || fail "stable output: $out"
 
 $S beta x 1 >/dev/null 2>&1 && fail "non-numeric PR accepted"
 $S stable 1.2.3 >/dev/null 2>&1 && fail "tag without v accepted"
+[ "$(TT_NOW=202609191430 $S stable v1.2.3-rc1 | head -n1)" = "APP_VERSION=1.2.3-rc1" ] || fail "suffix tag rejected"
 out="$($S beta 1 1)"
 echo "$out" | grep -Eq '^BUILD_NUMBER=[0-9]{12}$' || fail "default clock: $out"
 echo "PASS"
@@ -109,7 +111,7 @@ case "$kind" in
     echo "APP_VERSION=${base}-beta.${pr}.${run}" ;;
   stable)
     tag="${2:-}"
-    [[ "$tag" =~ ^v[0-9]+(\.[0-9]+)*$ ]] || { echo "usage: $0 stable vX.Y.Z" >&2; exit 2; }
+    [[ "$tag" =~ ^v[0-9]+(\.[0-9]+)*([-+][0-9A-Za-z.-]+)?$ ]] || { echo "usage: $0 stable vX.Y.Z[-suffix]" >&2; exit 2; }
     echo "APP_VERSION=${tag#v}" ;;
   *) echo "usage: $0 beta <pr> <run> | stable <tag>" >&2; exit 2 ;;
 esac
@@ -139,8 +141,8 @@ and replace `BUILD_NUMBER="${BUILD_NUMBER:-${GITHUB_RUN_NUMBER:-}}"` with `BUILD
 
 - [ ] **Step 6: Verify the script still parses and the override works**
 
-Run: `bash -n scripts/ci/build-release.sh && grep -c GITHUB_RUN_NUMBER scripts/ci/build-release.sh`
-Expected: prints `0`.
+Run: `bash -n scripts/ci/build-release.sh && ! grep -q '^[^#]*GITHUB_RUN_NUMBER' scripts/ci/build-release.sh && echo ok`
+Expected: prints `ok` (no non-comment line mentions `GITHUB_RUN_NUMBER`).
 
 - [ ] **Step 7: Commit**
 
@@ -1070,7 +1072,7 @@ jobs:
       - name: Build
         run: scripts/ci/build-release.sh
       - name: Pack app
-        run: tar -C dist -cf dist/TimeTug.tar TimeTug.app
+        run: tar -cf dist/TimeTug.tar -C dist TimeTug.app
       - uses: actions/upload-artifact@v4
         with:
           name: beta-app
@@ -1134,7 +1136,7 @@ jobs:
           VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")"
           BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")"
           [[ "$BUILD" =~ ^[0-9]{12}$ ]] || { echo "::error::bad build number"; exit 1; }
-          [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*-beta\.[0-9]+\.[0-9]+$ ]] || { echo "::error::bad version"; exit 1; }
+          [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*([-+][0-9A-Za-z.-]+)?-beta\.[0-9]+\.[0-9]+$ ]] || { echo "::error::bad version"; exit 1; }
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "BUILD=$BUILD" >> "$GITHUB_ENV"
       - name: Sign with Developer ID (no notarization)
@@ -1203,15 +1205,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: `compute-versions.sh stable`, `make-update-zip.sh`, `fetch-sparkle-tools.sh`, `publish-appcast.sh`.
 
-- [ ] **Step 1: Stamp the timestamp build number and add a concurrency group.** In `release.yml` add at top level:
-
-```yaml
-concurrency:
-  group: appcast
-  cancel-in-progress: false
-```
-
-Replace the step "Build Release app" with:
+- [ ] **Step 1: Stamp the timestamp build number.** Do NOT add a workflow-level concurrency group to `release.yml` (it would make every beta wait for a whole release and can drop queued runs); `publish-appcast.sh` already never force-pushes and re-applies its edit after a rejected push, so a release and a beta writing at once both land. Replace the step "Build Release app" with:
 
 ```yaml
       - name: Compute build number
@@ -1336,7 +1330,7 @@ These need credentials only the repo owner has. Each is a checkpoint, not code.
 | Two-workflow beta, no secrets in PR-code job, default-branch checkout, workflow_run field checks | 7 |
 | Developer ID signing without notarization, Sparkle helpers signed inside-out, `sign-app.sh` split | 4 |
 | Draft release, appcast, then publish; failure leaves draft | 7 |
-| Shared `appcast` concurrency group, retry without force-push | 3, 7, 8 |
+| Beta publishes serialised by the `appcast` concurrency group; release and beta both retry without force-push | 3, 7 |
 | Prune to 5 betas | 2, 3, 7 |
 | Stable path only when signed; zip from the stapled app | 8 |
 | Docs: `release.md`, AGENTS.md, ADR, checklist | 9 |

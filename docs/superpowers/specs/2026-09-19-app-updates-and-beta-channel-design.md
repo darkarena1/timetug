@@ -18,9 +18,9 @@ Date: 2026-09-19. Status: approved in conversation, pending written-spec review.
 - Retention: keep the 5 newest beta prereleases and their appcast entries; prune the rest.
 
 ## App changes
-- `UpdateController` in `Apps/macOS/Sources`, wrapping `SPUStandardUpdaterController`, behind a small protocol so tests never launch Sparkle. Exposes `checkForUpdates()`, `automaticallyChecks` (bound to Sparkle's own preference), `includeBetas` (stored in `SharedSettings`; drives `allowedChannels(for:)`, returning `["beta"]` when on, empty set when off), `lastCheckDate`, current version string.
+- `UpdateController` in `Apps/macOS/Sources`, wrapping `SPUStandardUpdaterController`, behind a small protocol so tests never launch Sparkle. Exposes `checkForUpdates()`, `automaticallyChecks` (bound to Sparkle's own preference), `includeBetas` (stored in the app's `UserDefaults`, key `updates.includeBetas.v1`; the widgets do not need it; drives `allowedChannels(for:)`, returning `["beta"]` when on, empty set when off), `lastCheckDate`, current version string.
 - Add `SUFeedURL` (gh-pages appcast URL) and `SUPublicEDKey` (public key only) under `info.properties` of the app target in `Apps/macOS/project.yml`. XcodeGen regenerates `Sources/Info.plist` from those properties, so editing the plist directly would lose them.
-- Settings > General gets an "Updates" section laid out like macOS Software Update: status line ("TimeTug is up to date" + version) with a Check for Updates button; Automatic Updates row; Beta Updates row, each with help text. Turning Beta Updates off leaves a beta user on their beta until a stable release outranks it; the help text says so.
+- Settings > General gets an "Updates" section laid out like macOS Software Update: status line ("TimeTug <version>" and "Last checked <date>"; Sparkle only reports "up to date" as the result of a check, so there is no standing claim) with a Check for Updates button; Automatic Updates row; Beta Updates row, each with help text. Turning Beta Updates off leaves a beta user on their beta until a stable release outranks it; the help text says so.
 - Menu bar dropdown gets a "Check for Updates…" item.
 - Core is untouched (no update logic; AGENTS.md layering holds).
 - Testing: unit tests for `UpdateController` logic (channel selection, defaults, persistence) using a fake updater. Real Sparkle UI verified by hand; steps added to `docs/manual-tests/macos-checklist.md`.
@@ -39,13 +39,13 @@ PR-authored scripts (`build-release.sh`, `project.yml`, XcodeGen run-script phas
 5. `scripts/release/update-appcast.sh` adds a beta item to `appcast.xml` on `gh-pages` (see below), then the release is flipped from draft to published. If any step fails the workflow fails visibly and the draft is left unpublished, so no update is offered that is missing from the feed, and a beta is never public without a feed entry.
 6. `scripts/release/prune-betas.sh` keeps the newest 5 beta releases and appcast entries.
 
-**Appcast writes.** One shared concurrency group `appcast` (`cancel-in-progress: false`) is set on `beta-publish.yml` AND `release.yml`'s appcast job so the two never write concurrently. Each write also does fetch, rebase and retry (bounded) on a rejected push and never force-pushes. Note GitHub keeps at most one pending run per group, so a beta for an intermediate green PR can be skipped when several finish at once; that is acceptable because only the newest beta matters.
+**Appcast writes.** Beta publishes are serialised by the concurrency group `appcast` (`cancel-in-progress: false`). `release.yml` has no such group (it would block betas behind a whole release and can drop queued runs); instead every write, beta or release, goes through `publish-appcast.sh`, which never force-pushes and re-applies its edit onto the latest `gh-pages` after a rejected push (bounded retries), so concurrent writers both land. Note GitHub keeps at most one pending run per group, so a beta for an intermediate green PR can be skipped when several finish at once; that is acceptable because only the newest beta matters.
 
 **Appcast generation.** `scripts/release/update-appcast.sh` edits the XML with a small script (Python stdlib): it inserts an `<item>` with `sparkle:version`, `sparkle:shortVersionString`, `sparkle:minimumSystemVersion`, the enclosure URL (the release asset), `length`, `sparkle:edSignature` and, for betas, `<sparkle:channel>beta</sparkle:channel>`. It does not depend on `generate_appcast`.
 
 ### `release.yml` (existing, tag-triggered)
 - Existing build, sign, notarize and DMG steps are unchanged.
-- Added, only when `steps.signing.outputs.has_signing == 'true'` (an unsigned/ad-hoc release never enters the update feed): after the app is signed, notarized and stapled, build the Sparkle zip from that stapled app, EdDSA-sign it, attach it to the release, and add a stable item to `appcast.xml` under the shared `appcast` concurrency group.
+- Added, only when `steps.signing.outputs.has_signing == 'true'` (an unsigned/ad-hoc release never enters the update feed): after the app is signed, notarized and stapled, build the Sparkle zip from that stapled app, EdDSA-sign it, attach it to the release, and add a stable item to `appcast.xml` through `publish-appcast.sh`, after the GitHub release exists.
 - Uses the same timestamp `CFBundleVersion` scheme.
 
 ### Scripts
