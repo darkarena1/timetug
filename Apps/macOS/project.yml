@@ -1,6 +1,7 @@
 name: TimeTug
 options:
   bundleIdPrefix: com.timetug
+  preGenCommand: ../../scripts/dev/link-signing.sh
   deploymentTarget:
     macOS: "14.0"
 packages:
@@ -13,10 +14,12 @@ packages:
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
     exactVersion: 2.4.0
+configFiles:
+  Debug: Config/Signing.xcconfig
+  Release: Config/Signing.xcconfig
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    CODE_SIGN_IDENTITY: "-"
     ENABLE_HARDENED_RUNTIME: YES
 targets:
   TimeTug:

@@ -65,6 +65,7 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] "Forget learned corrections" resets decisions and clears cached AI verdicts.
 
 ## Widgets and controls (needs a team-signed build)
+- [ ] Set up local signing once: `~/.config/timetug/signing.xcconfig` (see AGENTS.md "Widgets and controls"), run `xcodegen generate --spec Apps/macOS/project.yml`, then a `clean` build/Run in Xcode. Confirm `codesign -d --entitlements - TimeTug.app` shows the `YYA6ZKMD36.com.timetug.shared` group on the app and on `PlugIns/TimeTugWidgets.appex`.
 - [ ] Add each widget and size from the widget gallery: Next Up small and medium, Today medium and large.
 - [ ] Widgets show real meetings with the right calendar colours.
 - [ ] Next Up advances to the next meeting at a meeting's start and end without reloading the widget.
