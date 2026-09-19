@@ -8,7 +8,8 @@ Read this first if a session ran out of tokens. Branch: `claude/calendar-dedup-a
 - Fix A DONE (1c8384d). Fix B DONE (7929860, 89ff2f3, df371d6, 9c981a9). Fix C DONE (da52f4e, 7a0bd36, plus the docs commit that follows).
 - Fix D DONE (9188d2a, 4b3a98b, 8603ba1, plus the docs commit that follows): expandable merged-events list, tooltip, per-member split (`CalendarStore.separate`).
 - Fix E DONE (eebf8e5, 64d5130, plus the docs commit that follows): identical copies listed once ("×N"), `separate(_ members:, from:, now:)`, actions renamed "Split off" (row) and "Unmerge all" (card).
-- Last known counts: Core 210, AppleIntelligenceInference 11, app 140.
+- Fix F DONE (d1221b2, plus the docs commit that follows): identical-only merged groups present as a plain event (no "N copies merged", no list, no Unmerge all).
+- Last known counts: Core 210, AppleIntelligenceInference 11, app 142.
 - Next: push, watch CI on PR #6, user re-tests in Xcode. PR #6 stays open; never merge without the user's explicit go-ahead.
 
 ## The user's test finding and fixes
