@@ -47,3 +47,19 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Ledger file does not grow: after several days of use `~/Library/Application Support/TimeTug/takeover-ledger.json` only contains recent meetings.
 - [ ] Installer DMG (from a CI artifact or a release): opening it shows a cream window with the TimeTug icon on the left, the Applications shortcut on the right, a blue arrow between them and "Drag TimeTug to Applications"; no toolbar, sidebar or status bar.
 - [ ] Dragging TimeTug onto Applications copies the app (it then launches from /Applications); Eject works afterwards and the mounted volume shows the TimeTug icon.
+
+## Duplicate detection (beta)
+- [ ] Settings > Calendars: the on-device intelligence toggle is off by default and shows a Beta badge.
+- [ ] With it off, "Scott: Doctor" vs a detailed entry for the same appointment stay separate.
+- [ ] With it on and Apple Intelligence available, the pair merges and shows "Merged with Apple Intelligence".
+- [ ] "Unmerge all" (card menu or right-click) splits it, and it stays split after relaunch.
+- [ ] "Merge with..." on a separate look-alike merges it and shows "Merged manually".
+- [ ] On a Mac without Apple Intelligence, the status line says rules only and nothing is merged by the model.
+- [ ] A merged meeting takes over exactly once.
+- [ ] A merged meeting with a longer placeholder copy: the list shows the longer time range; the takeover fires at the appointment's start when a copy has a conference link, otherwise at the longer copy's start.
+- [ ] A merged card shows a chevron with "Merged with Apple Intelligence · N events" (or "N events merged"); clicking expands one row per distinct event, with identical copies collapsed into one row marked "×N" with its calendar, account and own time range, and the shown copy is tagged. The popup grows and shrinks with it.
+- [ ] Hovering the merged-events line shows the titles joined with " + ".
+- [ ] Identical copies alone (same title and time on several calendars) show as one plain card: no chevron, no badge, no "Unmerge all".
+- [ ] With a placeholder merged into identical copies, "Split off" on the placeholder row leaves the copies merged and the placeholder as its own card; it stays that way after relaunch.
+- [ ] Three identical copies plus a placeholder show two rows; "Split off" on the copies row (×3) leaves the placeholder as its own card and the copies merged. The Split off button reads correctly with VoiceOver ("Split off: <title>, 3 copies").
+- [ ] "Forget learned corrections" resets decisions and clears cached AI verdicts.

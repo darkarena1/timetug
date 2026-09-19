@@ -5,6 +5,7 @@ struct CalendarsPane: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var model: AppModel
     @ObservedObject var navigation: SettingsNavigation
+    let onForgetCorrections: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -12,6 +13,7 @@ struct CalendarsPane: View {
                 .font(.callout).foregroundStyle(.secondary)
             Toggle(SettingsText.skipAllDay, isOn: $settings.takeover.skipAllDayEvents)
                 .settingsHighlight("skip-all-day", navigation: navigation)
+            duplicatesControl
             calendarList
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             Text("Tugging needs the calendar shown in the list: turning on Tug shows it, and hiding it turns Tug off.")
@@ -122,5 +124,25 @@ struct CalendarsPane: View {
             get: { settings.takeover.isShownInList(key) },
             set: { settings.takeover.setShownInList($0, forCalendar: key) }
         )
+    }
+}
+
+extension CalendarsPane {
+    private var duplicatesControl: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Toggle(SettingsText.dedupInference, isOn: $settings.inferenceEnabled)
+                BetaBadge()
+                Spacer(minLength: 0)
+            }
+            if let status = InferenceStatusText.make(model.inferenceStatus) {
+                Text(status).font(.footnote).foregroundStyle(.secondary)
+            }
+            Text("Off by default. Duplicates with matching details are always merged. When this is on, your Mac's on-device model also compares events with different titles. Nothing leaves your Mac.")
+                .font(.footnote).foregroundStyle(.secondary)
+            Button("Forget learned corrections", action: onForgetCorrections)
+                .buttonStyle(.link).font(.footnote)
+        }
+        .settingsHighlight("dedup-inference", navigation: navigation)
     }
 }

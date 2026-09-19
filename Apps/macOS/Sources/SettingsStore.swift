@@ -12,6 +12,7 @@ final class SettingsStore: ObservableObject {
     private static let modeKey = "menuBarMode.v1"
     private static let appearanceKey = "appearanceMode.v1"
     private static let cardStyleKey = "popupCardStyle.v1"
+    private static let inferenceKey = "dedupInference.v1"
     private let defaults: UserDefaults
 
     @Published var takeover: TakeoverSettings {
@@ -26,6 +27,9 @@ final class SettingsStore: ObservableObject {
     @Published var popupCardStyle: PopupCardStyle {
         didSet { defaults.set(popupCardStyle.rawValue, forKey: Self.cardStyleKey) }
     }
+    @Published var inferenceEnabled: Bool {
+        didSet { defaults.set(inferenceEnabled, forKey: Self.inferenceKey) }
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -38,6 +42,7 @@ final class SettingsStore: ObservableObject {
         self.popupCardStyle = defaults.string(forKey: Self.cardStyleKey)
             .flatMap(PopupCardStyle.init(rawValue:))
             .flatMap { PopupCardStyle.available.contains($0) ? $0 : nil } ?? PopupCardStyle.defaultStyle
+        self.inferenceEnabled = defaults.bool(forKey: Self.inferenceKey)
     }
 
     private func save() {

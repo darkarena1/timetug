@@ -1,4 +1,5 @@
 import AppKit
+import AppleIntelligenceInference
 import Combine
 import EventKitSource
 import KeyboardShortcuts
@@ -20,6 +21,9 @@ final class AppCoordinator {
     private let store: CalendarStore
     private var snapshot = CalendarSnapshot.empty
     private let ledgerStore = LedgerStore()
+    private static let maxResolvePasses = 10
+    private let dedupStore = DedupStateStore()
+    private var lastSavedDedupState: DedupState?
     private var ledger: TakeoverLedger
     /// True until the first successful refresh after launch has acknowledged in-progress meetings.
     private var needsLaunchAcknowledge = true
@@ -30,11 +34,12 @@ final class AppCoordinator {
     private let overlay = OverlayController()
     private lazy var aboutWindow = AboutWindowController()
     private lazy var settingsWindow = SettingsWindowController { [unowned self] in
-        SettingsView(settings: settings, model: model, navigation: navigation, onTestTug: { [weak self] in self?.fireTest() })
+        SettingsView(settings: settings, model: model, navigation: navigation, onTestTug: { [weak self] in self?.fireTest() },
+                     onForgetCorrections: { [weak self] in self?.forgetCorrections() })
     }
 
     init() {
-        store = CalendarStore(sources: [eventKit])
+        store = CalendarStore(sources: [eventKit], adjudicator: AppleIntelligence.makeAdjudicator())
         var loaded = ledgerStore.load()
         loaded.prune(now: Date())
         ledger = loaded
@@ -49,7 +54,10 @@ final class AppCoordinator {
                 DropdownView(
                     model: model,
                     onOpenSettings: { [weak self] in self?.openSettings() },
-                    onJoin: { [weak self] url in self?.statusItem?.join(url) }
+                    onJoin: { [weak self] url in self?.statusItem?.join(url) },
+                    onUnmerge: { [weak self] event in self?.unmerge(event) },
+                    onSeparate: { [weak self] event, members in self?.separate(event, members: members) },
+                    onMerge: { [weak self] a, b in self?.merge(a, b) }
                 )
             ),
             onOpenSettings: { [weak self] in self?.openSettings() },
@@ -80,6 +88,13 @@ final class AppCoordinator {
         Timer.scheduledTimer(withTimeInterval: Self.periodicRefresh, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
         }
+        let loadedDedup = dedupStore.load()
+        lastSavedDedupState = loadedDedup
+        await store.load(loadedDedup)
+        _ = await store.setInferenceEnabled(settings.inferenceEnabled, now: Date())
+        settings.$inferenceEnabled.dropFirst().sink { [weak self] enabled in
+            Task { @MainActor in await self?.setInference(enabled) }
+        }.store(in: &cancellables)
         await refresh()
         if settings.takeover.takeoverCalendarKeys.isEmpty { openSettings(pane: .calendars) }
 
@@ -94,10 +109,18 @@ final class AppCoordinator {
     }
 
     func refresh() async {
-        snapshot = await store.refresh(now: Date(), leadTime: settings.takeover.leadTime)
+        apply(await store.refresh(now: Date(), leadTime: settings.takeover.leadTime))
+        // Inference never blocks a refresh (or start / the change loop).
+        Task { @MainActor [weak self] in await self?.resolvePending() }
+    }
+
+    /// Publishes a snapshot to the model, ledger bookkeeping, timers and UI.
+    private func apply(_ newSnapshot: CalendarSnapshot) {
+        snapshot = newSnapshot
         model.calendars = snapshot.calendars
         model.statuses = snapshot.statuses
         model.sourceNames = snapshot.sourceNames
+        model.candidates = snapshot.candidates
         if ledger.prune(now: Date()) { persistLedger() }
         if needsLaunchAcknowledge {
             // Meetings already underway at launch never take over (late fire is for wake-from-sleep).
@@ -108,6 +131,60 @@ final class AppCoordinator {
         }
         rearm()
         updateUI()
+    }
+
+    /// Asks the on-device model about look-alike pairs off the refresh path; each verdict republishes.
+    private func resolvePending() async {
+        model.inferenceStatus = await store.inferenceStatus()
+        // Bounded backstop: each pass drains a batch, but never loop forever if a verdict fails to stick.
+        var passes = 0
+        while passes < Self.maxResolvePasses, let updated = await store.resolvePending(now: Date()) {
+            apply(updated)
+            passes += 1
+        }
+        model.inferenceStatus = await store.inferenceStatus()
+        await persistDedup()
+    }
+
+    private func setInference(_ enabled: Bool) async {
+        apply(await store.setInferenceEnabled(enabled, now: Date()))
+        await resolvePending()
+    }
+
+    func unmerge(_ event: CalendarEvent) {
+        Task { @MainActor in
+            apply(await store.unmerge(event, now: Date()))
+            await persistDedup()
+        }
+    }
+
+    func separate(_ event: CalendarEvent, members: [MergedMember]) {
+        Task { @MainActor in
+            apply(await store.separate(members, from: event, now: Date()))
+            await persistDedup()
+        }
+    }
+
+    func merge(_ a: CalendarEvent, _ b: CalendarEvent) {
+        Task { @MainActor in
+            apply(await store.merge(a, b, now: Date()))
+            await persistDedup()
+        }
+    }
+
+    private func forgetCorrections() {
+        Task { @MainActor in
+            apply(await store.forgetLessons(now: Date()))
+            await persistDedup()
+            await resolvePending()
+        }
+    }
+
+    private func persistDedup() async {
+        let state = await store.state()
+        guard state != lastSavedDedupState else { return }
+        dedupStore.save(state)
+        lastSavedDedupState = state
     }
 
     /// Arms one timer for the next takeover. Skipped while an overlay is up (see Task 10).
@@ -143,7 +220,7 @@ final class AppCoordinator {
             TakeoverLog.suppressed(reason, event: event)
             rearm()
         case .present:
-            let current = snapshot.events.first { $0.id == event.id || $0.contentKey == event.contentKey } ?? event
+            let current = snapshot.events.first { $0.isSameMeeting(as: event) } ?? event
             let reason = ledger.isSnoozed(current) ? "snooze expired"
                 : now >= current.start.addingTimeInterval(Self.launchGrace) ? "late after wake" : "lead time"
             ledger.markFired(current, now: now)

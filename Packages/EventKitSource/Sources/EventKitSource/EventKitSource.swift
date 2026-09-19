@@ -80,7 +80,14 @@ public final class EventKitSource: CalendarSource, @unchecked Sendable {
             location: event.location,
             notes: event.notes,
             url: event.url,
-            conferenceURL: nil   // CalendarStore fills this from location/url/notes
+            conferenceURL: nil,
+            attendees: attendees.filter { !$0.isCurrentUser }.map {
+                Attendee(name: $0.name, email: Attendee.email(fromMailto: $0.url.absoluteString))
+            },
+            organizerEmail: event.organizer.flatMap {
+                $0.isCurrentUser ? nil : Attendee.email(fromMailto: $0.url.absoluteString)
+            },
+            externalUID: event.calendarItemExternalIdentifier
         )
     }
 }

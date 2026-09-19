@@ -7,6 +7,9 @@ struct DropdownView: View {
     @ObservedObject var model: AppModel
     let onOpenSettings: () -> Void
     let onJoin: (URL) -> Void
+    let onUnmerge: (CalendarEvent) -> Void
+    let onSeparate: (CalendarEvent, [MergedMember]) -> Void
+    let onMerge: (CalendarEvent, CalendarEvent) -> Void
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -63,7 +66,9 @@ struct DropdownView: View {
                                 EventCard(row: row, event: item.event, now: now,
                                           calendarTitle: calendarTitle(for: item.event),
                                           palette: palette, style: cardStyle,
-                                          strongBorder: contrast == .increased, onJoin: onJoin)
+                                          strongBorder: contrast == .increased,
+                                          candidates: model.candidates[item.event.id] ?? [],
+                                          onUnmerge: onUnmerge, onSeparate: onSeparate, onMerge: onMerge, onJoin: onJoin)
                             }
                         }
                     }
@@ -199,7 +204,13 @@ private struct EventCard: View {
     let palette: PopupPalette
     let style: PopupCardStyle
     let strongBorder: Bool
+    let candidates: [CalendarEvent]
+    let onUnmerge: (CalendarEvent) -> Void
+    let onSeparate: (CalendarEvent, [MergedMember]) -> Void
+    let onMerge: (CalendarEvent, CalendarEvent) -> Void
     let onJoin: (URL) -> Void
+
+    @State private var isExpanded = false
 
     private var isPast: Bool { row.kind == .past }
     private var isNext: Bool { row.kind == .next }
@@ -209,6 +220,10 @@ private struct EventCard: View {
     }
     private var secondaryColor: Color { style == .solid ? palette.secondary : .secondary }
     private var barColor: Color { Color(hex: row.colorHex) ?? palette.blue }
+    private var mergeIcon: String {
+        if case .inference = event.mergeProvenance { return "sparkles" }
+        return "checkmark.circle"
+    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -234,6 +249,43 @@ private struct EventCard: View {
                     }
                     Text(row.metaText)
                         .font(.system(size: 12)).foregroundStyle(secondaryColor).lineLimit(1)
+                    if let summary = row.mergeSummaryText {
+                        HStack(spacing: 6) {
+                            Button { isExpanded.toggle() } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 9, weight: .semibold))
+                                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                                    Image(systemName: mergeIcon).font(.system(size: 11))
+                                    Text(summary).font(.system(size: 11)).lineLimit(1)
+                                }
+                                .foregroundStyle(secondaryColor)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .help(row.mergeTooltip ?? summary)
+                            .accessibilityLabel(summary)
+                            .accessibilityHint(isExpanded ? "Collapse merged events" : "Expand merged events")
+                            .accessibilityAddTraits(.isButton)
+                            Menu {
+                                Button("Unmerge all") { onUnmerge(event) }
+                                    .accessibilityLabel("Unmerge all events in this group")
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                                    .font(.system(size: 11)).foregroundStyle(secondaryColor)
+                            }
+                            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                            .accessibilityLabel("\(summary). Actions")
+                        }
+                        if isExpanded {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(row.memberRows) { member in
+                                    memberRow(member)
+                                }
+                            }
+                            .padding(.top, 2)
+                        }
+                    }
                     if row.kind == .current {
                         ProgressBar(fraction: PopupText.progress(start: row.start, end: row.end, now: now), palette: palette)
                             .padding(.top, 4)
@@ -252,6 +304,46 @@ private struct EventCard: View {
         .modifier(CardSurface(style: style, isNext: isNext, palette: palette, strongBorder: strongBorder))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityText)
+        .contextMenu {
+            if row.isMerged {
+                Button("Unmerge all") { onUnmerge(event) }
+                    .accessibilityLabel("Unmerge all events in this group")
+            }
+            ForEach(candidates) { other in
+                Button("Merge with \u{201C}\(other.title)\u{201D} (\(PopupText.clock(other.start)))") { onMerge(event, other) }
+            }
+        }
+    }
+
+    private func memberRow(_ member: MergedMemberRow) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 4) {
+                    Text(member.title)
+                        .font(.system(size: 11, weight: member.isShown ? .semibold : .regular))
+                        .foregroundStyle(titleColor).lineLimit(1)
+                    if member.copyCount > 1 {
+                        Text("\u{00D7}\(member.copyCount)").font(.system(size: 10)).foregroundStyle(secondaryColor)
+                    }
+                    if member.isShown {
+                        Text("shown").font(.system(size: 10)).foregroundStyle(secondaryColor)
+                    }
+                }
+                Text([member.calendarLabel, member.timeText].filter { !$0.isEmpty }.joined(separator: " \u{00B7} "))
+                    .font(.system(size: 10)).foregroundStyle(secondaryColor).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            Button {
+                onSeparate(event, member.members)
+            } label: {
+                Label("Split off", systemImage: "arrow.triangle.branch").font(.system(size: 10))
+            }
+            .buttonStyle(.bordered).controlSize(.small)
+            .help("Show this as its own event")
+            .accessibilityLabel(member.copyCount > 1
+                ? "Split off: \(member.title), \(member.copyCount) copies" : "Split off: \(member.title)")
+        }
+        .accessibilityElement(children: .contain)
     }
 
     private var accessibilityText: String {
@@ -259,13 +351,14 @@ private struct EventCard: View {
         if row.kind == .allDay {
             parts.append("all day")
         } else {
-            let r = PopupText.range(row.start, row.end).replacingOccurrences(of: " – ", with: " to ")
+            let r = PopupText.range(row.shownStart ?? row.start, row.end).replacingOccurrences(of: " – ", with: " to ")
             parts.append(r)
         }
         if isNext { parts.append("in " + PopupText.spokenDuration(row.start.timeIntervalSince(now))) }
         if row.kind == .current { parts.append("in progress") }
         if isPast { parts.append("finished") }
         if let calendarTitle { parts.append("\(calendarTitle) calendar") }
+        if let summary = row.mergeSummaryText { parts.append(summary) }
         return parts.joined(separator: ", ")
     }
 }

@@ -8,6 +8,8 @@ packages:
     path: ../../Packages/TimeTugCore
   EventKitSource:
     path: ../../Packages/EventKitSource
+  AppleIntelligenceInference:
+    path: ../../Packages/AppleIntelligenceInference
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
     exactVersion: 2.4.0
@@ -26,6 +28,8 @@ targets:
         product: TimeTugCore
       - package: EventKitSource
         product: EventKitSource
+      - package: AppleIntelligenceInference
+        product: AppleIntelligenceInference
       - package: KeyboardShortcuts
         product: KeyboardShortcuts
     info:

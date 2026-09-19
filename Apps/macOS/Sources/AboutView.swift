@@ -54,6 +54,8 @@ struct AboutView: View {
             if let version = Self.versionText {
                 Text(version).font(.callout).foregroundStyle(palette.secondary)
             }
+            Text(Self.creditText)
+                .font(.callout.weight(.medium)).foregroundStyle(palette.primary)
             Text("Released under the MIT License.")
                 .font(.footnote).foregroundStyle(palette.secondary)
             Button("Done") { onDone() }
@@ -68,6 +70,9 @@ struct AboutView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("About TimeTug")
     }
+
+    /// Author credit shown in the About window (also in the README).
+    static let creditText = "Created by Scott O\u{2019}Bryan"
 
     /// "Version X (build Y)" from the bundle; nil when the version is missing.
     static var versionText: String? {

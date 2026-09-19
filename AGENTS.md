@@ -6,6 +6,7 @@ TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
 ## Layout
 - `Packages/TimeTugCore`: pure Swift, platform-neutral logic. NO UI or Apple-only imports.
 - `Packages/EventKitSource`: Apple Calendar adapter (macOS only).
+- `Packages/AppleIntelligenceInference`: Apple on-device model adapter for duplicate detection (macOS 26+, compile-guarded). Only place with Foundation Models imports.
 - `Apps/macOS`: AppKit/SwiftUI shell. Generated Xcode project (XcodeGen).
 - `artwork/`: brand images (see `docs/ARTWORK_USAGE.md`); the app's asset catalog is `Apps/macOS/Resources/Assets.xcassets`. Do not use the app icon for the menu bar; use the `MenuBarTemplate` template image.
 
@@ -20,6 +21,7 @@ TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
 ## Commands
 - Core tests: `swift test --package-path Packages/TimeTugCore`
 - EventKitSource build: `swift build --package-path Packages/EventKitSource`
+- Inference package tests: `swift test --package-path Packages/AppleIntelligenceInference`
 - Generate app project: `xcodegen generate --spec Apps/macOS/project.yml`
 - Build app: `xcodebuild -project Apps/macOS/TimeTug.xcodeproj -scheme TimeTug -destination 'platform=macOS' build`
 - App tests: `xcodebuild -project Apps/macOS/TimeTug.xcodeproj -scheme TimeTug -destination 'platform=macOS' test`
@@ -31,9 +33,10 @@ TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
 - The app depends on the remote package KeyboardShortcuts, pinned exactly in `Apps/macOS/project.yml`; regenerate the project after changing it (first build needs network).
 - Calendar access needs the calendars entitlement and `NSCalendarsFullAccessUsageDescription`.
 - Takeover decisions are logged (titles redacted). Read them with ``log show --predicate 'subsystem == "com.timetug.app" AND category == "takeover"' --last 1h``. The persisted ledger is `~/Library/Application Support/TimeTug/takeover-ledger.json`; delete it to reset "already shown" memory.
+- Duplicate detection: rules run always; on-device inference is opt-in (Settings > Calendars, Beta), default off. Lessons and verdicts persist at `~/Library/Application Support/TimeTug/dedup-state.json` (delete to reset).
 
 ## CI and releases
-- `.github/workflows/ci.yml`: on push to `master` and every PR. Jobs: `core` (Core tests + EventKitSource build), `app` (XcodeGen + app tests, uploads the `.xcresult` on failure), `core-linux` (allowed to fail; proves Core portability).
+- `.github/workflows/ci.yml`: on push to `master` and every PR. Jobs: `core` (Core tests + EventKitSource build + inference package tests), `app` (XcodeGen + app tests, uploads the `.xcresult` on failure), `core-linux` (allowed to fail; proves Core portability).
 - `.github/workflows/release.yml`: on `v*` tags. Builds via `scripts/ci/build-release.sh`; signed and notarized DMG when the Apple secrets exist, otherwise an unsigned prerelease DMG (`scripts/release/`). Process and secrets: `docs/release.md`; rationale: ADR 0007, 0008.
 - The `dmg` CI job builds and verifies an unsigned DMG on every run and uploads it as the `TimeTug-dmg` artifact.
 - DMG scripts: `scripts/release/make-dmg.sh` (dmgbuild, pinned in `scripts/release/dmg/requirements.txt`, installed in `build/dmg-venv`), `scripts/release/verify-dmg.sh <dmg>`, `scripts/release/sign-and-notarize.sh [app|dmg]`. Gotcha: the DMG background PNGs are committed; after editing `scripts/release/dmg/generate-background.swift` re-run it and commit the PNGs, and keep the icon positions in `scripts/release/dmg/settings.py` in sync with the arrow.

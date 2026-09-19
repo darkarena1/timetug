@@ -9,6 +9,7 @@ enum SettingsText {
     static let skipDeclined = "Skip declined events"
     static let testTug = "Test tug"
     static let skipAllDay = "Skip all-day events"
+    static let dedupInference = "Find duplicates with on-device intelligence"
     static let appearance = "Appearance"
     static let popupCards = "Popup cards"
     static let menuBarText = "Menu bar text"
@@ -40,6 +41,8 @@ enum SettingsSearch {
               keywords: ["tug", "takeover", "take over", "preview", "overlay", "try"], pane: .tugRules),
         .init(id: "skip-all-day", title: SettingsText.skipAllDay,
               keywords: ["list", "hide", "all day", "takeover", "take over", "tug"], pane: .calendars),
+        .init(id: "dedup-inference", title: SettingsText.dedupInference,
+              keywords: ["duplicate", "duplicates", "merge", "merged", "same meeting", "ai", "apple intelligence", "on-device", "beta", "inference"], pane: .calendars),
         .init(id: "appearance", title: SettingsText.appearance,
               keywords: ["theme", "light", "dark", "auto", "automatic", "mode", "dark mode", "color scheme"], pane: .general),
         .init(id: "popup-card-style", title: SettingsText.popupCards,
