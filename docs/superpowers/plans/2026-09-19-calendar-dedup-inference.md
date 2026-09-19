@@ -19,7 +19,7 @@
 - Time gate for candidates: intervals overlap, |start difference| <= 30 min, |end difference| <= 60 min.
 - Only different calendars are merged by inference or rules (exact-title-and-time matches keep the existing behavior, including on one calendar). All-day events merge only on an exact match.
 - Only `same` verdicts merge; `unsure` and `different` do not. Verdicts never block a refresh or a takeover.
-- Bounds: group size 4; 300 lessons; 6-month lesson expiry; 5 lessons per prompt; notes truncated to 500 characters; verdict cache 1000 entries, 7-day TTL.
+- Bounds: model verdicts join at most 4 clusters (rule/user merges uncapped; superseded by the two-phase grouping in the spec); 300 lessons; 6-month lesson expiry; 5 lessons per prompt; notes truncated to 500 characters; verdict cache 1000 entries, 7-day TTL.
 - Attendee emails are never sent to the model or stored in lessons.
 - Provenance: `.rule` (no badge), `.inference(engineID, engineName)` (badge), `.userConfirmed` (badge "Merged manually"). A user decision outranks rules and AI.
 - Commit messages end with `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>`.

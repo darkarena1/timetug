@@ -41,8 +41,11 @@ event's details are evidence in the prompt. Inference may also run when both are
 
 All-day events merge only on an exact match and are never sent to inference. A learned `same` lesson still requires the time gate; a learned `different` lesson is consulted inside the gate too (outside it the rules already keep the pair separate).
 
-Grouping is conservative: a merge group is only extended when the candidate is consistent with
-every member (no member vetoes it). Group size is capped (default 4).
+Grouping runs in two phases and never merges across a hard block (a rules veto or a learned
+`different`). Phase 1 applies the certain links (rules and learned `same`) with no size cap, so any
+number of exact duplicates across accounts and calendars collapse into one card. Phase 2 treats each
+model verdict as a vote between two groups: they merge when `same` votes outnumber `different` votes
+(a tie stays separate) and the result would join at most 4 phase 1 clusters (`maxGroupSize`, default 4).
 
 ## 2. Inference boundary
 
