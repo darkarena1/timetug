@@ -208,8 +208,8 @@ final class PopupLogicTests: XCTestCase {
     func testMergedRowsCarryBadgeAndFlag() {
         var merged = event("1", "Intermountain Health", at(10), at(11))
         merged.mergedMembers = [
-            MergedMember(title: "Intermountain Health", calendarKey: "src/work", contentKey: "k1", details: "location"),
-            MergedMember(title: "Scott: Doctor", calendarKey: "src/home", contentKey: "k2", details: "bare"),
+            MergedMember(title: "Intermountain Health", calendarKey: "src/work", contentKey: "k1", details: "location", start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 3600)),
+            MergedMember(title: "Scott: Doctor", calendarKey: "src/home", contentKey: "k2", details: "bare", start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 3600)),
         ]
         merged.mergeProvenance = .inference(engineID: "apple-intelligence", engineName: "Apple Intelligence")
         let row = rows([merged], now: at(9)).first!
@@ -224,5 +224,77 @@ final class PopupLogicTests: XCTestCase {
         let plain = rows([event("2", "Standup", at(11), at(12))], now: at(9)).first!
         XCTAssertNil(plain.mergeBadge)
         XCTAssertFalse(plain.isMerged)
+    }
+
+    // MARK: merged members
+
+    private func mergedEvent(provenance: MergeProvenance?, count: Int = 2) -> CalendarEvent {
+        var merged = event("1", "Intermountain Health", at(13), at(13, 30))
+        var members = [
+            MergedMember(title: "Scott: Doctor", calendarKey: "src/home", contentKey: "k2", details: "bare",
+                         start: at(12, 45), end: at(13, 45)),
+            MergedMember(title: "Intermountain Health", calendarKey: "src/work", contentKey: "k1", details: "location",
+                         start: at(13), end: at(13, 30)),
+        ]
+        if count > 2 {
+            members += (2..<count).map {
+                MergedMember(title: "Copy \($0)", calendarKey: "src/other\($0)", contentKey: "c\($0)", details: "bare",
+                             start: at(13), end: at(13, 30))
+            }
+        }
+        merged.mergedMembers = members
+        merged.mergeProvenance = provenance
+        return merged
+    }
+
+    func testMergeSummaryTextCountsEventsPerProvenance() {
+        let ai = rows([mergedEvent(provenance: .inference(engineID: "a", engineName: "Apple Intelligence"), count: 4)], now: at(9))[0]
+        XCTAssertEqual(ai.mergeSummaryText, "Merged with Apple Intelligence \u{00B7} 4 events")
+        let manual = rows([mergedEvent(provenance: .userConfirmed)], now: at(9))[0]
+        XCTAssertEqual(manual.mergeSummaryText, "Merged manually \u{00B7} 2 events")
+        let rule = rows([mergedEvent(provenance: .rule, count: 3)], now: at(9))[0]
+        XCTAssertEqual(rule.mergeSummaryText, "3 events merged")
+        let plain = rows([event("2", "Standup", at(11), at(12))], now: at(9))[0]
+        XCTAssertNil(plain.mergeSummaryText)
+        XCTAssertNil(plain.mergeTooltip)
+        XCTAssertTrue(plain.memberRows.isEmpty)
+    }
+
+    func testMergeTooltipJoinsTitlesAndTruncates() {
+        let row = rows([mergedEvent(provenance: .rule)], now: at(9))[0]
+        XCTAssertEqual(row.mergeTooltip, "Scott: Doctor + Intermountain Health")
+        var long = mergedEvent(provenance: .rule)
+        long.mergedMembers = (0..<6).map {
+            MergedMember(title: String(repeating: "x", count: 30) + "\($0)", calendarKey: "src/work", contentKey: "k\($0)",
+                         details: "bare", start: at(13), end: at(14))
+        }
+        let tip = rows([long], now: at(9))[0].mergeTooltip!
+        XCTAssertLessThanOrEqual(tip.count, 120)
+        XCTAssertTrue(tip.hasSuffix("\u{2026}"))
+    }
+
+    func testMemberRowsCarryTitleCalendarTimeAndShownFlag() {
+        let infos = [
+            CalendarInfo(sourceID: "src", calendarID: "work", title: "Work", accountName: "Acme"),
+            CalendarInfo(sourceID: "src", calendarID: "home", title: "Personal"),
+        ]
+        let rows = MergedMemberRow.rows(for: mergedEvent(provenance: .rule, count: 3), calendars: infos,
+                                        locale: posix, timeZone: utc)
+        XCTAssertEqual(rows.map(\.id), ["k2", "k1", "c2"])
+        XCTAssertEqual(rows[0].title, "Scott: Doctor")
+        XCTAssertEqual(rows[0].calendarLabel, "Personal")
+        XCTAssertEqual(rows[0].timeText, "12:45 \u{2013} 1:45 PM")
+        XCTAssertFalse(rows[0].isShown)
+        XCTAssertEqual(rows[1].calendarLabel, "Work \u{00B7} Acme")
+        XCTAssertEqual(rows[1].timeText, "1:00 \u{2013} 1:30 PM")
+        XCTAssertTrue(rows[1].isShown)
+        XCTAssertEqual(rows.filter(\.isShown).count, 1)
+        XCTAssertEqual(rows[2].calendarLabel, "other2")          // unknown calendar: the raw calendar id
+    }
+
+    func testPopupRowsExposeMemberRowsOnlyForMergedEvents() {
+        let r = rows([mergedEvent(provenance: .rule)], now: at(9))[0]
+        XCTAssertEqual(r.memberRows.count, 2)
+        XCTAssertEqual(r.memberRows.first { $0.isShown }?.title, "Intermountain Health")
     }
 }

@@ -23,8 +23,8 @@ final class DedupStateStoreTests: XCTestCase {
         let store = DedupStateStore(url: tempURL())
         var state = DedupState()
         let now = Date(timeIntervalSince1970: 1_800_000_000)
-        state.lessons.record(MergedMember(title: "A", calendarKey: "s/x", contentKey: "k1", details: "bare"),
-                             MergedMember(title: "B", calendarKey: "s/y", contentKey: "k2", details: "bare"),
+        state.lessons.record(MergedMember(title: "A", calendarKey: "s/x", contentKey: "k1", details: "bare", start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 3600)),
+                             MergedMember(title: "B", calendarKey: "s/y", contentKey: "k2", details: "bare", start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 3600)),
                              decision: .same, now: now)
         state.verdicts.store(AdjudicationVerdict(requestID: "r", answer: .same),
                              engine: EngineInfo(id: "e", displayName: "E", isOnDevice: true),
