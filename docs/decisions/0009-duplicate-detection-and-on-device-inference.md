@@ -16,7 +16,8 @@ The exact title+time merge misses real duplicates ("Scott: Doctor" vs "Intermoun
 - Current rule order in `DuplicateRules.decide`: exact match, same calendar, all-day, time gate, external UID (merge), conference link (merge), the vetoes (conflicting location, conflicting conference), shared attendee or organizer email (merge), same location (merge), attendee-disjoint veto, then ambiguous. Vetoes run before shared-attendee and same-location merges (user decision 2026-09-19).
 - A merged event takes the largest attendee count and the most-attending response of its copies, so merging never makes a meeting stop qualifying for takeover.
 
-- Grouping is three literal phases: (1) identical items, (2) those groups by the other rules and learned `same` lessons, (3) model verdicts as votes between groups. Phases 1 and 2 are uncapped; hard blocks (rule `.separate`, learned `different`) hold at every phase across all members.
+- Grouping is three literal phases: (1) identical items, (2) those groups by the other rules and learned `same` lessons, (3) model verdicts between groups, one request per pair of groups. Phases 1 and 2 are uncapped; hard blocks (rule `.separate`, learned `different`) hold at every phase across all members.
+- The model is asked once per pair of groups, from the richest copy of each (ties: earliest index), so identical copies cannot get different answers. The request fingerprint excludes calendar keys. The prompt carries rule-computed facts (offsets, overlap, detail fields, no conflicts) and calendar titles but never account names; its instructions say a missing detail is not a mismatch and give worked examples.
 - A merged event displays the longer copy's time range (`CalendarEvent.displayStart`, read through `shownStart`). Its tug time (`start`, which everything schedules on) is the start of the copy carrying a conference link, else the start of the longer copy.
 
 ## Consequences

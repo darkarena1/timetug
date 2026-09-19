@@ -46,8 +46,13 @@ hard block (a rules `.separate` or a learned `different`, checked across all mem
 1. Merge all identical items (`.exactMatch`), no size cap.
 2. Merge those groups by the other rules (external UID, conference link, shared attendee, same location)
    and by learned `same` lessons, no size cap. Any number of duplicates across accounts collapse into one card.
-3. Treat each model verdict as a vote between two groups: they merge when `same` votes outnumber `different`
-   votes (a tie stays separate) and the result would join at most 4 clusters (`maxGroupSize`, default 4).
+3. Ask the model once per pair of groups (not once per pair of copies). A pair qualifies when no cross pair is
+   hard-blocked and at least one cross pair is ambiguous; the request is built from each group's richest copy
+   (`detailScore`, ties: earliest index). A cached `same` merges the two groups when the result would join at
+   most 4 clusters (`maxGroupSize`, default 4); `different` keeps them apart; `unsure` does nothing; no entry
+   means pending. After each merge the new group's representative is asked about its remaining neighbours.
+   The request id (fingerprint) leaves out calendar keys, so identical copies share one verdict whichever
+   is the representative.
 
 Links inside a phase are processed in index order, and exact matches are all unioned before any other rule
 link, so the result does not depend on input order.
@@ -75,8 +80,9 @@ is never called. Core refuses non-on-device engines regardless of what the app i
 `Packages/AppleIntelligenceInference` (new, macOS 26+, Swift 5 mode like the other Apple packages):
 Foundation Models adapter with structured (guided) output. Reports `.available` only when
 `SystemLanguageModel.default` reports the model ready; otherwise `.unavailable` with a reason.
-Sends only: titles, times, location, attendee names (no emails), calendar and account names,
-notes truncated to about 500 characters, and lessons.
+Sends only: titles, times, location, attendee names (no emails), calendar titles (never account names),
+notes truncated to about 500 characters, lessons, and rule-computed facts (start and end offset in minutes,
+overlap, which detail fields each side has, whether any conflicting detail was found).
 `AdjudicationEvent` (Core) truncates notes to 500 characters and carries attendee names only; the prompt builder cannot see emails. The prompt builder is a pure function.
 The app is the composition root: it constructs the adapter and injects it. Other platforms add
 sibling packages later.
@@ -93,7 +99,7 @@ effect on the next refresh, and already-cached AI verdicts are ignored while it 
 
 - `CalendarStore.refresh` returns the rules-merged snapshot immediately and never awaits inference.
 - Ambiguous pairs go to a background resolver. Verdicts are cached on disk (same pattern as
-  `LedgerStore`), keyed by a fingerprint of both events' relevant content, so an edited event is
+  `LedgerStore`), keyed by a fingerprint of both representative events' relevant content (title, times, location, notes prefix, emails, attendee count; not calendar keys), so an edited event is
   re-judged. Verdicts are kept by age (7-day TTL) and the 1000-entry cap, not by event end: an ended meeting still in the fetch window must not be re-judged.
 - When a verdict lands that changes the merge result, the store publishes an updated snapshot.
 - A pending or missing verdict means "not merged".
