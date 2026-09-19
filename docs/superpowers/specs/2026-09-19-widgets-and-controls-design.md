@@ -15,7 +15,7 @@ Add two desktop widgets (Next Up, Today) and three Control Center toggles (Skip 
 - `agenda-snapshot.json` in the group container: merged events for today plus the next few days (Next Up needs to roll past midnight), written by the app.
 - Shared `UserDefaults` suite (`YYA6ZKMD36.com.timetug.shared`) with three booleans: `skipAllDay`, `useIntelligence`, `disableTug`.
 - `SettingsStore` reads and writes those three through the suite. On first launch it migrates existing values (`takeoverSettings.v1` `skipAllDayEvents`, `dedupInference.v1`) into the suite, once. Existing Settings toggles bind to the same values.
-- The app observes the suite (KVO on the three keys) so a toggle flipped in Control Center, which runs in the extension process, applies immediately: reschedule takeover, re-run dedup, refresh the snapshot.
+- A toggle flipped in Control Center runs in the extension process. Each intent writes the suite, then posts a Darwin notification (`com.timetug.settings-changed`). The app listens for it, re-reads the three keys from the suite (the notification carries no value, so there is no write/read race), and applies the change: reschedule takeover, re-run dedup, refresh the snapshot. KVO on the suite is kept as a secondary trigger, not relied on for cross-process delivery.
 
 ## Core (TimeTugCore, pure Swift, tests first)
 - `WidgetSnapshot`: Codable, platform-neutral model of the events widgets need (id, title, start, end, isAllDay, calendar colour key, join URL, merged flag) plus `generatedAt`. Core has no display strings.
@@ -30,7 +30,7 @@ Add two desktop widgets (Next Up, Today) and three Control Center toggles (Skip 
 - **Controls** (macOS 26): three `ControlWidgetToggle`s, each backed by a `SetValueIntent` writing the shared suite: Skip All Day Events, Use Intelligence, Disable Tug.
 
 ## App changes
-- `AppCoordinator` writes the snapshot and calls `WidgetCenter.reloadAllTimelines()` after each calendar refresh and each setting change. Write is atomic; failures are logged, not fatal.
+- `AppCoordinator` writes the snapshot after each calendar refresh and each setting change. Write is atomic; failures are logged, not fatal. It calls `WidgetCenter.reloadAllTimelines()` only when the new snapshot differs from the last one written, debounced, to stay inside WidgetKit reload budgets.
 - Settings: add "Disable Tug" toggle (General or Tug Rules pane; implementation picks the better fit), register it in `SettingsSearch`. Use Intelligence stays labelled Beta and unavailable where inference is unavailable; the control reflects that (disabled/off with explanatory value text).
 - Menu bar/popover unchanged except that a disabled Tug is indicated (small state in the status menu; exact affordance decided in the plan).
 
@@ -45,6 +45,7 @@ Add two desktop widgets (Next Up, Today) and three Control Center toggles (Skip 
 - Manual (checklist): add each widget, verify rolling advance, toggle each control from Control Center and confirm the app reacts, run on a signed build.
 
 ## Risks
-- Extension loading on ad-hoc signed local builds may be flaky; verify with a Developer-ID-signed build.
+- Ad-hoc signed builds have no team identity, so the extension may not load or the group container may be unavailable. Widgets and controls are only expected to work in builds signed with the team identity (Developer ID for release, an Apple Development cert for local runs). The app must still run normally when the container is unavailable (snapshot write logs and skips). Unverified assumption to confirm early: a team-prefixed group needs no provisioning profile under Developer ID; the plan's first task is a spike that proves the app-to-extension round trip on a signed build.
+- DeepSeek review of this spec (unverified, checked by hand) drove the Darwin-notification and reload-debounce changes above.
 - Snapshot goes stale if the app is not running; timeline entries are precomputed to the snapshot horizon so display stays correct until then.
 - Controls cannot be built or exercised on macOS < 26; they are compile-guarded.
