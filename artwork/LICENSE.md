@@ -14,3 +14,5 @@ You may view the artwork, and redistribute the unmodified official TimeTug app a
 Forks must replace the artwork and name before distributing their own builds.
 
 To ask for permission, open an issue at https://github.com/darkarena1/timetug/issues.
+
+The DMG installer background (`scripts/release/dmg/background.png`, `background@2x.png` and the script that generates them) is TimeTug brand artwork and is covered by this all-rights-reserved notice, not by the MIT License.

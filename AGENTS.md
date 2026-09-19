@@ -34,6 +34,8 @@ TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
 
 ## CI and releases
 - `.github/workflows/ci.yml`: on push to `master` and every PR. Jobs: `core` (Core tests + EventKitSource build), `app` (XcodeGen + app tests, uploads the `.xcresult` on failure), `core-linux` (allowed to fail; proves Core portability).
-- `.github/workflows/release.yml`: on `v*` tags. Builds via `scripts/ci/build-release.sh`; signed DMG when the Apple secrets exist, otherwise an unsigned prerelease zip (`scripts/release/`). Process and secrets: `docs/release.md`; rationale: ADR 0007.
+- `.github/workflows/release.yml`: on `v*` tags. Builds via `scripts/ci/build-release.sh`; signed and notarized DMG when the Apple secrets exist, otherwise an unsigned prerelease DMG (`scripts/release/`). Process and secrets: `docs/release.md`; rationale: ADR 0007, 0008.
+- The `dmg` CI job builds and verifies an unsigned DMG on every run and uploads it as the `TimeTug-dmg` artifact.
+- DMG scripts: `scripts/release/make-dmg.sh` (dmgbuild, pinned in `scripts/release/dmg/requirements.txt`, installed in `build/dmg-venv`), `scripts/release/verify-dmg.sh <dmg>`, `scripts/release/sign-and-notarize.sh [app|dmg]`. Gotcha: the DMG background PNGs are committed; after editing `scripts/release/dmg/generate-background.swift` re-run it and commit the PNGs, and keep the icon positions in `scripts/release/dmg/settings.py` in sync with the arrow.
 - When CI fails: reproduce with the Commands above; for the app job download the `TestResults` artifact. Runner label or Xcode problems: `scripts/ci/select-xcode.sh` and the `runs-on` lines. Keep logic in the scripts, not in YAML.
 - Never commit certificates or keys (`*.p12`, `*.p8`, ...); they are git-ignored.

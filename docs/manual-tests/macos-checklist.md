@@ -45,3 +45,5 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Edit a meeting's title after its takeover: no second takeover. Move its time: a new takeover appears for the new time.
 - [ ] Two meetings starting together: the second takeover appears after you dismiss the first.
 - [ ] Ledger file does not grow: after several days of use `~/Library/Application Support/TimeTug/takeover-ledger.json` only contains recent meetings.
+- [ ] Installer DMG (from a CI artifact or a release): opening it shows a cream window with the TimeTug icon on the left, the Applications shortcut on the right, a blue arrow between them and "Drag TimeTug to Applications"; no toolbar, sidebar or status bar.
+- [ ] Dragging TimeTug onto Applications copies the app (it then launches from /Applications); Eject works afterwards and the mounted volume shows the TimeTug icon.

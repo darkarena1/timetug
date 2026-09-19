@@ -21,8 +21,10 @@ and takes over every screen shortly before a meeting starts, so you don't hyperf
 - Optional global shortcut to show today's meetings
 
 ## Install
-Download the latest build from the [Releases page](https://github.com/darkarena1/timetug/releases). Until Apple
-Developer signing is set up, releases are unsigned prereleases: on first open, right-click TimeTug and choose Open.
+Download the `.dmg` from the [Releases page](https://github.com/darkarena1/timetug/releases), open it and drag
+TimeTug onto the Applications shortcut. Until Apple Developer signing is set up, releases are unsigned
+prereleases: the first time, right-click TimeTug and choose Open. If macOS says the app is damaged, run
+`xattr -dr com.apple.quarantine /Applications/TimeTug.app`.
 
 ## Build
 Requires macOS 14+ to run and Xcode 26 or newer to build (needs [XcodeGen](https://github.com/yonaskolb/XcodeGen):
