@@ -10,6 +10,8 @@
 A tug when time needs your attention. TimeTug lives in your macOS menu bar, lists today's meetings,
 and takes over every screen shortly before a meeting starts, so you don't hyperfocus through it.
 
+Created by [Scott O'Bryan](https://github.com/darkarena1).
+
 ## Features
 - Reads Apple Calendar (iCloud, Google and Exchange accounts added to macOS) via EventKit
 - Merges the same meeting across calendars and accounts, so it shows (and tugs) once; see [Event merging](#event-merging)
@@ -75,6 +77,9 @@ Uses KeyboardShortcuts by Sindre Sorhus (MIT).
 
 ## Status
 Early development.
+
+## Author
+Created and maintained by Scott O'Bryan.
 
 ## Licensing
 The source code is released under the [MIT License](LICENSE).
