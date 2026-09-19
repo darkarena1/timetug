@@ -50,6 +50,7 @@ is_applications_link() { [ -L "$mnt/Applications" ] && [ "$(readlink "$mnt/Appli
 has_background() { compgen -G "$mnt/.background.*" >/dev/null || compgen -G "$mnt/.background/*" >/dev/null; }
 
 check "TimeTug.app/Contents/MacOS/TimeTug is executable" test -x "$mnt/TimeTug.app/Contents/MacOS/TimeTug"
+check "TimeTugWidgets.appex is embedded" test -d "$mnt/TimeTug.app/Contents/PlugIns/TimeTugWidgets.appex"
 check "Applications is a symlink to /Applications" is_applications_link
 check "hidden background image (.background.tiff) exists" has_background
 check ".DS_Store exists" test -f "$mnt/.DS_Store"

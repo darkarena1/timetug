@@ -55,25 +55,33 @@ ditto "$BUILD_DIR/TimeTug.xcarchive/Products/Applications/TimeTug.app" "$APP"
 
 # The plist has fixed values; stamp the release version and build number, re-signing ad hoc on change.
 PLIST="$APP/Contents/Info.plist"
+APPEX="$APP/Contents/PlugIns/TimeTugWidgets.appex"
+[ -d "$APPEX" ] || { echo "error: widget extension missing at $APPEX" >&2; exit 1; }
+APPEX_PLIST="$APPEX/Contents/Info.plist"
 BUILD_NUMBER="${BUILD_NUMBER:-${GITHUB_RUN_NUMBER:-}}"
 changed=0
 current="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")"
 if [ "$current" != "$VERSION" ]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APPEX_PLIST"
   changed=1
 fi
 if [ -n "$BUILD_NUMBER" ]; then
   current="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")"
   if [ "$current" != "$BUILD_NUMBER" ]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$PLIST"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APPEX_PLIST"
     changed=1
   fi
 fi
 if [ "$changed" = 1 ]; then
+  # Inside-out: the extension is signed before the app that contains it.
+  codesign --force --sign - --options runtime \
+    --entitlements Apps/macOS/Widgets/TimeTugWidgets.entitlements "$APPEX"
   codesign --force --sign - --options runtime \
     --entitlements Apps/macOS/Sources/TimeTug.entitlements "$APP"
 fi
 
-codesign --verify --strict "$APP"
+codesign --verify --strict --deep "$APP"
 printf '%s\n' "$VERSION" > "$DIST_DIR/version.txt"
 echo "Built $ROOT/$APP (version $VERSION)"

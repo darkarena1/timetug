@@ -8,6 +8,8 @@ TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
 - `Packages/EventKitSource`: Apple Calendar adapter (macOS only).
 - `Packages/AppleIntelligenceInference`: Apple on-device model adapter for duplicate detection (macOS 26+, compile-guarded). Only place with Foundation Models imports.
 - `Apps/macOS`: AppKit/SwiftUI shell. Generated Xcode project (XcodeGen).
+- `Apps/macOS/Widgets`: WidgetKit extension `TimeTugWidgets` (Next Up, Today, and macOS 26 Control Center controls). Reads the snapshot; no EventKit.
+- `Apps/macOS/Shared`: AppGroup, SharedSettings, SettingsChangeSignal, WidgetSnapshotStore. Compiled into both the app and the extension.
 - `artwork/`: brand images (see `docs/ARTWORK_USAGE.md`); the app's asset catalog is `Apps/macOS/Resources/Assets.xcassets`. Do not use the app icon for the menu bar; use the `MenuBarTemplate` template image.
 
 ## Rules
@@ -34,6 +36,9 @@ TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
 - Calendar access needs the calendars entitlement and `NSCalendarsFullAccessUsageDescription`.
 - Takeover decisions are logged (titles redacted). Read them with ``log show --predicate 'subsystem == "com.timetug.app" AND category == "takeover"' --last 1h``. The persisted ledger is `~/Library/Application Support/TimeTug/takeover-ledger.json`; delete it to reset "already shown" memory.
 - Duplicate detection: rules run always; on-device inference is opt-in (Settings > Calendars, Beta), default off. Lessons and verdicts persist at `~/Library/Application Support/TimeTug/dedup-state.json` (delete to reset).
+- Widgets and controls only work in team-signed builds (`CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=YYA6ZKMD36 CODE_SIGN_IDENTITY="Developer ID Application: ..."` on the xcodebuild command line; `DEVELOPMENT_TEAM` is deliberately not in `project.yml`; checks in `docs/manual-tests/macos-checklist.md`). Ad-hoc builds run normally: the snapshot write logs and skips, and widgets show the placeholder. See ADR 0010.
+- The app writes `agenda-snapshot.json` to `~/Library/Group Containers/YYA6ZKMD36.com.timetug.shared/`; some shells cannot read that path (privacy protection). Control Center intents live in the extension, write the shared suite and signal the app with a Darwin notification; the app re-reads.
+- Disable Tug is enforced in Core (`TakeoverPolicy.qualifies` via `TakeoverSettings.disabled`), not in the app.
 
 ## CI and releases
 - `.github/workflows/ci.yml`: on push to `master` and every PR. Jobs: `core` (Core tests + EventKitSource build + inference package tests), `app` (XcodeGen + app tests, uploads the `.xcresult` on failure), `core-linux` (allowed to fail; proves Core portability).

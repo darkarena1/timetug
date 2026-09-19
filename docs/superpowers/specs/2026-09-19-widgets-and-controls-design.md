@@ -49,3 +49,8 @@ Add two desktop widgets (Next Up, Today) and three Control Center toggles (Skip 
 - DeepSeek review of this spec (unverified, checked by hand) drove the Darwin-notification and reload-debounce changes above.
 - Snapshot goes stale if the app is not running; timeline entries are precomputed to the snapshot horizon so display stays correct until then.
 - Controls cannot be built or exercised on macOS < 26; they are compile-guarded.
+
+## Changes during planning
+- `DEVELOPMENT_TEAM` is not written into `project.yml` (it would trigger automatic provisioning for the ad-hoc CI build); signed builds pass it on the command line and the group id is a literal string.
+- Tapping a widget opens the join link when there is one, otherwise it just activates the app; there is no URL scheme for opening the popover.
+- No extra menu bar indicator for a disabled Tug: the icon never turns to the colour puppy, and the Settings and Control Center toggles show the state.
