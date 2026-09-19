@@ -72,3 +72,4 @@ Branch: `feature/core-app`. To resume: read this file and `git log`, then contin
 - Task 8 complete (581b354): AppleIntelligenceInference package (prompt builder + Foundation Models adapter; adapter unverified on device). Follow-ups queued for final fix pass: non-public error logging, cancellation check.
 - Task 9 complete (4dec703): inferenceEnabled setting (default off), DedupStateStore, InferenceStatusText, BetaBadge, search entry. App 127 tests.
 - Task 10 complete (caf39e6): Beta toggle, status line, Forget button, coordinator wiring (GUI unverified). Final fix pass queued: detach resolvePending with in-flight guard, prune on load, skip redundant persists, non-public error log, cancellation check, AppModel comment placement.
+- Task 11 complete (65c4859): merge badge (Merged with <engine> / Merged manually), Not-the-same-meeting and Merge-with actions in the popup. App 131 tests (GUI unverified).
