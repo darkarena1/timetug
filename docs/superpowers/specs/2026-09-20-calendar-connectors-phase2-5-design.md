@@ -11,7 +11,7 @@ Status: draft for review. Phases 1 and 2 are merged (#16, #17, `ef212ec`). This 
 
 ## Non-goals
 
-- No change to persisted data: ledger keys, lesson keys, settings keys and the widget snapshot schema stay as they are.
+- No change to persisted data: ledger and lesson keys of timed events, settings keys and the widget snapshot schema stay as they are (all-day keys may change for other-zone events; see the wrapper section).
 - No write capabilities (Phase 3), no Microsoft (Phase 4), no injection of the Google OAuth client into CI builds (separate small PR).
 - Core keeps its own `CalendarSource` protocol, `SourceError` and `SourceStatus`; it does not adopt the library's change stream.
 
