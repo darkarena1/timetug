@@ -9,3 +9,8 @@ CODE_SIGN_IDENTITY = -
 // ~/.config/timetug/signing.xcconfig when that file exists, so one per-user file signs every worktree.
 // (Xcode cannot include a file by $(HOME) directly.) You may also write a real Local.xcconfig by hand.
 #include? "Local.xcconfig"
+
+// Google Desktop OAuth client (git-ignored). Defines GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET, which
+// project.yml injects into Info.plist. scripts/dev/link-signing.sh links it from ~/.config/timetug/google-oauth.xcconfig.
+// A missing file leaves both empty and Google is not offered.
+#include? "GoogleOAuth.xcconfig"

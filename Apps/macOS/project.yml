@@ -66,6 +66,8 @@ targets:
         SUPublicEDKey: QZXAO2hdupCAJzVJV0wqKHw3VPTjLDhQPGjJZDBlkzo=
         SUEnableAutomaticChecks: true
         NSCalendarsFullAccessUsageDescription: TimeTug reads your calendars to alert you before meetings start.
+        TimeTugGoogleClientID: $(GOOGLE_OAUTH_CLIENT_ID)
+        TimeTugGoogleClientSecret: $(GOOGLE_OAUTH_CLIENT_SECRET)
     entitlements:
       path: Sources/TimeTug.entitlements
       properties:
