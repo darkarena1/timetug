@@ -19,7 +19,7 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Declined, solo, all-day and non-opted-in events never take over.
 - [ ] Menu bar modes: icon only, next meeting (long titles truncated), countdown only.
 - [ ] Launch at login toggle works.
-- [ ] Settings sidebar order is General, Calendars, Tug Rules; General has "App", "Menu bar" and "Appearance" (last) sections.
+- [ ] Settings sidebar order is General, Calendars, Tug Rules; General has "Software Update" (first), "App", "Shortcut", "Menu bar" and "Appearance" (last) sections.
 - [ ] Left-click popup: it is only as tall as its content (one event = short popup; many events scroll the list under a fixed header, max about 520 pt); light and dark both look right.
 - [ ] Popup header shows the weekday, the date and "N meetings left" ("No meetings today" when empty, with the puppy empty state); the gear button opens Settings.
 - [ ] Event cards use the real calendar colors; the current meeting shows a "Now" pill and a progress bar; the next meeting has the blue border and an orange "in 3h 40m" countdown; finished meetings stay readable.

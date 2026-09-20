@@ -120,7 +120,7 @@ Use `TAG=v0.1.0` to set the version for `build-release.sh`; without it the versi
 To smoke-test signing the update payload without secrets: `SIGN_IDENTITY=- scripts/release/sign-app.sh dist/TimeTug.app`.
 
 ## Changing the runner label
-Workflows use `runs-on: macos-26` (the hosted image with Xcode 26 or newer). If that label is unavailable for your account, edit `runs-on` in the `core`, `app` and `dmg` jobs of `.github/workflows/ci.yml` and in `.github/workflows/release.yml` (for example to `macos-latest` once it ships Xcode 26, or a self-hosted label). `scripts/ci/select-xcode.sh` selects the newest Xcode installed on whatever runner is used.
+Workflows use `runs-on: macos-26` (the hosted image with Xcode 26 or newer). If that label is unavailable for your account, edit `runs-on` in the `core`, `app` and `dmg` jobs of `.github/workflows/ci.yml`, in `.github/workflows/release.yml`, in the `build` job of `.github/workflows/beta-build.yml` and in the `publish` job of `.github/workflows/beta-publish.yml` (its `gate` job runs on `ubuntu-latest` and needs no change) (for example to `macos-latest` once it ships Xcode 26, or a self-hosted label). `scripts/ci/select-xcode.sh` selects the newest Xcode installed on whatever runner is used.
 
 ## Who can release
 - Releases run in the `release` GitHub environment: the repository owner must approve each run, and only `master` and `v*` tags may deploy.
