@@ -16,7 +16,7 @@ mkrepo() {
   echo "$d"
 }
 tmp="$(mkrepo)"; trap 'rm -rf "$tmp" "${tmp2:-}"' EXIT
-for t in v1.0.0 v1.1.0 v0.2.1 v1.2.0-rc1 beta-20260101000000 v1.10 vfoo; do git -C "$tmp" tag "$t"; done
+for t in v1.0.0 v1.1.0 v0.2.1 v1.2.0-rc1 v1.2.0-beta.20260920052623 beta-20260101000000 v1.10 vfoo; do git -C "$tmp" tag "$t"; done
 out="$(TT_NOW=20260920050214 "$tmp/scripts/ci/compute-versions.sh" beta)"
 [ "$out" = "APP_VERSION=1.10-beta.20260920050214
 BUILD_NUMBER=20260920050214" ] || fail "beta newest stable: $out"
@@ -26,7 +26,7 @@ out="$(TT_NOW=20260920050214 "$tmp/scripts/ci/compute-versions.sh" beta)"
 BUILD_NUMBER=20260920050214" ] || fail "beta newest stable: $out"
 
 tmp2="$(mkrepo)"
-for t in v1.2.0-rc1 beta-20260101000000; do git -C "$tmp2" tag "$t"; done
+for t in v1.2.0-rc1 v1.2.0-beta.20260920052623 beta-20260101000000; do git -C "$tmp2" tag "$t"; done
 out="$(TT_NOW=20260920050214 "$tmp2/scripts/ci/compute-versions.sh" beta)"
 [ "$out" = "APP_VERSION=0.0.0-dev-beta.20260920050214
 BUILD_NUMBER=20260920050214" ] || fail "beta fallback: $out"

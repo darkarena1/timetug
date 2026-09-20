@@ -82,7 +82,11 @@ jobs:
         run: brew install xcodegen
       - name: Compute versions
         if: steps.signing.outputs.go == 'true'
-        run: scripts/ci/compute-versions.sh beta >> "$GITHUB_ENV"
+        run: |
+          VERSIONS="$(scripts/ci/compute-versions.sh beta)"
+          echo "$VERSIONS" >> "$GITHUB_ENV"
+          # The tag reads like the version, e.g. v1.2.0-beta.20260920052623.
+          echo "BETA_TAG=v$(sed -n 's/^APP_VERSION=//p' <<<"$VERSIONS")" >> "$GITHUB_ENV"
       - name: Build Release app
         if: steps.signing.outputs.go == 'true'
         run: scripts/ci/build-release.sh
@@ -115,30 +119,28 @@ jobs:
         env:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          if gh release view "beta-${BUILD_NUMBER}" >/dev/null 2>&1; then
-            echo "::error::release beta-${BUILD_NUMBER} already exists"; exit 1
+          if gh release view "${BETA_TAG}" >/dev/null 2>&1; then
+            echo "::error::release ${BETA_TAG} already exists"; exit 1
           fi
-          if git ls-remote --exit-code --tags origin "refs/tags/beta-${BUILD_NUMBER}" >/dev/null 2>&1; then
-            echo "::error::tag beta-${BUILD_NUMBER} already exists"; exit 1
+          if git ls-remote --exit-code --tags origin "refs/tags/${BETA_TAG}" >/dev/null 2>&1; then
+            echo "::error::tag ${BETA_TAG} already exists"; exit 1
           fi
-          gh release create "beta-${BUILD_NUMBER}" "$ZIP" --draft --prerelease \
+          gh release create "${BETA_TAG}" "$ZIP" --draft --prerelease \
             --title "TimeTug ${APP_VERSION}" --target "$HEAD_SHA" \
             --notes "Beta build from ${HEAD_SHA}"
           # Publish BEFORE the appcast so the appcast never references an undownloadable asset.
-          gh release edit "beta-${BUILD_NUMBER}" --draft=false --prerelease
+          gh release edit "${BETA_TAG}" --draft=false --prerelease
       - name: Update appcast and prune old betas
         if: steps.signing.outputs.go == 'true'
         run: |
-          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/beta-${BUILD_NUMBER}/$(basename "$ZIP")"
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${BETA_TAG}/$(basename "$ZIP")"
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           PRUNED="$(scripts/release/publish-appcast.sh "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             --keep-betas 5 -- \
             --title "TimeTug ${APP_VERSION}" --version "$BUILD_NUMBER" --short "$APP_VERSION" --url "$URL" \
             --length "$LENGTH" --signature "$SIGNATURE" --min-system 14.0 --channel beta \
-            --notes-url "https://github.com/${GITHUB_REPOSITORY}/releases/tag/beta-${BUILD_NUMBER}")"
-          for u in $PRUNED; do
-            tag="$(sed -n 's#.*/download/\(beta-[0-9]*\)/.*#\1#p' <<<"$u")"
-            [ -n "$tag" ] || continue
+            --notes-url "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${BETA_TAG}")"
+          while IFS= read -r tag; do
             gh release delete "$tag" --cleanup-tag --yes || echo "::warning::could not delete pruned release $tag"
-          done
+          done < <(scripts/release/beta-tags-from-urls.sh <<<"$PRUNED")
