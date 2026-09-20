@@ -20,6 +20,7 @@ Write support (Phase 3), Microsoft (Phase 4), CalDAV/iCloud-direct, webhook push
 - `EventKitSource` and the app remain Swift 5 language mode; `CalendarBridge` is Swift 6 mode (it depends on `TimeTugCore`).
 - Stored calendar selections are `sourceID/calendarID` strings and must keep working: EventKit's source id stays `"eventkit"`.
 - New `Codable` fields use `decodeIfPresent` with defaults. Every Core/bridge behavior gets a Swift Testing test first; app tests are XCTest.
+- All-day events are dates: connectors emit the library's canonical form, the bridge alone converts to TimeTug's device-local form, and no other code compensates for provider or zone differences.
 - No secrets in the repository: OAuth client values come from a git-ignored xcconfig; user credentials live only in the Keychain.
 - Merges to `master` ship a beta build, so the work lands only through a pull request with CI green.
 
@@ -61,7 +62,7 @@ Add `SourceError.needsPermission` to `CalendarCore`: the OS or user has not gran
 
 - `id` is the constant `"eventkit"`, because existing stored keys begin with `eventkit/` and EventKit is a singleton. This deliberately differs from `Connection.sourceID` (which would be `eventkit-this-mac`). To keep one rule for all kinds, **the app and the reconciler identify every source by the built source's `id`, never by computing `Connection.sourceID`**; for Google the two are identical (a test asserts it), for EventKit only `source.id` is used. The exception is documented at the definition.
 - `calendars()` returns `CalendarDescriptor` (id = `calendarIdentifier`, title, sRGB hex color, `accountName` = the owning macOS account title).
-- `events(in:)` returns library `CalendarEvent`: `eventID` = `eventIdentifier ?? calendarItemIdentifier`; `uid` = `calendarItemExternalIdentifier`; attendees carry `isSelf` (from `isCurrentUser`), `response`, name, and email from the `mailto:` URL; `organizer` likewise; `myResponse` from the current user's participant status; `start` and `end` pass EventKit's dates through untouched, exactly as today (no re-anchoring, so `contentKey` and day bucketing are unchanged), and `timeZone` is `event.timeZone ?? .current`. `title` keeps today's rule, `event.title ?? "(No title)"`: only nil is substituted, so an empty title stays empty and stored merge and separation decisions (which are keyed by `contentKey`) keep matching.
+- `events(in:)` returns library `CalendarEvent`: `eventID` = `eventIdentifier ?? calendarItemIdentifier`; `uid` = `calendarItemExternalIdentifier`; attendees carry `isSelf` (from `isCurrentUser`), `response`, name, and email from the `mailto:` URL; `organizer` likewise; `myResponse` from the current user's participant status; timed events pass `startDate`/`endDate` through; **all-day events are normalized to the library's canonical form** (see "All-day events" below). `title` keeps today's rule, `event.title ?? "(No title)"`: only nil is substituted, so an empty title stays empty and stored merge and separation decisions (which are keyed by `contentKey`) keep matching.
 - `capabilities`: read-only, `syncKind: .notification`, no conference detection (TimeTug's `ConferenceLinkDetector` continues to run in the store).
 - `changes()` yields `.calendarsChanged` on `EKEventStoreChanged`, which the library defines as "reload calendars and events".
 - Missing access throws `SourceError.needsPermission`.
@@ -72,6 +73,21 @@ Add `SourceError.needsPermission` to `CalendarCore`: the OS or user has not gran
 - `reauthorize` behaves as `authorize`. When access was previously denied, macOS will not prompt again, so the UI offers "Open System Settings" instead.
 - `makeSource` returns the `EventKitSource`.
 
+## All-day events: one form per layer
+
+An all-day event is a run of calendar *dates*, not instants, and providers encode it differently. To keep TimeTug's main path (day bucketing, "skip all-day", widgets, the popup) identical for every source, each layer has exactly one form and conversion happens only at the boundaries:
+
+1. **Native** (provider-specific): Google sends `date` strings and the calendar's time zone; EventKit sends floating device-local dates with an `endDate` that is typically the last day's end (23:59:59), not the next midnight; other providers will differ again.
+2. **Canonical** (the library contract, already in Phase 1): `start` is midnight of the first day **in `timeZone`**, `end` is midnight after the last day (exclusive), `timeZone` is non-nil. Every connector's job is to map its native form into this, so nothing above the connector needs to know provider quirks.
+3. **TimeTug native** (`TimeTugCalendarEvent`, documented on the type): `start` is the **device-local** midnight of the first day, `end` the device-local midnight after the last day (exclusive). All-day events in TimeTug are dates in the user's own calendar, so they fall on the same day the user sees in their calendar app, regardless of the source's zone.
+
+Conversions:
+
+- **Connector, native to canonical.** Google already does this (`GoogleEventMapper`: `date` parsed in the calendar's zone, exclusive end). The EventKit connector treats EventKit's all-day dates as floating: it takes the device-local calendar days of `startDate` and of the last covered day, and emits canonical instants with `timeZone = .current`. The last covered day is the day of `endDate`, except when `endDate` is exactly a local midnight after `startDate` (already exclusive); a zero-length event (`end <= start`) covers one day. `EKEvent.timeZone` is ignored for all-day events (floating semantics).
+- **Bridge, canonical to TimeTug native.** `EventMapper` reads the year, month and day of `start` and of `end` in the event's `timeZone`, and rebuilds midnight instants of those same dates in the injected device `Calendar` (default `.current`, the same calendar `CalendarStore` uses). The rebuild uses the start of day of that date so a zone whose midnight does not exist on a DST day still yields a valid instant. When `timeZone` equals the device zone this is the identity, so the common case is unchanged.
+
+Consequences to accept: existing EventKit all-day events change `end` from about 23:59:59 to the next midnight. All-day events never take part in duplicate merging (the `.allDay` rule) and never trigger a takeover, and `DayAgenda` selects by overlap, so behavior is unchanged; a test pins that. Multi-day all-day events keep appearing on every covered day.
+
 ## Bridge behavior
 
 **Mapping** (`TimeTugCalendarEvent`), the same for every source so Google and Apple events dedup against each other:
@@ -80,7 +96,8 @@ Add `SourceError.needsPermission` to `CalendarCore`: the OS or user has not gran
 |---|---|
 | `sourceEventID`, `calendarID`, `title` | `eventID`, `calendarID`, `title` unchanged (each source decides its own placeholder; the bridge never rewrites titles, so `contentKey` is stable) |
 | `sourceID` | the source's `id` |
-| `start`, `end`, `isAllDay` | same (the library's all-day form is midnight in the event's zone with an exclusive end, which is what Google and EventKit already produce) |
+| `start`, `end` | timed events: same instants. All-day events: converted to TimeTug's native all-day form (see "All-day events") |
+| `isAllDay` | same |
 | `responseStatus` | `myResponse`, else the self attendee's `response`; `needsAction` becomes `.pending`; none becomes `.unknown` |
 | `attendees` | non-self attendees as TimeTug `Attendee(name:email:)` |
 | `otherAttendeeCount` | count of non-self attendees |
@@ -124,8 +141,8 @@ The Google Desktop OAuth client ID and secret are read from `Info.plist` keys fi
 ## Testing
 
 - **Core (Swift Testing):** `setSources` add/remove drops cache, statuses and names, including a `setSources` that runs while a `refresh` is suspended (a fake source that blocks) so nothing is written back and no ghost status remains; `removeCalendars(forSourceID:)` including the `google-1` / `google-10` prefix case and untouched other sources.
-- **Bridge (Swift Testing, fake library source):** mapper table above (all-day, self/other attendees, organizer-is-self, response fallback and `needsAction`, cancelled dropped, titles passed through unchanged including empty, conference URL); adapter error translation; change-stream mapping including `.sourceFailed`; cancellation ends the stream. A parity fixture checks that an EventKit-shaped event and a Google-shaped event for the same meeting map to values the existing dedup treats as one meeting (same `externalUID`, title and times).
-- **EventKitSource:** pure helpers (participant status to response, color to hex) get Swift Testing tests; the package must still build. The `EKEventStore` paths are covered by the manual checklist.
+- **Bridge (Swift Testing, fake library source):** mapper table above (all-day in the device zone is the identity; all-day from a calendar in another zone, for example Tokyo events on a New York device and the reverse, lands on the same dates locally; multi-day; a DST-day zone; self/other attendees, organizer-is-self, response fallback and `needsAction`, cancelled dropped, titles passed through unchanged including empty, conference URL); adapter error translation; change-stream mapping including `.sourceFailed`; cancellation ends the stream. A parity fixture checks that an EventKit-shaped event and a Google-shaped event for the same meeting map to values the existing dedup treats as one meeting (same `externalUID`, title and times).
+- **EventKitSource:** the pure helpers (participant status to response, color to hex, and the all-day normalization taking plain dates and a calendar: one-day event ending 23:59:59, multi-day ending 23:59:59, end already at midnight, zero-length, DST day) get Swift Testing tests; the package must still build. The `EKEventStore` paths are covered by the manual checklist.
 - **Library:** one test for `needsPermission`; the 81 existing tests keep passing.
 - **App (XCTest):** `AccountStore` round trip, missing and corrupt file; `FileSyncStateStore`; `KeychainCredentialStore` with a per-run unique service name and cleanup; `SourceReconciler` add, remove, EventKit toggle, failing `makeSource`, `rebuild` restarting the listener, and identical keying by `source.id` for Google; removal order and idempotence with a store that throws at each step; the launch orphan sweep (including the unreadable-file and `eventkit/` cases); Accounts view-model add/remove/duplicate/re-sign-in using a fake `ConnectorKind` and interaction.
 - **Manual (`docs/manual-tests/macos-checklist.md`, needs the Google client):** add a Google account (calendars appear under the email); add a second; toggle EventKit off and on (calendars hide and return, selections intact); `−` an account (calendars and Tug choices vanish, Keychain item gone); relaunch reconnects silently; revoke access on the Google account page and see "Sign in again", then fix it in place; edit an event in Google and see it in the menu bar within about a minute; deny Calendar access in System Settings and see the EventKit row explain it; the same meeting via both EventKit and direct Google merges into one.
