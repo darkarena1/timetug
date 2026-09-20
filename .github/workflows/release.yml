@@ -44,6 +44,14 @@ jobs:
           # The tag's commit for a published release; the selected ref for a manual run.
           ref: ${{ github.event.release.tag_name || github.sha }}
           fetch-depth: 0
+      - name: Build the tag's commit when the tag exists
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          # A manual run for an existing tag must build that tag; otherwise it builds the selected ref
+          # and the release step creates the tag at that commit.
+          if git rev-parse -q --verify "refs/tags/$TAG^{commit}" >/dev/null; then
+            git checkout --detach "refs/tags/$TAG"
+          fi
       - name: Require the release commit to be on master
         run: |
           git fetch --quiet origin master
