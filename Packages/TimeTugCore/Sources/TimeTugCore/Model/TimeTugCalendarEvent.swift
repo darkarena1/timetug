@@ -7,6 +7,7 @@ public struct TimeTugCalendarEvent: Identifiable, Hashable, Sendable {
     public var title: String
     public var start: Date
     public var end: Date
+    /// All-day events use TimeTug's device-local form: start is the local midnight of the first day, end the local midnight after the last day (exclusive). Sources' own forms are converted by CalendarBridge.
     public var isAllDay: Bool
     public var otherAttendeeCount: Int
     public var responseStatus: ResponseStatus
