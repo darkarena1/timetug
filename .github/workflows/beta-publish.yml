@@ -43,16 +43,30 @@ jobs:
           name: beta-app
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
-      - name: Unpack and read validated versions
+      - name: Unpack the untrusted app safely
+        run: scripts/ci/unpack-untrusted-app.sh TimeTug.tar "$RUNNER_TEMP/untrusted" dist
+      - name: Compute trusted versions and stamp the app
+        env:
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          BUILD_RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
         run: |
-          mkdir -p dist && tar -C dist -xf TimeTug.tar
-          PLIST=dist/TimeTug.app/Contents/Info.plist
-          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")"
-          BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")"
-          [[ "$BUILD" =~ ^[0-9]{12}$ ]] || { echo "::error::bad build number"; exit 1; }
-          [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*([-+][0-9A-Za-z.-]+)?-beta\.[0-9]+\.[0-9]+$ ]] || { echo "::error::bad version"; exit 1; }
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "BUILD=$BUILD" >> "$GITHUB_ENV"
+          [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || { echo "::error::no numeric PR number on the workflow run"; exit 1; }
+          [[ "$BUILD_RUN_NUMBER" =~ ^[0-9]+$ ]] || { echo "::error::bad run number"; exit 1; }
+          OUT="$(scripts/ci/compute-versions.sh beta "$PR_NUMBER" "$BUILD_RUN_NUMBER")"
+          echo "$OUT" >> "$GITHUB_ENV"
+          APP_VERSION="$(sed -n 's/^APP_VERSION=//p' <<<"$OUT")"
+          BUILD_NUMBER="$(sed -n 's/^BUILD_NUMBER=//p' <<<"$OUT")"
+          [[ "$BUILD_NUMBER" =~ ^[0-9]{12}$ ]] || { echo "::error::bad build number"; exit 1; }
+          [[ "$APP_VERSION" =~ ^[0-9]+(\.[0-9]+)*([-+][0-9A-Za-z.-]+)?-beta\.[0-9]+\.[0-9]+$ ]] || { echo "::error::bad version"; exit 1; }
+          if gh release view "beta-${BUILD_NUMBER}" >/dev/null 2>&1; then
+            echo "::error::release beta-${BUILD_NUMBER} already exists"; exit 1
+          fi
+          echo "VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "BUILD=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          for PLIST in dist/TimeTug.app/Contents/Info.plist dist/TimeTug.app/Contents/PlugIns/TimeTugWidgets.appex/Contents/Info.plist; do
+            /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$PLIST"
+            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$PLIST"
+          done
       - name: Sign with Developer ID (no notarization)
         env:
           MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
@@ -72,12 +86,14 @@ jobs:
           echo "SIGNATURE=$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<<"$SIG")" >> "$GITHUB_ENV"
           echo "LENGTH=$(stat -f%z "$ZIP")" >> "$GITHUB_ENV"
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
-      - name: Create draft prerelease
+      - name: Create and publish the prerelease
         run: |
           gh release create "beta-${BUILD}" "$ZIP" --draft --prerelease \
             --title "TimeTug ${VERSION}" --target "${{ github.event.workflow_run.head_sha }}" \
             --notes "Beta build from PR head ${{ github.event.workflow_run.head_sha }}."
-      - name: Update appcast, then publish the release
+          # Publish BEFORE the appcast so the appcast never references an undownloadable asset.
+          gh release edit "beta-${BUILD}" --draft=false --prerelease
+      - name: Update appcast and prune old betas
         run: |
           URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/beta-${BUILD}/$(basename "$ZIP")"
           git config --global user.name "github-actions[bot]"
@@ -86,8 +102,8 @@ jobs:
             --keep-betas 5 -- \
             --title "TimeTug ${VERSION}" --version "$BUILD" --short "$VERSION" --url "$URL" \
             --length "$LENGTH" --signature "$SIGNATURE" --min-system 14.0 --channel beta)"
-          gh release edit "beta-${BUILD}" --draft=false --prerelease
           for u in $PRUNED; do
             tag="$(sed -n 's#.*/download/\(beta-[0-9]*\)/.*#\1#p' <<<"$u")"
-            [ -n "$tag" ] && gh release delete "$tag" --cleanup-tag --yes || true
+            [ -n "$tag" ] || continue
+            gh release delete "$tag" --cleanup-tag --yes || echo "::warning::could not delete pruned release $tag"
           done
