@@ -2,7 +2,8 @@
 # Sign, notarize and staple TimeTug release artifacts with a Developer ID Application certificate.
 #
 # Usage: scripts/release/sign-and-notarize.sh [app|dmg]
-#   app  (default) sign dist/TimeTug.app (hardened runtime), notarize it, staple, verify with spctl.
+#   app  (default) sign dist/TimeTug.app (hardened runtime; delegates the signing to sign-app.sh),
+#        notarize it, staple, verify with spctl.
 #   dmg  codesign the DMG, notarize it, staple the ticket, verify with spctl. Run after make-dmg.sh.
 # Release flow: build app -> `app` -> make-dmg.sh -> `dmg`. Each run imports the certificate into a
 # temporary keychain, so the secret handling below is shared by both modes.
@@ -60,36 +61,44 @@ else
 fi
 
 WORK="$(mktemp -d)"
-KEYCHAIN="$WORK/signing.keychain-db"
-KEYCHAIN_PASSWORD="$(uuidgen)"
-ORIGINAL_KEYCHAINS="$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')"
 
-cleanup() {
+if [ "$MODE" = dmg ]; then
+  # `dmg` mode signs with the certificate itself, so it needs the temporary keychain. `app` mode
+  # leaves all key handling to sign-app.sh, so no second unlocked keychain holds the key while
+  # notarizing.
+  KEYCHAIN="$WORK/signing.keychain-db"
+  KEYCHAIN_PASSWORD="$(uuidgen)"
+  ORIGINAL_KEYCHAINS="$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')"
+
+  cleanup() {
+    # shellcheck disable=SC2086
+    security list-keychains -d user -s $ORIGINAL_KEYCHAINS >/dev/null 2>&1 || true
+    security delete-keychain "$KEYCHAIN" >/dev/null 2>&1 || true
+    rm -rf "$WORK"
+  }
+  trap cleanup EXIT
+
+  # 1. Import the certificate into a temporary keychain.
+  echo "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$WORK/cert.p12"
+  security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+  security set-keychain-settings -lut 21600 "$KEYCHAIN"
+  security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+  security import "$WORK/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERTIFICATE_PASSWORD" \
+    -T /usr/bin/codesign -T /usr/bin/security >/dev/null
+  security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
   # shellcheck disable=SC2086
-  security list-keychains -d user -s $ORIGINAL_KEYCHAINS >/dev/null 2>&1 || true
-  security delete-keychain "$KEYCHAIN" >/dev/null 2>&1 || true
-  rm -rf "$WORK"
-}
-trap cleanup EXIT
+  security list-keychains -d user -s "$KEYCHAIN" $ORIGINAL_KEYCHAINS
 
-# 1. Import the certificate into a temporary keychain.
-echo "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$WORK/cert.p12"
-security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-security set-keychain-settings -lut 21600 "$KEYCHAIN"
-security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-security import "$WORK/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERTIFICATE_PASSWORD" \
-  -T /usr/bin/codesign -T /usr/bin/security >/dev/null
-security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
-# shellcheck disable=SC2086
-security list-keychains -d user -s "$KEYCHAIN" $ORIGINAL_KEYCHAINS
-
-IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" \
-  | sed -n "s/.*\"\(Developer ID Application: .*(${APPLE_TEAM_ID})\)\".*/\1/p" | head -n 1)"
-if [ -z "$IDENTITY" ]; then
-  echo "error: no 'Developer ID Application' identity for team $APPLE_TEAM_ID in the certificate" >&2
-  exit 1
+  IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" \
+    | sed -n "s/.*\"\(Developer ID Application: .*(${APPLE_TEAM_ID})\)\".*/\1/p" | head -n 1)"
+  if [ -z "$IDENTITY" ]; then
+    echo "error: no 'Developer ID Application' identity for team $APPLE_TEAM_ID in the certificate" >&2
+    exit 1
+  fi
+  echo "Signing with: $IDENTITY"
+else
+  trap 'rm -rf "$WORK"' EXIT
 fi
-echo "Signing with: $IDENTITY"
 
 echo "$NOTARY_API_KEY_P8_BASE64" | base64 --decode > "$WORK/AuthKey.p8"
 notarize() { # notarize <file>: submit and wait; fail loudly unless Apple accepts it
@@ -99,15 +108,8 @@ notarize() { # notarize <file>: submit and wait; fail loudly unless Apple accept
 }
 
 if [ "$MODE" = app ]; then
-  # 2. Re-sign with hardened runtime and a secure timestamp, inside-out: the widget
-  #    extension first, then the app that contains it.
-  APPEX="$APP_PATH/Contents/PlugIns/TimeTugWidgets.appex"
-  [ -d "$APPEX" ] || { echo "error: widget extension missing at $APPEX" >&2; exit 1; }
-  codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN" --options runtime --timestamp \
-    --entitlements Apps/macOS/Widgets/TimeTugWidgets.entitlements "$APPEX"
-  codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN" --options runtime --timestamp \
-    --entitlements "$ENTITLEMENTS" "$APP_PATH"
-  codesign --verify --strict --deep --verbose=2 "$APP_PATH"
+  # 2. Re-sign with hardened runtime and a secure timestamp, inside-out (scripts/release/sign-app.sh).
+  scripts/release/sign-app.sh "$APP_PATH"
 
   # 3. Notarize with the App Store Connect API key.
   ditto -c -k --keepParent "$APP_PATH" "$WORK/notarize.zip"

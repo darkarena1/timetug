@@ -1,0 +1,144 @@
+# Builds, signs (Developer ID, NOT notarized) and publishes a beta after a change is merged to master.
+#
+# Trigger: workflow_run of the CI workflow, filtered to master pushes that passed. workflow_run is used
+# (instead of a push trigger) so the beta only starts once CI is green on master, and because it always
+# runs the copy of this workflow from the default branch.
+#
+# Security: this workflow NEVER checks out or runs anything from a pull request. Pull requests only run
+# ci.yml (build and tests, no secrets). The only ref built here is the head_sha of a push-to-master CI
+# run from this repository, and it is verified to be an ancestor of origin/master before signing.
+#
+# Without the signing secrets, or when a newer commit is already on master, the run succeeds and does
+# nothing (a notice is printed).
+name: Beta
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: [master]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: appcast
+  cancel-in-progress: false
+
+jobs:
+  beta:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: macos-26
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Require the commit to be the tip of master
+        id: master
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          git fetch --quiet origin master
+          if ! git merge-base --is-ancestor "$HEAD_SHA" origin/master; then
+            echo "::error::Betas can only be built from commits on master; $HEAD_SHA is not."
+            exit 1
+          fi
+          # Re-running an old run would stamp old code with a fresh (higher) build number.
+          if [ "$HEAD_SHA" = "$(git rev-parse origin/master)" ]; then
+            echo "is_tip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_tip=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::A newer commit is on master; its own beta run will build it."
+          fi
+      - name: Check for signing secrets
+        id: signing
+        env:
+          IS_TIP: ${{ steps.master.outputs.is_tip }}
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          if [ "$IS_TIP" != true ]; then
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          elif [ -n "$MACOS_CERTIFICATE_P12_BASE64" ] && [ -n "$MACOS_CERTIFICATE_PASSWORD" ] \
+            && [ -n "$APPLE_TEAM_ID" ] && [ -n "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Signing secrets are not set; skipping the beta."
+          fi
+      - name: Select newest Xcode
+        if: steps.signing.outputs.go == 'true'
+        run: scripts/ci/select-xcode.sh
+      - name: Install XcodeGen
+        if: steps.signing.outputs.go == 'true'
+        run: brew install xcodegen
+      - name: Compute versions
+        if: steps.signing.outputs.go == 'true'
+        run: scripts/ci/compute-versions.sh beta "${{ github.run_number }}" >> "$GITHUB_ENV"
+      - name: Build Release app
+        if: steps.signing.outputs.go == 'true'
+        run: scripts/ci/build-release.sh
+      - name: Sign with Developer ID (no notarization)
+        if: steps.signing.outputs.go == 'true'
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: scripts/release/sign-app.sh dist/TimeTug.app
+      - name: Zip and EdDSA-sign
+        if: steps.signing.outputs.go == 'true'
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          ZIP="dist/TimeTug-${APP_VERSION}.zip"
+          scripts/release/make-update-zip.sh dist/TimeTug.app "$ZIP"
+          BIN="$(scripts/release/fetch-sparkle-tools.sh "$RUNNER_TEMP/sparkle")"
+          KEY="$RUNNER_TEMP/sparkle.key"; umask 077
+          trap 'rm -f "$KEY"' EXIT
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$KEY"
+          SIG="$("$BIN/sign_update" --ed-key-file "$KEY" "$ZIP")"; rm -f "$KEY"
+          SIG_VALUE="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<<"$SIG")"
+          [ -n "$SIG_VALUE" ] || { echo "::error::could not read edSignature from sign_update output"; exit 1; }
+          echo "SIGNATURE=$SIG_VALUE" >> "$GITHUB_ENV"
+          echo "LENGTH=$(stat -f%z "$ZIP")" >> "$GITHUB_ENV"
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+      - name: Create and publish the prerelease
+        if: steps.signing.outputs.go == 'true'
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if gh release view "beta-${BUILD_NUMBER}" >/dev/null 2>&1; then
+            echo "::error::release beta-${BUILD_NUMBER} already exists"; exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/beta-${BUILD_NUMBER}" >/dev/null 2>&1; then
+            echo "::error::tag beta-${BUILD_NUMBER} already exists"; exit 1
+          fi
+          gh release create "beta-${BUILD_NUMBER}" "$ZIP" --draft --prerelease \
+            --title "TimeTug ${APP_VERSION}" --target "$HEAD_SHA" \
+            --notes "Beta build from ${HEAD_SHA}"
+          # Publish BEFORE the appcast so the appcast never references an undownloadable asset.
+          gh release edit "beta-${BUILD_NUMBER}" --draft=false --prerelease
+      - name: Update appcast and prune old betas
+        if: steps.signing.outputs.go == 'true'
+        run: |
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/beta-${BUILD_NUMBER}/$(basename "$ZIP")"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          PRUNED="$(scripts/release/publish-appcast.sh "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            --keep-betas 5 -- \
+            --title "TimeTug ${APP_VERSION}" --version "$BUILD_NUMBER" --short "$APP_VERSION" --url "$URL" \
+            --length "$LENGTH" --signature "$SIGNATURE" --min-system 14.0 --channel beta \
+            --notes-url "https://github.com/${GITHUB_REPOSITORY}/releases/tag/beta-${BUILD_NUMBER}")"
+          for u in $PRUNED; do
+            tag="$(sed -n 's#.*/download/\(beta-[0-9]*\)/.*#\1#p' <<<"$u")"
+            [ -n "$tag" ] || continue
+            gh release delete "$tag" --cleanup-tag --yes || echo "::warning::could not delete pruned release $tag"
+          done

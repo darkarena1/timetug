@@ -5,6 +5,7 @@ import SwiftUI
 struct GeneralPane: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var navigation: SettingsNavigation
+    @ObservedObject var updates: UpdateController
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var launchError: String?
     /// Set while we programmatically revert `launchAtLogin`, so the resulting
@@ -13,6 +14,7 @@ struct GeneralPane: View {
 
     var body: some View {
         Form {
+            UpdatesSection(updates: updates, navigation: navigation)
             Section("App") {
                 Toggle(SettingsText.launchAtLogin, isOn: $launchAtLogin)
                     .settingsHighlight("launch-at-login", navigation: navigation)

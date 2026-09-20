@@ -14,6 +14,9 @@ packages:
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
     exactVersion: 2.4.0
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.0
 configFiles:
   Debug: Config/Signing.xcconfig
   Release: Config/Signing.xcconfig
@@ -36,6 +39,8 @@ targets:
         product: AppleIntelligenceInference
       - package: KeyboardShortcuts
         product: KeyboardShortcuts
+      - package: Sparkle
+        product: Sparkle
     info:
       path: Sources/Info.plist
       properties:
@@ -43,6 +48,9 @@ targets:
         CFBundleShortVersionString: "0.0.0-dev"
         CFBundleVersion: "2"
         LSUIElement: true
+        SUFeedURL: https://darkarena1.github.io/timetug/appcast.xml
+        SUPublicEDKey: QZXAO2hdupCAJzVJV0wqKHw3VPTjLDhQPGjJZDBlkzo=
+        SUEnableAutomaticChecks: true
         NSCalendarsFullAccessUsageDescription: TimeTug reads your calendars to alert you before meetings start.
     entitlements:
       path: Sources/TimeTug.entitlements

@@ -19,13 +19,13 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Declined, solo, all-day and non-opted-in events never take over.
 - [ ] Menu bar modes: icon only, next meeting (long titles truncated), countdown only.
 - [ ] Launch at login toggle works.
-- [ ] Settings sidebar order is General, Calendars, Tug Rules; General has "App", "Menu bar" and "Appearance" (last) sections.
+- [ ] Settings sidebar order is General, Calendars, Tug Rules; General has "Software Update" (first), "App", "Shortcut", "Menu bar" and "Appearance" (last) sections.
 - [ ] Left-click popup: it is only as tall as its content (one event = short popup; many events scroll the list under a fixed header, max about 520 pt); light and dark both look right.
 - [ ] Popup header shows the weekday, the date and "N meetings left" ("No meetings today" when empty, with the puppy empty state); the gear button opens Settings.
 - [ ] Event cards use the real calendar colors; the current meeting shows a "Now" pill and a progress bar; the next meeting has the blue border and an orange "in 3h 40m" countdown; finished meetings stay readable.
 - [ ] The Join button on the next or current meeting (labelled Zoom / Google Meet / Teams / etc.) opens the link and closes the popup.
 - [ ] Popup footer shows the lead time ("Tugs you 1 min before", "Tugs you at start").
-- [ ] Right-click the menu bar icon: About TimeTug (own window, follows Light/Dark), separator, Settings…, separator, Quit. The About window shows logo, version and Done.
+- [ ] Right-click the menu bar icon: About TimeTug (own window, follows Light/Dark), Check for Updates…, separator, Settings…, separator, Quit TimeTug. The About window shows logo, version and Done.
 - [ ] Appearance Auto/Light/Dark changes Settings, the popover and the About window; Auto follows the OS setting (the takeover overlay stays dark).
 - [ ] Settings > General > Appearance > Popup cards: switch Glass / Frosted / Solid and open the popup: cards change live; with Reduce Transparency on the cards are solid.
 - [ ] About window is readable in both Light and Dark appearance (logo lockup, tagline pill, version, Done).
@@ -47,6 +47,12 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Ledger file does not grow: after several days of use `~/Library/Application Support/TimeTug/takeover-ledger.json` only contains recent meetings.
 - [ ] Installer DMG (from a CI artifact or a release): opening it shows a cream window with the TimeTug icon on the left, the Applications shortcut on the right, a blue arrow between them and "Drag TimeTug to Applications"; no toolbar, sidebar or status bar.
 - [ ] Dragging TimeTug onto Applications copies the app (it then launches from /Applications); Eject works afterwards and the mounted volume shows the TimeTug icon.
+
+## Updates
+- [ ] Settings > General shows Software Update with the current version, Check for Updates, Automatic updates and Beta updates.
+- [ ] Right-click the menu bar icon: the menu has "Check for Updates…".
+- [ ] Against a test appcast (`defaults write com.timetug.app SUFeedURL <url>`; the feed needs a validly EdDSA-signed item): a newer stable item is offered; a beta item is offered only with Beta updates on; turning it off and checking again offers only stable. Afterwards `defaults delete com.timetug.app SUFeedURL`.
+- [ ] Installing an update relaunches the app and widgets still load (team-signed build).
 
 ## Duplicate detection (beta)
 - [ ] Settings > Calendars: the on-device intelligence toggle is off by default and shows a Beta badge.

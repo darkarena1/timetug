@@ -18,6 +18,11 @@ final class AppCoordinator {
     let settings = SettingsStore(shared: .appGroup)
     let model = AppModel()
     let navigation = SettingsNavigation()
+    let updates = UpdateController(
+        driver: ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+            ? SparkleUpdater(includeBetas: { UserDefaults.standard.bool(forKey: UpdateController.betaKey) })
+            : NoOpUpdater(),
+        currentVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?")
 
     private let eventKit = EventKitSource()
     private let store: CalendarStore
@@ -41,7 +46,7 @@ final class AppCoordinator {
     private let overlay = OverlayController()
     private lazy var aboutWindow = AboutWindowController()
     private lazy var settingsWindow = SettingsWindowController { [unowned self] in
-        SettingsView(settings: settings, model: model, navigation: navigation, onTestTug: { [weak self] in self?.fireTest() },
+        SettingsView(settings: settings, model: model, navigation: navigation, updates: updates, onTestTug: { [weak self] in self?.fireTest() },
                      onForgetCorrections: { [weak self] in self?.forgetCorrections() })
     }
 
@@ -68,6 +73,7 @@ final class AppCoordinator {
                 )
             ),
             onOpenSettings: { [weak self] in self?.openSettings() },
+            onCheckForUpdates: { [weak self] in self?.updates.checkForUpdates() },
             onOpenAbout: { [weak self] in self?.aboutWindow.show(on: self?.statusItem?.clickedScreen) }
         )
         KeyboardShortcuts.onKeyUp(for: .togglePopup) { [weak self] in

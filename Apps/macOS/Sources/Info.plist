@@ -22,5 +22,11 @@
 	<true/>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>TimeTug reads your calendars to alert you before meetings start.</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://darkarena1.github.io/timetug/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>QZXAO2hdupCAJzVJV0wqKHw3VPTjLDhQPGjJZDBlkzo=</string>
 </dict>
 </plist>
