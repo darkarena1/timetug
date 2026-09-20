@@ -1,5 +1,8 @@
 import AppKit
 import AppleIntelligenceInference
+import CalendarApple
+import CalendarBridge
+import CalendarCore
 import Combine
 import EventKitSource
 import KeyboardShortcuts
@@ -44,14 +47,34 @@ final class AppCoordinator {
     private var settingsSignal: SettingsChangeSignal.Observer?
     private static let widgetLog = Logger(subsystem: "com.timetug.app", category: "widgets")
     private let overlay = OverlayController()
+    private lazy var registry = AppConnectors.makeRegistry(google: GoogleOAuthSettings.config(), eventKit: eventKit)
+    private let credentials = KeychainCredentialStore(service: "com.timetug.app.credentials")
+    private let syncState = FileSyncStateStore(url: AppSupportFiles.url("sync-state.json"))
+    private lazy var reconciler = SourceReconciler(
+        buildAccount: { [unowned self] connection in
+            guard let kind = registry.kind(id: connection.kindID) else { throw CalendarCore.SourceError.invalidResponse("unknown account type") }
+            return ConnectedSource(try kind.makeSource(for: connection, credentials: credentials, syncState: syncState))
+        },
+        buildEventKit: { [unowned self] in ConnectedSource(eventKit) },
+        onChange: { [weak self] in await self?.refresh() })
+    lazy var accounts = AccountsController(
+        registry: registry, connectionStore: FileConnectionStore(url: AppSupportFiles.url("accounts.json")),
+        credentials: credentials, syncState: syncState,
+        interaction: LoopbackAuthorizationInteraction(openURL: { url in await MainActor.run { NSWorkspace.shared.open(url) } }),
+        settings: settings, reconciler: reconciler,
+        applySources: { [weak self] sources in
+            await self?.store.setSources(sources)
+            await self?.refresh()
+        },
+        requestEventKitAccess: { [unowned self] in _ = await eventKit.requestAccess() })
     private lazy var aboutWindow = AboutWindowController()
     private lazy var settingsWindow = SettingsWindowController { [unowned self] in
-        SettingsView(settings: settings, model: model, navigation: navigation, updates: updates, onTestTug: { [weak self] in self?.fireTest() },
+        SettingsView(settings: settings, model: model, navigation: navigation, accounts: accounts, updates: updates, onTestTug: { [weak self] in self?.fireTest() },
                      onForgetCorrections: { [weak self] in self?.forgetCorrections() })
     }
 
     init() {
-        store = CalendarStore(sources: [eventKit], adjudicator: AppleIntelligence.makeAdjudicator())
+        store = CalendarStore(sources: [], adjudicator: AppleIntelligence.makeAdjudicator())
         var loaded = ledgerStore.load()
         loaded.prune(now: Date())
         ledger = loaded
@@ -80,7 +103,6 @@ final class AppCoordinator {
             Task { @MainActor in self?.statusItem?.togglePopover() }
         }
         model.popupCardStyle = settings.popupCardStyle
-        _ = await eventKit.requestAccess()
         observeSystemEvents()
         settings.$takeover.dropFirst().sink { [weak self] _ in
             Task { @MainActor in self?.rearm(); self?.updateUI(); self?.publishWidgetSnapshot() }
@@ -111,10 +133,8 @@ final class AppCoordinator {
         settings.$inferenceEnabled.dropFirst().sink { [weak self] enabled in
             Task { @MainActor in await self?.setInference(enabled) }
         }.store(in: &cancellables)
-        await refresh()
+        await accounts.start()   // requests Apple Calendar access if enabled, builds the sources and refreshes
         if settings.takeover.takeoverCalendarKeys.isEmpty { openSettings(pane: .calendars) }
-
-        for await _ in eventKit.changes() { await refresh() }
     }
 
     /// Hosting controller that reports its content size so the popover is exactly as tall as the popup.
@@ -199,21 +219,21 @@ final class AppCoordinator {
         await resolvePending()
     }
 
-    func unmerge(_ event: CalendarEvent) {
+    func unmerge(_ event: TimeTugCalendarEvent) {
         Task { @MainActor in
             apply(await store.unmerge(event, now: Date()))
             await persistDedup()
         }
     }
 
-    func separate(_ event: CalendarEvent, members: [MergedMember]) {
+    func separate(_ event: TimeTugCalendarEvent, members: [MergedMember]) {
         Task { @MainActor in
             apply(await store.separate(members, from: event, now: Date()))
             await persistDedup()
         }
     }
 
-    func merge(_ a: CalendarEvent, _ b: CalendarEvent) {
+    func merge(_ a: TimeTugCalendarEvent, _ b: TimeTugCalendarEvent) {
         Task { @MainActor in
             apply(await store.merge(a, b, now: Date()))
             await persistDedup()
@@ -255,7 +275,7 @@ final class AppCoordinator {
 
     /// Always checks the ledger and the current calendar snapshot BEFORE showing anything: the
     /// event captured when the timer was armed may be stale.
-    private func fire(_ event: CalendarEvent) {
+    private func fire(_ event: TimeTugCalendarEvent) {
         let now = Date()
         let decision = TakeoverGuard.evaluate(
             event: event, currentEvents: snapshot.events, settings: settings.takeover,
@@ -329,7 +349,7 @@ final class AppCoordinator {
     /// Settings' "Test tug" button: a sample event that never touches the ledger.
     func fireTest() {
         let now = Date()
-        let sample = CalendarEvent(
+        let sample = TimeTugCalendarEvent(
             sourceEventID: "test", sourceID: "test", calendarID: "test", title: "Sample meeting",
             start: now.addingTimeInterval(settings.takeover.leadTime),
             end: now.addingTimeInterval(settings.takeover.leadTime + 1800),

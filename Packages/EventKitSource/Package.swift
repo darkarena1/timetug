@@ -5,11 +5,16 @@ let package = Package(
     name: "EventKitSource",
     platforms: [.macOS(.v14)],
     products: [.library(name: "EventKitSource", targets: ["EventKitSource"])],
-    dependencies: [.package(path: "../TimeTugCore")],
+    dependencies: [.package(path: "../CalendarConnectors")],
     targets: [
         .target(
             name: "EventKitSource",
-            dependencies: [.product(name: "TimeTugCore", package: "TimeTugCore")],
+            dependencies: [.product(name: "CalendarCore", package: "CalendarConnectors")],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "EventKitSourceTests",
+            dependencies: ["EventKitSource", .product(name: "CalendarCore", package: "CalendarConnectors")],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]

@@ -11,6 +11,12 @@ packages:
     path: ../../Packages/EventKitSource
   AppleIntelligenceInference:
     path: ../../Packages/AppleIntelligenceInference
+  CalendarConnectors:
+    path: ../../Packages/CalendarConnectors
+  CalendarBridge:
+    path: ../../Packages/CalendarBridge
+  CalendarApple:
+    path: ../../Packages/CalendarApple
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
     exactVersion: 2.4.0
@@ -37,6 +43,14 @@ targets:
         product: EventKitSource
       - package: AppleIntelligenceInference
         product: AppleIntelligenceInference
+      - package: CalendarConnectors
+        product: CalendarCore
+      - package: CalendarConnectors
+        product: GoogleCalendar
+      - package: CalendarBridge
+        product: CalendarBridge
+      - package: CalendarApple
+        product: CalendarApple
       - package: KeyboardShortcuts
         product: KeyboardShortcuts
       - package: Sparkle
@@ -52,6 +66,8 @@ targets:
         SUPublicEDKey: QZXAO2hdupCAJzVJV0wqKHw3VPTjLDhQPGjJZDBlkzo=
         SUEnableAutomaticChecks: true
         NSCalendarsFullAccessUsageDescription: TimeTug reads your calendars to alert you before meetings start.
+        TimeTugGoogleClientID: $(GOOGLE_OAUTH_CLIENT_ID)
+        TimeTugGoogleClientSecret: $(GOOGLE_OAUTH_CLIENT_SECRET)
     entitlements:
       path: Sources/TimeTug.entitlements
       properties:
@@ -91,6 +107,16 @@ targets:
     sources: [Tests]
     dependencies:
       - target: TimeTug
+      - package: TimeTugCore
+        product: TimeTugCore
+      - package: CalendarConnectors
+        product: CalendarCore
+      - package: CalendarConnectors
+        product: GoogleCalendar
+      - package: CalendarBridge
+        product: CalendarBridge
+      - package: CalendarApple
+        product: CalendarApple
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

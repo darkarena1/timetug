@@ -33,6 +33,14 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.appearanceMode, .dark)
     }
 
+    func testEventKitEnabledDefaultsToTrueAndPersists() {
+        let defaults = freshDefaults()
+        let store = SettingsStore(defaults: defaults)
+        XCTAssertTrue(store.eventKitEnabled)
+        store.eventKitEnabled = false
+        XCTAssertFalse(SettingsStore(defaults: defaults).eventKitEnabled)
+    }
+
     func testPopupCardStyleDefault() {
         XCTAssertEqual(SettingsStore(defaults: freshDefaults()).popupCardStyle, PopupCardStyle.defaultStyle)
     }

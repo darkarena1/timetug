@@ -15,13 +15,13 @@ final class MenuBarIconStateTests: XCTestCase {
 
     private func event(startingIn offset: TimeInterval, duration: TimeInterval = 1800,
                        calendarID: String = "cal", isAllDay: Bool = false,
-                       response: ResponseStatus = .unknown) -> CalendarEvent {
-        CalendarEvent(sourceEventID: "e1", sourceID: "src", calendarID: calendarID, title: "Sync",
+                       response: ResponseStatus = .unknown) -> TimeTugCalendarEvent {
+        TimeTugCalendarEvent(sourceEventID: "e1", sourceID: "src", calendarID: calendarID, title: "Sync",
                       start: now.addingTimeInterval(offset), end: now.addingTimeInterval(offset + duration),
                       isAllDay: isAllDay, otherAttendeeCount: 1, responseStatus: response)
     }
 
-    private func resolve(_ events: [CalendarEvent], ledger: TakeoverLedger = TakeoverLedger()) -> MenuBarIconState {
+    private func resolve(_ events: [TimeTugCalendarEvent], ledger: TakeoverLedger = TakeoverLedger()) -> MenuBarIconState {
         MenuBarIconState.resolve(events: events, settings: settings, ledger: ledger, now: now)
     }
 

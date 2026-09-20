@@ -1,21 +1,27 @@
 #!/usr/bin/env bash
-# Link the per-user signing override into this checkout so local builds are team-signed.
+# Link the per-user signing and Google OAuth overrides into this checkout so local builds are team-signed
+# and can offer Google Calendar.
 #
 # Xcode's xcconfig parser cannot include files by $(HOME), so this links
-# ~/.config/timetug/signing.xcconfig to Apps/macOS/Config/Local.xcconfig (git-ignored), which
+# ~/.config/timetug/signing.xcconfig to Apps/macOS/Config/Local.xcconfig and
+# ~/.config/timetug/google-oauth.xcconfig to Apps/macOS/Config/GoogleOAuth.xcconfig (both git-ignored), which
 # Apps/macOS/Config/Signing.xcconfig includes. Runs before every `xcodegen generate` (see
-# `options.preGenCommand` in project.yml). It does nothing when the home file does not exist
-# (CI, other machines), so those builds stay ad-hoc signed.
+# `options.preGenCommand` in project.yml). It does nothing for a home file that does not exist
+# (CI, other machines), so those builds stay ad-hoc signed and Google is not offered.
 #
-# Environment: TIMETUG_SIGNING_XCCONFIG overrides the source path.
+# Environment: TIMETUG_SIGNING_XCCONFIG and TIMETUG_GOOGLE_XCCONFIG override the source paths.
 set -euo pipefail
 
-SRC="${TIMETUG_SIGNING_XCCONFIG:-${HOME:-/nonexistent}/.config/timetug/signing.xcconfig}"
-DEST="$(cd "$(dirname "$0")/../.." && pwd)/Apps/macOS/Config/Local.xcconfig"
+link_one() {   # link_one SRC DEST
+  local src="$1" dest="$2"
+  if [ ! -f "$src" ]; then
+    # A dangling link left by a removed source would break the include; drop it.
+    [ -L "$dest" ] && rm -f "$dest"
+    return 0
+  fi
+  [ "$(readlink "$dest" 2>/dev/null || true)" = "$src" ] || ln -sfn "$src" "$dest"
+}
 
-if [ ! -f "$SRC" ]; then
-  # A dangling link left by a removed source would break the include; drop it.
-  [ -L "$DEST" ] && rm -f "$DEST"
-  exit 0
-fi
-[ "$(readlink "$DEST" 2>/dev/null || true)" = "$SRC" ] || ln -sfn "$SRC" "$DEST"
+CONFIG_DIR="$(cd "$(dirname "$0")/../.." && pwd)/Apps/macOS/Config"
+link_one "${TIMETUG_SIGNING_XCCONFIG:-${HOME:-/nonexistent}/.config/timetug/signing.xcconfig}" "$CONFIG_DIR/Local.xcconfig"
+link_one "${TIMETUG_GOOGLE_XCCONFIG:-${HOME:-/nonexistent}/.config/timetug/google-oauth.xcconfig}" "$CONFIG_DIR/GoogleOAuth.xcconfig"

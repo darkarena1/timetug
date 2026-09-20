@@ -4,6 +4,7 @@ struct SettingsView: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var model: AppModel
     @ObservedObject var navigation: SettingsNavigation
+    let accounts: AccountsController
     let updates: UpdateController
     let onTestTug: () -> Void
     let onForgetCorrections: () -> Void
@@ -60,6 +61,8 @@ struct SettingsView: View {
         switch navigation.pane {
         case .general:
             GeneralPane(settings: settings, navigation: navigation, updates: updates)
+        case .accounts:
+            AccountsPane(accounts: accounts, settings: settings, model: model, navigation: navigation)
         case .calendars:
             CalendarsPane(settings: settings, model: model, navigation: navigation, onForgetCorrections: onForgetCorrections)
         case .tugRules:

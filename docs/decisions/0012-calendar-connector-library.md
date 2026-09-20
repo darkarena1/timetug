@@ -27,3 +27,15 @@ Build `Packages/CalendarConnectors` in this repository, extract it to its own re
 - Reads are provider-neutral; TimeTug maps `CalendarEvent` into `TimeTugCalendarEvent`.
 - The first change check after connecting costs one field-minimal full listing per calendar; persisting sync tokens across launches (Phase 2) avoids repeating it.
 - Extraction later is a `git subtree split`.
+
+## Phase 2
+
+TimeTug now uses the library. Decisions made while plugging it in:
+
+- **Bridge package:** `Packages/CalendarBridge` maps library events to `TimeTugCalendarEvent` and adapts library sources to Core's source protocol. `TimeTugCore` does not depend on the library: the library needs swift-crypto, which needs a newer toolchain than the `swift:6.0` image that proves Core's portability. Core gains only generic pieces (`CalendarStore.setSources`, `TakeoverSettings.removeCalendars`).
+- **Layering:** anything generic (stores, all-day handling, conformance check) lives in `CalendarCore`; OS-specific code lives in `Packages/CalendarApple` (Keychain, loopback OAuth) and the `EventKitSource` adapter. The app composes them and owns UI and account state.
+- **All-day rule:** a connector emits all-day events in the library's canonical form (`AllDay`); the bridge converts them to TimeTug's native all-day form so the same calendar date shows regardless of time zone. The bridge conversion is interim; Phase 2.5 removes it.
+- **EventKit source id:** EventKit reports one constant source id for the Mac. Selections and status are keyed by `source.id`, never by the calendar's own source identifier.
+- **Removal order** (`AccountsController.removeAccount`): the stored connection first (if that fails nothing else changes), then the source is dropped by reconciling, then the account's calendar selections, then its sync state, then its secrets, the last two best effort with an error message if the secret cannot be deleted. On launch an orphan sweep drops selections of account-based sources that no stored account owns, covering an interrupted removal.
+- **Phase 2.5 goal:** a minimal bridge and a dependency-free `CalendarCore`, by moving OAuth into a separate `CalendarOAuth` product.
+

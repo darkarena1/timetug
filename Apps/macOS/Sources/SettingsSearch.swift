@@ -3,6 +3,8 @@ import TimeTugCore
 
 /// Visible label strings, shared by the views and the search catalog so they cannot drift.
 enum SettingsText {
+    static let accounts = "Accounts"
+    static let appleCalendar = "Apple Calendar"
     static let disableTug = "Disable Tug"
     static let leadTime = "Lead time"
     static let videoLink = "Require a video link"
@@ -33,6 +35,8 @@ enum SettingsSearch {
     static let calendarIDPrefix = "calendar:"
 
     static let catalog: [SettingsSearchItem] = [
+        .init(id: "accounts", title: SettingsText.accounts,
+              keywords: ["google", "account", "accounts", "sign in", "add account", "remove account", "apple calendar", "eventkit", "icloud", "connect"], pane: .accounts),
         .init(id: "software-update", title: SettingsText.checkForUpdates,
               keywords: ["update", "updates", "upgrade", "version", "software update", "sparkle"], pane: .general),
         .init(id: "automatic-updates", title: SettingsText.automaticUpdates,

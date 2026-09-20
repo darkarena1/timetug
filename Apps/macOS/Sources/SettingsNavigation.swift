@@ -1,13 +1,14 @@
 import SwiftUI
 
 enum SettingsPane: String, CaseIterable, Hashable, Identifiable {
-    case general, calendars, tugRules
+    case general, accounts, calendars, tugRules
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .general: "General"
+        case .accounts: "Accounts"
         case .calendars: "Calendars"
         case .tugRules: "Tug Rules"
         }
@@ -16,6 +17,7 @@ enum SettingsPane: String, CaseIterable, Hashable, Identifiable {
     var systemImage: String {
         switch self {
         case .general: "gearshape"
+        case .accounts: "person.crop.circle"
         case .calendars: "calendar"
         case .tugRules: "bolt.fill"
         }
@@ -24,6 +26,7 @@ enum SettingsPane: String, CaseIterable, Hashable, Identifiable {
     var iconColor: Color {
         switch self {
         case .general: Color.gray
+        case .accounts: Color(red: 0.20, green: 0.70, blue: 0.40)
         case .calendars: Color(red: 0.18, green: 0.48, blue: 0.96)
         case .tugRules: Color(red: 1.0, green: 0.62, blue: 0.10)
         }

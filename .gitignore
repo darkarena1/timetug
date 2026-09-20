@@ -22,3 +22,4 @@ dist/
 
 # Per-checkout signing override (see Apps/macOS/Config/Signing.xcconfig)
 Apps/macOS/Config/Local.xcconfig
+Apps/macOS/Config/GoogleOAuth.xcconfig

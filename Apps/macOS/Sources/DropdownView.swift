@@ -7,9 +7,9 @@ struct DropdownView: View {
     @ObservedObject var model: AppModel
     let onOpenSettings: () -> Void
     let onJoin: (URL) -> Void
-    let onUnmerge: (CalendarEvent) -> Void
-    let onSeparate: (CalendarEvent, [MergedMember]) -> Void
-    let onMerge: (CalendarEvent, CalendarEvent) -> Void
+    let onUnmerge: (TimeTugCalendarEvent) -> Void
+    let onSeparate: (TimeTugCalendarEvent, [MergedMember]) -> Void
+    let onMerge: (TimeTugCalendarEvent, TimeTugCalendarEvent) -> Void
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -109,7 +109,7 @@ struct DropdownView: View {
         .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
     }
 
-    private func calendarTitle(for event: CalendarEvent) -> String? {
+    private func calendarTitle(for event: TimeTugCalendarEvent) -> String? {
         model.calendars.first { $0.key == event.calendarKey }?.title
     }
 
@@ -198,16 +198,16 @@ private struct NoMoreMeetings: View {
 
 private struct EventCard: View {
     let row: PopupRowModel
-    let event: CalendarEvent
+    let event: TimeTugCalendarEvent
     let now: Date
     let calendarTitle: String?
     let palette: PopupPalette
     let style: PopupCardStyle
     let strongBorder: Bool
-    let candidates: [CalendarEvent]
-    let onUnmerge: (CalendarEvent) -> Void
-    let onSeparate: (CalendarEvent, [MergedMember]) -> Void
-    let onMerge: (CalendarEvent, CalendarEvent) -> Void
+    let candidates: [TimeTugCalendarEvent]
+    let onUnmerge: (TimeTugCalendarEvent) -> Void
+    let onSeparate: (TimeTugCalendarEvent, [MergedMember]) -> Void
+    let onMerge: (TimeTugCalendarEvent, TimeTugCalendarEvent) -> Void
     let onJoin: (URL) -> Void
 
     @State private var isExpanded = false

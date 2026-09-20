@@ -71,6 +71,12 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertEqual(Set(all).count, all.count)
     }
 
+    func testAccountsIsFoundByProviderAndSignInWords() {
+        XCTAssertTrue(ids("google").contains("accounts"))
+        XCTAssertTrue(ids("sign in").contains("accounts"))
+        XCTAssertTrue(ids("apple calendar").contains("accounts"))
+    }
+
     func testEveryCatalogPaneIsValid() {
         for item in SettingsSearch.catalog {
             XCTAssertTrue(SettingsPane.allCases.contains(item.pane), item.id)
@@ -78,8 +84,8 @@ final class SettingsSearchTests: XCTestCase {
     }
 
     func testPaneOrderAndTitles() {
-        XCTAssertEqual(SettingsPane.allCases, [.general, .calendars, .tugRules])
-        XCTAssertEqual(SettingsPane.allCases.map(\.title), ["General", "Calendars", "Tug Rules"])
+        XCTAssertEqual(SettingsPane.allCases, [.general, .accounts, .calendars, .tugRules])
+        XCTAssertEqual(SettingsPane.allCases.map(\.title), ["General", "Accounts", "Calendars", "Tug Rules"])
     }
 
     @MainActor func testDefaultPaneIsGeneral() {

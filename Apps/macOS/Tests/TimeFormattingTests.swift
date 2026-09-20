@@ -17,8 +17,8 @@ final class TimeFormattingTests: XCTestCase {
         XCTAssertEqual(TimeFormatting.clock(-3), "0:00")
     }
 
-    private func event(startingIn seconds: TimeInterval, from now: Date, title: String = "Design Review") -> CalendarEvent {
-        CalendarEvent(sourceEventID: "1", sourceID: "s", calendarID: "c", title: title,
+    private func event(startingIn seconds: TimeInterval, from now: Date, title: String = "Design Review") -> TimeTugCalendarEvent {
+        TimeTugCalendarEvent(sourceEventID: "1", sourceID: "s", calendarID: "c", title: title,
                       start: now.addingTimeInterval(seconds), end: now.addingTimeInterval(seconds + 1800))
     }
 

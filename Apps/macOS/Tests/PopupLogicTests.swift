@@ -16,8 +16,8 @@ final class PopupLogicTests: XCTestCase {
     }
 
     private func event(_ id: String, _ title: String, _ start: Date, _ end: Date, allDay: Bool = false,
-                       calendarID: String = "work", conference: String? = nil) -> CalendarEvent {
-        CalendarEvent(sourceEventID: id, sourceID: "src", calendarID: calendarID, title: title,
+                       calendarID: String = "work", conference: String? = nil) -> TimeTugCalendarEvent {
+        TimeTugCalendarEvent(sourceEventID: id, sourceID: "src", calendarID: calendarID, title: title,
                       start: start, end: end, isAllDay: allDay,
                       conferenceURL: conference.flatMap(URL.init(string:)))
     }
@@ -27,13 +27,13 @@ final class PopupLogicTests: XCTestCase {
         CalendarInfo(sourceID: "src", calendarID: "home", title: "Personal", colorHex: "#00FF00"),
     ]
 
-    private func agenda(_ events: [CalendarEvent], now: Date) -> DayAgenda {
+    private func agenda(_ events: [TimeTugCalendarEvent], now: Date) -> DayAgenda {
         var s = TakeoverSettings()
         s.skipAllDayEvents = false
         return DayAgenda.make(events: events, settings: s, now: now, calendar: cal)
     }
 
-    private func rows(_ events: [CalendarEvent], now: Date, calendars: [CalendarInfo]? = nil) -> [PopupRowModel] {
+    private func rows(_ events: [TimeTugCalendarEvent], now: Date, calendars: [CalendarInfo]? = nil) -> [PopupRowModel] {
         PopupRowModel.rows(agenda: agenda(events, now: now), calendars: calendars ?? self.calendars,
                            now: now, locale: posix, timeZone: utc)
     }
@@ -228,7 +228,7 @@ final class PopupLogicTests: XCTestCase {
 
     // MARK: merged members
 
-    private func mergedEvent(provenance: MergeProvenance?, count: Int = 2) -> CalendarEvent {
+    private func mergedEvent(provenance: MergeProvenance?, count: Int = 2) -> TimeTugCalendarEvent {
         var merged = event("1", "Intermountain Health", at(13), at(13, 30))
         var members = [
             MergedMember(title: "Scott: Doctor", calendarKey: "src/home", contentKey: "k2", details: "bare",
@@ -301,7 +301,7 @@ final class PopupLogicTests: XCTestCase {
 
     // MARK: identical copies collapse
 
-    private func identicalCopies(provenance: MergeProvenance?, extra: Bool = false) -> CalendarEvent {
+    private func identicalCopies(provenance: MergeProvenance?, extra: Bool = false) -> TimeTugCalendarEvent {
         var merged = event("1", "Mando (X1102)'s Upcoming Appointment", at(13), at(13, 30), calendarID: "a")
         var members = ["a", "b", "c"].map {
             MergedMember(title: "Mando (X1102)'s Upcoming Appointment", calendarKey: "src/\($0)", contentKey: "same",
