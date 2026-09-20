@@ -1,0 +1,151 @@
+# Calendar connectors, Phase 2: plug the library into TimeTug
+
+Status: draft for review. Phase 1 (the portable `Packages/CalendarConnectors` library with a read-only Google connector) is merged (#16, `51f9a6d`). This phase makes TimeTug use it: Google accounts appear in Settings, their calendars feed the same store and dedup as Apple Calendar, and EventKit itself moves onto the library's abstraction. Roadmap and earlier decisions: `docs/superpowers/specs/2026-09-20-calendar-connectors-phase1-design.md` and ADR `docs/decisions/0012-calendar-connector-library.md`.
+
+## Goals
+
+1. Add and remove Google Calendar accounts from a new **Accounts** tab in Settings (standard `+` / `−`, several accounts of one kind allowed).
+2. Apple Calendar (EventKit) stays available, appears as one pinned row in the same tab with an enable checkbox, and is built on the library's `CalendarSource` / `ConnectorKind` abstraction like every other source.
+3. The Calendars tab lists calendars from every enabled account; removing an account also removes that account's Tug and visibility selections, which live in Core's `TakeoverSettings`.
+4. Google data refreshes through the library's sync-token polling; changes reach the menu bar within about a minute.
+
+## Non-goals
+
+Write support (Phase 3), Microsoft (Phase 4), CalDAV/iCloud-direct, webhook push, iOS, any UI beyond the Accounts pane and the existing Calendars tab. Shipping a Google OAuth client inside release builds is a separate follow-up (see "OAuth client configuration").
+
+## Global constraints
+
+- `TimeTugCore` stays pure Swift 6 with no Apple-only imports and **no dependency on `CalendarConnectors`** (swift-crypto needs Swift 6.2, which would break the `core-linux` job on `swift:6.0`).
+- `CalendarCore` and `GoogleCalendar` stay free of Apple-only imports; the only library API change is adding one error case (below).
+- `EventKitSource` and the app remain Swift 5 language mode; `CalendarBridge` is Swift 6 mode (it depends on `TimeTugCore`).
+- Stored calendar selections are `sourceID/calendarID` strings and must keep working: EventKit's source id stays `"eventkit"`.
+- New `Codable` fields use `decodeIfPresent` with defaults. Every Core/bridge behavior gets a Swift Testing test first; app tests are XCTest.
+- No secrets in the repository: OAuth client values come from a git-ignored xcconfig; user credentials live only in the Keychain.
+- Merges to `master` ship a beta build, so the work lands only through a pull request with CI green.
+
+## Architecture
+
+```
+TimeTugCore (pure)            CalendarCore / GoogleCalendar (portable library)
+   CalendarSource (Void)  <---  CalendarBridge  --->  CalendarSource (CalendarChange)
+   TimeTugCalendarEvent          mapper + adapter       CalendarEvent, CalendarDescriptor
+        ^                              ^                          ^
+        |                              |                          |
+     CalendarStore            Apps/macOS (composition root)   EventKitSource (Mac-only kind + source)
+                                AccountStore, Keychain, OAuth loopback, reconciler, Accounts pane
+```
+
+**New package `Packages/CalendarBridge`** (Swift 6, depends on `TimeTugCore` and the library's `CalendarCore`). It is the only code that knows both vocabularies:
+
+- `EventMapper`: library `CalendarEvent` to `TimeTugCalendarEvent`; library `CalendarDescriptor` to Core `CalendarInfo`.
+- `ConnectedSource`: wraps `any CalendarCore.CalendarSource` and conforms to Core's `CalendarSource`. It translates errors and the change stream (below).
+
+`EventKitSource` drops its dependency on `TimeTugCore` and depends on `CalendarCore` instead.
+
+## Step 0: rename (first commit, mechanical)
+
+Rename TimeTug's `CalendarEvent` to `TimeTugCalendarEvent` (about 120 references in ~38 files across `TimeTugCore`, `EventKitSource`, `AppleIntelligenceInference`, `Apps/macOS`, `docs/` and `AGENTS.md`). Move the type from `Model/CalendarEvent.swift` to `Model/TimeTugCalendarEvent.swift`, leaving `CalendarInfo` and `ResponseStatus` in place. The type is not `Codable`, so no persisted data changes. The commit changes names only; the existing Core and app test suites must pass unchanged except for the name.
+
+## TimeTugCore changes
+
+- `CalendarStore.setSources(_ sources: [any CalendarSource])` replaces the fixed `sources` array with mutable state. Sources that disappear drop their cached events, calendars and status. `refresh` and `makeSnapshot` read the current set; `sourceNames` come from it. `init(sources:)` stays for tests and startup.
+- `TakeoverSettings.removeCalendars(forSourceID:)` removes every entry of `takeoverCalendarKeys` and `hiddenCalendarKeys` that starts with `"<sourceID>/"`. The prefix includes the slash so `google-1` never matches `google-10`. Tests come first.
+
+## Library change
+
+Add `SourceError.needsPermission` to `CalendarCore`: the OS or user has not granted access to a local data store (EventKit). It is a new case in an existing enum; no existing behavior changes, and Google never throws it. `GoogleCalendar` tests are unaffected.
+
+## EventKit as a connector
+
+`EventKitSource` (still one class, still `EKEventStore` inside) conforms to the library's `CalendarSource`:
+
+- `id` is the constant `"eventkit"` (a deliberate exception to "use `Connection.sourceID`": existing stored keys begin with `eventkit/`, and EventKit is a singleton, so there is nothing to disambiguate). The exception is documented at the definition.
+- `calendars()` returns `CalendarDescriptor` (id = `calendarIdentifier`, title, sRGB hex color, `accountName` = the owning macOS account title).
+- `events(in:)` returns library `CalendarEvent`: `eventID` = `eventIdentifier ?? calendarItemIdentifier`; `uid` = `calendarItemExternalIdentifier`; attendees carry `isSelf` (from `isCurrentUser`), `response`, name, and email from the `mailto:` URL; `organizer` likewise; `myResponse` from the current user's participant status; all-day events use the device zone's midnight for start and the exclusive next midnight for end, with `timeZone` set, as the model requires.
+- `capabilities`: read-only, `syncKind: .notification`, no conference detection (TimeTug's `ConferenceLinkDetector` continues to run in the store).
+- `changes()` yields `.calendarsChanged` on `EKEventStoreChanged`, which the library defines as "reload calendars and events".
+- Missing access throws `SourceError.needsPermission`.
+
+`EventKitConnectorKind: ConnectorKind` (`id: "eventkit"`, `supportedPlatforms: .macOS`, `authorization: .system`):
+
+- `authorize` calls `requestFullAccessToEvents()` and throws `needsPermission` when denied; it never uses the `AuthorizationInteraction` or the `CredentialStore`. It returns a synthesized `Connection(kindID: "eventkit", connectionID: "this-mac", displayName: "Apple Calendar")`, which the app does not persist (EventKit is a setting, not an account).
+- `reauthorize` behaves as `authorize`. When access was previously denied, macOS will not prompt again, so the UI offers "Open System Settings" instead.
+- `makeSource` returns the `EventKitSource`.
+
+## Bridge behavior
+
+**Mapping** (`TimeTugCalendarEvent`), the same for every source so Google and Apple events dedup against each other:
+
+| TimeTug field | From library event |
+|---|---|
+| `sourceEventID`, `calendarID`, `title` | `eventID`, `calendarID`, `title` (empty title becomes "(No title)") |
+| `sourceID` | the source's `id` |
+| `start`, `end`, `isAllDay` | same (all-day semantics are identical: midnight, exclusive end) |
+| `responseStatus` | `myResponse`, else the self attendee's `response`; `needsAction` becomes `.pending`; none becomes `.unknown` |
+| `attendees` | non-self attendees as TimeTug `Attendee(name:email:)` |
+| `otherAttendeeCount` | count of non-self attendees |
+| `organizerEmail` | organizer's email unless the organizer is self |
+| `externalUID` | `uid` |
+| `conferenceURL` | `conference?.url` (else the store's link detector runs as today) |
+| `location`, `notes`, `url` | same |
+
+Events with `status == .cancelled` are dropped. The library's `Attendee` and `ResponseStatus` share names with Core's, so the mapper qualifies them (`CalendarCore.Attendee`). `CalendarDescriptor` to `CalendarInfo`: `sourceID` = the source id, `calendarID` = `id`, plus title, `accountName`, `colorHex`.
+
+**Errors.** `ConnectedSource` throws Core's `SourceError.needsPermission` for the library's `needsPermission` and `SourceError.authExpired` for `authExpired`; anything else propagates and `CalendarStore` records it as `.failing`.
+
+**Changes.** `changes()` maps the library stream to Core's `AsyncStream<Void>`: every `CalendarChange` yields once. `.sourceFailed` also yields, so the next refresh surfaces the failure status ("Sign in again") instead of leaving stale data quietly. Cancelling the consumer ends the library stream.
+
+## App (Apps/macOS)
+
+**Persistence and platform services**
+
+- `AccountStore`: an actor holding `[Connection]` in `accounts.json` under Application Support, injectable file URL and atomic writes, following `LedgerStore` conventions. EventKit is never stored here.
+- `KeychainCredentialStore: CredentialStore`: `kSecClassGenericPassword`, service `com.timetug.app.credentials` (injectable for tests), account = `connectionID`, value = JSON of the secrets map.
+- `FileSyncStateStore: SyncStateStore`: an actor over `sync-state.json` in Application Support, injectable URL, atomic writes. A missing or unreadable file means "no tokens", so the library does a full bootstrap.
+- `OAuthInteraction: AuthorizationInteraction`: `beginOAuthRedirect()` starts an `NWListener` on `127.0.0.1` with an ephemeral port and returns a session whose `redirectURI` is `http://127.0.0.1:<port>`; `authorize(at:)` opens the URL with `NSWorkspace`, answers the first request with a small "You can close this window" page, and returns the received URL; it times out after 5 minutes and `close()` cancels the listener. `promptCredentials` throws (unused until CalDAV). The app has no sandbox entitlement, so the listener and Keychain need no new entitlements.
+- `ConnectorRegistry` is built at launch with `GoogleConnectorKind` (when a client is configured) and `EventKitConnectorKind`.
+
+**Reconciler.** A testable type, `SourceReconciler`, owns "which sources exist": given the persisted connections, the EventKit enabled flag and the registry, it builds a `[String: ConnectedSource]` keyed by source id, diffs against the running set, and reports additions and removals. `AppCoordinator` calls it at launch and after any account or toggle change, then calls `store.setSources(_:)`, starts a change-listening task for each added source (each `for await _ in source.changes() { await refresh() }`) and cancels the tasks of removed sources. The existing periodic refresh remains. The old direct EventKit access request and `eventKit.changes()` loop are replaced by this path. A failing `makeSource` for one account leaves it out of the set and records a status for the pane instead of stopping the others.
+
+**Settings**
+
+- `SettingsPane.accounts` (after General; icon `person.crop.circle`; also indexed in `SettingsSearch`).
+- `AccountsPane` and a small view model. A list with a pinned first row "Apple Calendar (this Mac)" and an enable checkbox (not removable); then one row per Google account with its email, status (connected; "Sign in again"; error text) and, for permission problems, an "Open System Settings" link. Below the list, the standard `+` and `−` controls.
+  - `+` lists the registered, platform-valid connector kinds excluding `.system` ones (just Google now). Selecting Google runs `authorize` in a task, shows "Waiting for browser..." with Cancel, then persists the `Connection` and reconciles. Signing in as an account that is already added (same kind and display name) is rejected with a message.
+  - `−` asks: "Remove <email>? Its calendars will no longer appear and their Tug and visibility choices are forgotten." On confirm, in order: stop and remove the source, delete its Keychain secrets, sync state and stored connection, and call `removeCalendars(forSourceID:)` on the persisted settings.
+  - "Sign in again" runs `reauthorize` (same `connectionID`, so selections and sync state survive) and rebuilds that source.
+  - The EventKit checkbox is persisted as `eventKitEnabled.v1` in `SettingsStore` (default `true`, so existing users see no change). Turning it off removes the source and hides its calendars but **keeps** their stored selections, so turning it back on is lossless; it does not revoke the system permission. Turning it on runs `authorize` (prompting if undetermined).
+- The Calendars tab needs no structural change: it groups by `accountName`, so Google calendars appear under the account's email and disabled or removed sources contribute nothing.
+
+## OAuth client configuration
+
+The Google Desktop OAuth client ID and secret are read from `Info.plist` keys filled by a git-ignored `Apps/macOS/Config/GoogleOAuth.xcconfig` (optionally included, following the `Local.xcconfig` pattern). When they are absent (CI, fresh checkouts), Google is not registered and the `+` menu has no Google entry; everything else works, so CI and beta builds are unaffected. The Desktop-client "secret" is not confidential but is still kept out of source control. Live testing needs the Google Cloud project described in ADR 0012 (Calendar API enabled; sensitive scopes, so in Testing mode only listed test users, with 7-day refresh tokens; public release needs Google's OAuth verification). **Open item for after this phase:** how release and beta workflows receive the client values (GitHub secrets into the build).
+
+## Testing
+
+- **Core (Swift Testing):** `setSources` add/remove drops cache, statuses and names; `removeCalendars(forSourceID:)` including the `google-1` / `google-10` prefix case and untouched other sources.
+- **Bridge (Swift Testing, fake library source):** mapper table above (all-day, self/other attendees, organizer-is-self, response fallback and `needsAction`, cancelled dropped, empty title, conference URL); adapter error translation; change-stream mapping including `.sourceFailed`; cancellation ends the stream. A parity fixture checks that an EventKit-shaped event and a Google-shaped event for the same meeting map to values the existing dedup treats as one meeting (same `externalUID`, title and times).
+- **EventKitSource:** pure helpers (participant status to response, color to hex) get Swift Testing tests; the package must still build. The `EKEventStore` paths are covered by the manual checklist.
+- **Library:** one test for `needsPermission`; the 81 existing tests keep passing.
+- **App (XCTest):** `AccountStore` round trip, missing and corrupt file; `FileSyncStateStore`; `KeychainCredentialStore` with a per-run unique service name and cleanup; `SourceReconciler` add, remove, EventKit toggle, failing `makeSource`; Accounts view-model add/remove/duplicate/re-sign-in using a fake `ConnectorKind` and interaction.
+- **Manual (`docs/manual-tests/macos-checklist.md`, needs the Google client):** add a Google account (calendars appear under the email); add a second; toggle EventKit off and on (calendars hide and return, selections intact); `−` an account (calendars and Tug choices vanish, Keychain item gone); relaunch reconnects silently; revoke access on the Google account page and see "Sign in again", then fix it in place; edit an event in Google and see it in the menu bar within about a minute; deny Calendar access in System Settings and see the EventKit row explain it; the same meeting via both EventKit and direct Google merges into one.
+- **CI:** the `core` job also runs `swift test` for `CalendarBridge` and builds `EventKitSource`; the `app` job builds and tests the app with the new package references in `project.yml`. `core-linux` is unchanged (Core does not depend on the library).
+
+## Risks
+
+- **Duplicate meetings.** A Google calendar also added in macOS appears twice. The existing dedup should merge them through `externalUID` (`iCalUID` vs `calendarItemExternalIdentifier`); the parity test and manual check cover it, and users can turn EventKit off.
+- **EventKit regression.** The conversion touches a working source. The mapping rules are unchanged, pure pieces are tested, and the manual checklist exercises permission grant, denial and live edits.
+- **Token expiry in Testing mode.** Google refresh tokens last 7 days for unverified apps, so test accounts will show "Sign in again" weekly until the app is verified.
+- **Loopback listener.** A firewall prompt or a blocked port fails the sign-in with a clear error and Cancel; the listener always closes.
+
+## Commit sequence (one PR)
+
+1. Rename `CalendarEvent` to `TimeTugCalendarEvent` (mechanical).
+2. Core: `setSources`, `removeCalendars(forSourceID:)`.
+3. Library: `SourceError.needsPermission`.
+4. `CalendarBridge` package (mapper, adapter) with tests.
+5. `EventKitSource` conversion and `EventKitConnectorKind`.
+6. App services: `AccountStore`, Keychain, sync state, `OAuthInteraction`, OAuth config plumbing.
+7. `SourceReconciler` and `AppCoordinator` wiring.
+8. Accounts pane, `SettingsPane.accounts`, search entries, view model.
+9. Docs: ADR 0012 update, `architecture.md`, `AGENTS.md` (layout, test commands, CI), manual checklist.
