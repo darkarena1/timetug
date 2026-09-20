@@ -16,6 +16,9 @@ enum SettingsText {
     static let menuBarText = "Menu bar text"
     static let launchAtLogin = "Launch at login"
     static let tugCheckbox = "Tug"
+    static let checkForUpdates = "Check for Updates"
+    static let automaticUpdates = "Automatic updates"
+    static let betaUpdates = "Beta updates"
     static let popupShortcut = "Show today's meetings"
 }
 
@@ -30,6 +33,12 @@ enum SettingsSearch {
     static let calendarIDPrefix = "calendar:"
 
     static let catalog: [SettingsSearchItem] = [
+        .init(id: "software-update", title: SettingsText.checkForUpdates,
+              keywords: ["update", "updates", "upgrade", "version", "software update", "sparkle"], pane: .general),
+        .init(id: "automatic-updates", title: SettingsText.automaticUpdates,
+              keywords: ["update", "updates", "automatic", "download", "install", "software update"], pane: .general),
+        .init(id: "beta-updates", title: SettingsText.betaUpdates,
+              keywords: ["update", "updates", "beta", "prerelease", "pre-release", "preview", "early access", "software update"], pane: .general),
         .init(id: "disable-tug", title: SettingsText.disableTug,
               keywords: ["pause", "off", "mute", "stop", "do not disturb", "focus", "takeover", "take over", "tug"], pane: .tugRules),
         .init(id: "lead-time", title: SettingsText.leadTime,

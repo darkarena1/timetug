@@ -12,7 +12,7 @@ protocol UpdaterDriving: AnyObject {
 /// preference; the beta opt-in is ours and lives in UserDefaults.
 @MainActor
 final class UpdateController: ObservableObject {
-    private static let betaKey = "updates.includeBetas.v1"
+    nonisolated static let betaKey = "updates.includeBetas.v1"
     private let driver: UpdaterDriving
     private let defaults: UserDefaults
     let currentVersion: String

@@ -7,6 +7,7 @@ final class StatusItemController: NSObject {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
     private let onOpenSettings: () -> Void
+    private let onCheckForUpdates: () -> Void
     private let onOpenAbout: () -> Void
     private let idleImage: NSImage?
     private let soonImage: NSImage?
@@ -16,8 +17,10 @@ final class StatusItemController: NSObject {
     /// The display of the last menu bar click (fallbacks: the item's own screen, then the main screen).
     var clickedScreen: NSScreen? { lastClickedScreen ?? item.button?.window?.screen ?? NSScreen.main }
 
-    init(popoverContent: NSViewController, onOpenSettings: @escaping () -> Void, onOpenAbout: @escaping () -> Void) {
+    init(popoverContent: NSViewController, onOpenSettings: @escaping () -> Void,
+         onCheckForUpdates: @escaping () -> Void, onOpenAbout: @escaping () -> Void) {
         self.onOpenSettings = onOpenSettings
+        self.onCheckForUpdates = onCheckForUpdates
         self.onOpenAbout = onOpenAbout
         let fallback = NSImage(systemSymbolName: "alarm", accessibilityDescription: "TimeTug")
         idleImage = NSImage(named: "MenuBarTemplate") ?? fallback
@@ -81,9 +84,10 @@ final class StatusItemController: NSObject {
     }
 
     /// The right-click menu, laid out like the macOS Apple menu.
-    static func makeMenu(target: AnyObject, about: Selector, settings: Selector) -> NSMenu {
+    static func makeMenu(target: AnyObject, about: Selector, checkForUpdates: Selector, settings: Selector) -> NSMenu {
         let menu = NSMenu()
         menu.addItem(withTitle: "About TimeTug", action: about, keyEquivalent: "").target = target
+        menu.addItem(withTitle: "Check for Updates…", action: checkForUpdates, keyEquivalent: "").target = target
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings…", action: settings, keyEquivalent: ",").target = target
         menu.addItem(.separator())
@@ -92,11 +96,13 @@ final class StatusItemController: NSObject {
     }
 
     private func showMenu() {
-        item.menu = Self.makeMenu(target: self, about: #selector(openAbout), settings: #selector(openSettings))
+        item.menu = Self.makeMenu(target: self, about: #selector(openAbout),
+                                    checkForUpdates: #selector(checkForUpdates), settings: #selector(openSettings))
         item.button?.performClick(nil)
         item.menu = nil
     }
 
+    @objc private func checkForUpdates() { onCheckForUpdates() }
     @objc private func openAbout() { onOpenAbout() }
     @objc private func openSettings() { onOpenSettings() }
 }

@@ -164,4 +164,11 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertTrue(ids("pause").contains("disable-tug"))
         XCTAssertEqual(SettingsSearch.catalog.first { $0.id == "disable-tug" }?.pane, .tugRules)
     }
+
+    func testUpdateSettingsAreFoundInGeneral() {
+        for (query, id) in [("update", "software-update"), ("automatic updates", "automatic-updates"), ("beta updates", "beta-updates")] {
+            let hit = SettingsSearch.results(for: query, calendars: []).first { $0.id == id }
+            XCTAssertEqual(hit?.pane, .general, query)
+        }
+    }
 }
