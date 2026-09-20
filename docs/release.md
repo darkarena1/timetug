@@ -3,12 +3,12 @@
 ## Cut a release
 1. Make sure `master` is green and `docs/manual-tests/macos-checklist.md` has been run.
 2. In GitHub, draft a new release (Releases > Draft a new release). Create a tag that starts with `v`, for example `v0.1.0`, on `master`, and write the title and notes. Saving the draft does nothing. Review it, then click **Publish release**.
-3. Publishing triggers the `Release` workflow (`release: published`; tags that do not start with `v`, such as `beta-*`, are ignored). Pushing a tag alone no longer triggers anything. The workflow builds the tag's commit, waits for your approval in the `release` environment, then signs and notarizes the app and DMG and uploads `TimeTug-<version>.dmg`, its `.sha256` and the Sparkle zip to the release you published. It does not touch your title or notes. Only after the upload does it add the item to the appcast (see "Publishing the stable update"). The version is the tag without the `v`.
+3. Publishing triggers the `Release` workflow (`release: published`; tags that do not start with `v`, such as `beta-*`, are ignored). Pushing a tag alone no longer triggers anything. The workflow checks out `refs/tags/<tag>` (qualified, so a branch with the same name cannot shadow it) and fails if HEAD is not the tag's commit. A `Validate the tag` step runs `compute-versions.sh stable` first, so a bad tag such as an uppercase `V1.2.3` fails before any build or secrets. It builds that commit, waits for your approval in the `release` environment, then signs and notarizes the app and DMG and uploads `TimeTug-<version>.dmg`, its `.sha256` and the Sparkle zip to the release you published. It does not touch your title or notes. Only after the upload does it add the item to the appcast (see "Publishing the stable update"). The version is the tag without the `v`.
 4. The release is visible without assets for the roughly 30 minutes the build takes, and the appcast item appears only after the assets are uploaded. Do not announce it until the workflow is green.
 
 Fallback: run the "Release" workflow from the Actions tab (`workflow_dispatch`, input `tag`). For an existing tag it builds that tag's commit and uploads to that release. For a new tag it builds the selected ref, creates the tag and the release (with generated notes). The commit must be on `master` either way.
 
-A tag with a `-` suffix (for example `v1.2.3-rc1`) is marked as a prerelease and goes to the `beta` channel of the appcast, not the stable feed. If the Apple secrets are missing, the workflow uploads an unsigned DMG, marks the release a prerelease and never adds it to the feed.
+A tag with a `-` suffix (for example `v1.2.3-rc1`), or a release you marked as a pre-release in the GitHub UI, goes to the `beta` channel of the appcast, not the stable feed (a `-` tag is also marked prerelease on GitHub). If the Apple secrets are missing, the workflow uploads an unsigned DMG, marks the release a prerelease and never adds it to the feed.
 
 ## Channels and versioning
 Installed apps update through Sparkle from one feed, `https://darkarena1.github.io/timetug/appcast.xml` (`SUFeedURL` in `Apps/macOS/project.yml`). Items in it are either stable or on the `beta` channel; a user sees beta items only after turning on Settings > General > Software Update > Beta updates.
@@ -20,8 +20,8 @@ Installed apps update through Sparkle from one feed, `https://darkarena1.github.
 
 - `<base>` is `CFBundleShortVersionString` in `Apps/macOS/project.yml`. Bump it by hand at the start of each release cycle. It is `0.0.0-dev` today, so bump it before the first real beta, or betas are labelled `0.0.0-dev-beta.N`.
 - `<run>` is the `Beta` workflow run number. It is a label only.
-- Sparkle orders updates by the build number, so it must always increase. A timestamp does: a stable release cut after a beta outranks it, and a newer beta outranks an older one. Seconds resolution means a beta and a release cannot collide. A commit hash has no order, and `GITHUB_RUN_NUMBER` is per workflow, so beta and release runs would collide. Both come from `scripts/ci/compute-versions.sh`; never bump the build number in the repo. Older 12-digit items in the feed still order correctly, because a 14-digit value is always larger.
-- A pre-release tag (a version containing `-`, e.g. `v1.2.3-rc1`) is published as a GitHub prerelease and goes to the beta channel in the appcast, never the stable feed. It counts toward the newest-5 beta window of the feed: its GitHub release is never auto-deleted (only `beta-<build>` releases are), but its feed entry ages out once five newer betas exist. `appcast.py add` refuses to replace an item with the same `sparkle:version` but a different download URL, so a build-number collision fails loudly; re-run the job.
+- Sparkle orders updates by the build number, so it must always increase. A timestamp does: a stable release cut after a beta outranks it, and a newer beta outranks an older one. Second resolution makes a beta and a release build-number collision very unlikely, not impossible. A commit hash has no order, and `GITHUB_RUN_NUMBER` is per workflow, so beta and release runs would collide. Both come from `scripts/ci/compute-versions.sh`; never bump the build number in the repo. Older 12-digit items in the feed still order correctly, because a 14-digit value is always larger.
+- A pre-release tag (a version containing `-`, e.g. `v1.2.3-rc1`) is published as a GitHub prerelease and goes to the beta channel in the appcast, never the stable feed. It counts toward the newest-5 beta window of the feed: its GitHub release is never auto-deleted (only `beta-<build>` releases are), but its feed entry ages out once five newer betas exist. `appcast.py add` refuses to replace an item with the same `sparkle:version` but a different download URL, so a build-number collision fails loudly; re-run the job. It does replace an item with the same download URL.
 
 ## How betas work
 Pull requests only build and run tests (`ci.yml`). They get no signing, no secrets and produce no artifact for the feed. A beta is built after a change is merged.
@@ -60,7 +60,7 @@ No SSH or deploy keys are needed: the workflows use `GITHUB_TOKEN` with `content
 ## Publishing the stable update
 With all six Apple secrets and `SPARKLE_PRIVATE_KEY` set, the `Release` workflow also zips the notarized app (`make-update-zip.sh`), EdDSA-signs it and uploads the zip to the release with the DMG. After the upload it adds the item to the appcast (the stable feed; the beta channel for a pre-release tag). Upload first, then appcast, for the same reason as betas. If `SPARKLE_PRIVATE_KEY` is missing while the Apple secrets exist, the workflow fails before building. An unsigned release (no Apple secrets) has no zip and never enters the update feed.
 
-The release workflow is not idempotent after the appcast step fails. Re-running a manual run for an existing tag builds the tag's commit again with a new build number and uploads with `--clobber`, so the assets that installed apps already know about are replaced by different bytes. Recovery:
+The release workflow is not idempotent after the appcast step fails. Re-running a manual run for an existing tag builds the tag's commit again with a new build number, uploads with `--clobber` (replacing the assets) and replaces the tag's appcast item (`appcast.py add` replaces an item with the same download URL), so no stale item is left behind. A same `sparkle:version` with a different URL is still an error. Recovery:
 - If only the appcast step failed, add the item by hand from a checkout of `master`, using the release's zip URL, its length in bytes and the `edSignature` (from the failed job's log, or re-sign the downloaded zip with `sign_update`):
   ```bash
   scripts/release/publish-appcast.sh "https://github.com/<owner>/<repo>.git" -- \
@@ -70,7 +70,7 @@ The release workflow is not idempotent after the appcast step fails. Re-running 
     --notes-url "https://github.com/<owner>/<repo>/releases/tag/v1.2.3"
   ```
   Add `--channel beta` for a pre-release. `<BUILD_NUMBER>` must be the value stamped into the shipped app (read `CFBundleVersion` from the app inside the uploaded zip), not a new one.
-- Otherwise fix the cause and re-run (`workflow_dispatch` with the existing tag). The new run builds new bytes and a new build number, replaces the assets and adds a new appcast item.
+- Otherwise fix the cause and re-run (`workflow_dispatch` with the existing tag). The new run builds new bytes with a new build number, replaces the assets and replaces the tag's appcast item.
 
 ## What the workflow does
 `scripts/ci/build-release.sh` archives the app in Release into `dist/TimeTug.app` (ad-hoc signed, hardened runtime). Both paths ship a drag-to-install DMG and run `scripts/release/verify-dmg.sh` on it before publishing.
@@ -98,7 +98,7 @@ scripts/release/verify-dmg.sh dist/TimeTug-*-unsigned.dmg
 `verify-dmg.sh` mounts the image read-only and checks the app executable, the `Applications` symlink, the hidden background, `.DS_Store`, the volume icon, and the stored icon positions and window size; it prints PASS or FAIL. It checks structure, not looks: open the DMG and follow `docs/manual-tests/macos-checklist.md` for the visual check.
 
 ## GitHub Actions secrets to add later
-Add these under Settings > Secrets and variables > Actions. Signing happens only when ALL six are set.
+Add these under Settings > Secrets and variables > Actions. Signing and notarizing a release happens only when ALL six are set (the `release` job). Betas are never notarized: they need only `MACOS_CERTIFICATE_P12_BASE64`, `MACOS_CERTIFICATE_PASSWORD`, `APPLE_TEAM_ID` and `SPARKLE_PRIVATE_KEY`, and skip when any of those four is missing.
 
 | Secret | Contents |
 | --- | --- |
@@ -143,7 +143,7 @@ Workflows use `runs-on: macos-26` (the hosted image with Xcode 26 or newer). If 
 - **`sign_update` fails or the workflow says it could not read edSignature.** `SPARKLE_PRIVATE_KEY` is missing, empty or not the key from `generate_keys -x`. The secret holds the file contents.
 - **The app rejects an update (signature error).** The private key that signed the zip does not match `SUPublicEDKey` in the installed app.
 - **A user is not offered a beta.** Beta updates is off (Settings > General); their installed build number is not lower than the beta's; the beta was pruned (only the newest 5 are kept); or the appcast step failed after the release was published (check the `Beta` run).
-- **A merge to `master` produced no beta.** Open the `Beta` run. A notice "A newer commit is on master" means a later commit got its own run. A notice "Signing secrets are not set" means one of the four secrets is missing or not visible to the workflow. No `Beta` run at all means CI on that push did not succeed.
-- **The `Beta` run fails before signing.** The commit is not on `master`, or `beta-<build number>` already exists (release or tag). These fail closed on purpose.
+- **A merge to `master` produced no beta.** Open the `Beta` run. A notice "A newer commit is on master" means a later commit got its own run. A notice "Signing secrets are not set" means one of the four secrets is missing or not visible to the workflow. No `Beta` run at all means CI on that push did not succeed. A `Beta` run can also show as cancelled: GitHub's `appcast` concurrency group keeps only one pending run, so a later CI completion (even a failed CI run) can cancel a queued beta run for an older commit. This is expected with the tip-only rule; the newest green tip still gets its beta.
+- **The `Beta` run fails.** Before building: the commit is not on `master`. After building and signing, at "Create and publish the prerelease": `beta-<build number>` already exists as a release or tag. These fail closed on purpose.
 - **To verify on the first real run after merging this pipeline:** that `workflow_run` fires the `Beta` workflow for `CI` runs on `master` pushes, and that the signing secrets are repository-scoped. `beta.yml` declares no environment, so secrets stored only in the `release` environment are not visible to it and it skips with a notice.
 - **A stable release fails at the appcast step.** See the recovery steps under "Publishing the stable update".
