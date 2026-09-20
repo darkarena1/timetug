@@ -20,6 +20,27 @@ A tag with a `-` suffix (for example `v1.2.3-rc1`), or a release you marked as a
 
 **Burned tag `v1.2.0`.** It was published, and locked, while immutable releases were on, with no assets; it cannot be reused. The next version is `v1.2.1` or higher.
 
+## Release rules
+These apply whenever a release is prepared, by hand or by Claude. They follow the format of the existing releases.
+
+- **Tag:** `v<version>`, e.g. `v1.3.0`. It must be new, on `master`, and higher than the newest stable tag.
+- **Title:** `TimeTug <version>`, e.g. `TimeTug 1.3.0` (the tag without the `v`).
+- **Notes:** a list of the changes since the previous stable release, in the format GitHub generates: a `## What's Changed` heading, one `* <PR title> by @<author> in <PR URL>` line per merged PR, then `**Full Changelog**: <compare URL>` from the previous stable tag to the new one. Do not add the DMG SHA-256 line; the workflow adds it.
+- **Flow:** the draft flow above. Save the draft with the tag, title and notes, then run the `Release` workflow with the `tag` input.
+- **Manual gate:** the only manual step is approving the deployment to the `release` environment. Claude may draft the release and start the run; it never approves.
+
+### Choosing the version
+Take the newest stable tag (`v*` with no suffix) as `X.Y.Z`, then:
+
+| Release kind | Rule | Example |
+| --- | --- | --- |
+| Default | increment Y, set Z to 0 | 1.0.0 -> 1.1.0, 1.3.1 -> 1.4.0 |
+| Major (a major shift, or you say "major release") | increment X, set Y and Z to 0 | 1.2.0 -> 2.0.0, 2.0.3 -> 3.0.0 |
+| Trivial (you say it is trivial) | increment Z only | 1.2.0 -> 1.2.1 |
+| Explicit version | use exactly what you specify; it overrides the rules above | |
+
+Never reuse a burned tag (see below).
+
 ## Channels and versioning
 Installed apps update through Sparkle from one feed, `https://darkarena1.github.io/timetug/appcast.xml` (`SUFeedURL` in `Apps/macOS/project.yml`). Items in it are either stable or on the `beta` channel; a user sees beta items only after turning on Settings > General > Software Update > Beta updates.
 
