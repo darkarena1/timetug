@@ -30,7 +30,9 @@ struct CalendarsPane: View {
     private var calendarList: some View {
         Group {
             if model.calendars.isEmpty {
-                Text("No calendars found. Check calendar access in System Settings.")
+                Text(settings.eventKitEnabled
+                     ? "No calendars found. Check calendar access in System Settings."
+                     : "No calendars to show. Turn on Apple Calendar or add an account in Accounts.")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

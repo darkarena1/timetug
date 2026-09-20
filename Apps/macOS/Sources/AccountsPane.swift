@@ -99,7 +99,7 @@ struct AccountsPane: View {
         HStack(spacing: 0) {
             Menu {
                 if accounts.availableKinds.isEmpty {
-                    Text("No account types are available in this build")
+                    Button("No account types are available in this build") {}.disabled(true)
                 }
                 ForEach(accounts.availableKinds, id: \.id) { kind in
                     Button(kind.displayName) { accounts.beginAddAccount(kindID: kind.id) }
