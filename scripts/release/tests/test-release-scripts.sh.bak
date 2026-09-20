@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# Tests release-state.sh and upload-release-assets.sh against a fake `gh` on PATH.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+mkdir "$T/bin"
+cat > "$T/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+# Records every call; `gh api --paginate .../releases` returns $FAKE_RELEASES.
+printf '%s\n' "$*" >> "$FAKE_LOG"
+if [ "${1:-}" = api ] && [ "${2:-}" = --paginate ]; then cat "$FAKE_RELEASES"; fi
+# Existing assets of a draft: `gh api repos/../releases/<id>/assets` returns $FAKE_ASSETS (default empty list).
+case "$*" in *"/assets" ) [ "${1:-}" = api ] && { cat "${FAKE_ASSETS:-/dev/null}" 2>/dev/null || echo '[]'; } ;; esac
+exit 0
+STUB
+chmod +x "$T/bin/gh"
+export PATH="$T/bin:$PATH" GITHUB_REPOSITORY=o/r FAKE_LOG="$T/log" FAKE_RELEASES="$T/releases.json"
+
+git init -q "$T/repo"; cd "$T/repo"
+git -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
+git tag v1.0.0   # a tag that exists locally
+printf 'dmg' > a.dmg; echo "abc123  a.dmg" > a.dmg.sha256
+
+# Two pages: the wanted releases are on the second page.
+cat > "$FAKE_RELEASES" <<'J'
+[{"id":1,"tag_name":"v0.9.0","draft":false,"immutable":true}]
+[{"id":42,"tag_name":"v1.1.0","draft":true,"immutable":false},
+ {"id":43,"tag_name":"v1.0.0","draft":true,"immutable":false},
+ {"id":44,"tag_name":"v0.8.0","draft":false,"immutable":true},
+ {"id":45,"tag_name":"v2.0.0-rc1","draft":true,"immutable":false},
+ {"id":46,"tag_name":"v0.7.0","draft":false,"immutable":false},
+ {"id":47,"tag_name":"v0.7.1-rc1","draft":false,"immutable":false},
+ {"id":48,"tag_name":"v0.6.0","draft":false},
+ {"id":49,"tag_name":"v1.3.0","draft":true,"immutable":false,"prerelease":true},
+ {"id":50,"tag_name":"v0.5.0","draft":false,"immutable":false,"prerelease":true}]
+J
+S="$ROOT/scripts/release/release-state.sh"; U="$ROOT/scripts/release/upload-release-assets.sh"
+reset() { : > "$FAKE_LOG"; }
+
+echo "=== release-state ===" >&2
+[ "$($S v3.0.0)" = none ] || fail "none"
+[ "$($S v1.1.0)" = draft ] || fail "draft with no git tag"
+[ "$($S v0.8.0)" = published-immutable ] || fail "immutable (page 2)"
+[ "$($S v0.9.0)" = published-immutable ] || fail "immutable (page 1)"
+[ "$($S v0.7.0)" = published ] || fail "published, not immutable"
+[ "$($S v0.6.0)" = published ] || fail "published, immutable field absent"
+[ "$($S --id v1.1.0)" = 42 ] || fail "id"
+[ "$($S --prerelease v1.3.0)" = true ] || fail "draft prerelease flag"
+[ "$($S --prerelease v0.5.0)" = true ] || fail "published prerelease flag"
+[ "$($S --prerelease v1.1.0)" = false ] || fail "draft, flag absent"
+[ "$($S --prerelease v3.0.0)" = false ] || fail "none -> false"
+echo "PASS" >&2
+
+echo "=== published-immutable: fails, no uploads ===" >&2
+reset
+out="$($U v0.8.0 deadbeef a.dmg 2>&1)" && fail "published should exit non-zero"
+grep -q "immutable release; use a new version\|cannot add assets to an immutable release" <<<"$out" || fail "message: $out"
+grep -q "POST\|PATCH\|release create" "$FAKE_LOG" && fail "made changes for published"
+echo "PASS" >&2
+
+echo "=== published (not immutable): gh release upload --clobber, no publish ===" >&2
+reset
+$U v0.7.0 deadbeef a.dmg a.dmg.sha256 >/dev/null
+grep -qF 'release upload v0.7.0 a.dmg a.dmg.sha256 --clobber' "$FAKE_LOG" || fail "upload: $(cat "$FAKE_LOG")"
+grep -q 'PATCH\|release create\|release edit\|--notes\|--title' "$FAKE_LOG" && fail "touched release: $(cat "$FAKE_LOG")"
+reset
+$U v0.7.1-rc1 deadbeef a.dmg >/dev/null
+grep -qF 'release edit v0.7.1-rc1 --prerelease' "$FAKE_LOG" || fail "suffix prerelease edit"
+reset
+RELEASE_PRERELEASE=1 $U v0.7.0 deadbeef a.dmg >/dev/null
+grep -qF 'release edit v0.7.0 --prerelease' "$FAKE_LOG" || fail "unsigned prerelease edit"
+echo "PASS" >&2
+
+echo "=== draft, tag missing: upload then PATCH with target_commitish ===" >&2
+reset
+$U v1.1.0 deadbeef a.dmg a.dmg.sha256 >/dev/null
+[ "$(grep -c 'method POST.*releases/42/assets?name=' "$FAKE_LOG")" = 2 ] || fail "two uploads"
+patch="$(grep 'method PATCH' "$FAKE_LOG")"
+grep -q 'releases/42' <<<"$patch" || fail "patch id: $patch"
+grep -q -- '-F draft=false' <<<"$patch" || fail "draft=false: $patch"
+grep -q 'target_commitish=deadbeef' <<<"$patch" || fail "target_commitish: $patch"
+grep -q 'make_latest=true' <<<"$patch" || fail "make_latest true: $patch"
+grep -q 'prerelease=false' <<<"$patch" || fail "prerelease false: $patch"
+[ "$(grep -n 'POST' "$FAKE_LOG" | tail -1 | cut -d: -f1)" -lt "$(grep -n PATCH "$FAKE_LOG" | cut -d: -f1)" ] || fail "upload before publish"
+grep -q 'title\|notes' <<<"$patch" && fail "must not touch title/notes"
+echo "PASS" >&2
+
+echo "=== draft re-run: same-name asset deleted before POST; other names kept ===" >&2
+reset
+echo '[{"id":900,"name":"a.dmg"},{"id":901,"name":"other.txt"}]' > "$T/assets.json"
+FAKE_ASSETS="$T/assets.json" $U v1.1.0 deadbeef a.dmg a.dmg.sha256 >/dev/null
+[ "$(grep -c 'method DELETE' "$FAKE_LOG")" = 1 ] || fail "one delete: $(cat "$FAKE_LOG")"
+grep -q 'method DELETE repos/o/r/releases/assets/900' "$FAKE_LOG" || fail "delete id 900"
+[ "$(grep -n 'DELETE' "$FAKE_LOG" | cut -d: -f1)" -lt "$(grep -n 'POST.*name=a.dmg$' "$FAKE_LOG" | cut -d: -f1)" ] || fail "delete before post"
+reset
+$U v1.1.0 deadbeef a.dmg >/dev/null
+grep -q DELETE "$FAKE_LOG" && fail "delete without matching asset"
+echo "PASS" >&2
+
+echo "=== asset name is percent-encoded in the upload URL ===" >&2
+reset
+printf x > "$T/a+b c.zip"
+$U v1.1.0 deadbeef "$T/a+b c.zip" >/dev/null
+grep -qF 'assets?name=a%2Bb%20c.zip' "$FAKE_LOG" || fail "encoding: $(cat "$FAKE_LOG")"
+echo "PASS" >&2
+
+echo "=== draft, tag exists: no target_commitish ===" >&2
+reset
+$U v1.0.0 deadbeef a.dmg >/dev/null
+grep 'method PATCH' "$FAKE_LOG" | grep -q target_commitish && fail "target_commitish set for existing tag"
+echo "PASS" >&2
+
+echo "=== draft, suffixed version: prerelease, not latest ===" >&2
+reset
+$U v2.0.0-rc1 deadbeef a.dmg >/dev/null
+patch="$(grep 'method PATCH' "$FAKE_LOG")"
+grep -q 'prerelease=true' <<<"$patch" || fail "prerelease true: $patch"
+grep -q 'make_latest=false' <<<"$patch" || fail "make_latest false: $patch"
+echo "PASS" >&2
+
+echo "=== draft, unsigned (RELEASE_PRERELEASE=1) ===" >&2
+reset
+RELEASE_PRERELEASE=1 $U v1.1.0 deadbeef a.dmg >/dev/null
+grep 'method PATCH' "$FAKE_LOG" | grep -q 'prerelease=true' || fail "unsigned prerelease"
+echo "PASS" >&2
+
+echo "=== DRY_PUBLISH=1: uploads, no PATCH ===" >&2
+reset
+DRY_PUBLISH=1 $U v1.1.0 deadbeef a.dmg >/dev/null
+grep -q 'method POST' "$FAKE_LOG" || fail "no upload"
+grep -q PATCH "$FAKE_LOG" && fail "patched under DRY_PUBLISH"
+echo "PASS" >&2
+
+echo "=== none: gh release create ===" >&2
+reset
+$U v3.0.0 deadbeef a.dmg a.dmg.sha256 >/dev/null
+c="$(grep 'release create' "$FAKE_LOG")"
+for want in 'create v3.0.0 a.dmg a.dmg.sha256' '--title TimeTug 3.0.0' '--target deadbeef' '--generate-notes' '--notes SHA-256: abc123'; do
+  grep -qF -- "$want" <<<"$c" || fail "missing '$want' in: $c"
+done
+grep -q -- '--prerelease' <<<"$c" && fail "stable must not be prerelease"
+echo "PASS" >&2
+
+echo "=== none, suffixed / unsigned ===" >&2
+reset
+$U v3.0.0-rc1 deadbeef a.dmg >/dev/null
+grep 'release create' "$FAKE_LOG" | grep -q -- '--prerelease' || fail "suffixed prerelease"
+reset
+RELEASE_PRERELEASE=1 RELEASE_TITLE_SUFFIX=" (unsigned)" RELEASE_NOTES_PREFIX="Unsigned build." $U v3.0.0 deadbeef a.dmg a.dmg.sha256 >/dev/null
+c="$(grep 'release create' "$FAKE_LOG")"
+grep -q -- '--prerelease' <<<"$c" || fail "unsigned prerelease"
+grep -qF -- 'TimeTug 3.0.0 (unsigned)' <<<"$c" || fail "unsigned title: $c"
+grep -qF -- 'Unsigned build. SHA-256: abc123' <<<"$c" || fail "unsigned notes: $c"
+echo "PASS" >&2
+echo "ALL PASS"
