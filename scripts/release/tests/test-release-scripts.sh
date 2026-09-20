@@ -23,11 +23,14 @@ printf 'dmg' > a.dmg; echo "abc123  a.dmg" > a.dmg.sha256
 
 # Two pages: the wanted releases are on the second page.
 cat > "$FAKE_RELEASES" <<'J'
-[{"id":1,"tag_name":"v0.9.0","draft":false}]
-[{"id":42,"tag_name":"v1.1.0","draft":true},
- {"id":43,"tag_name":"v1.0.0","draft":true},
- {"id":44,"tag_name":"v0.8.0","draft":false},
- {"id":45,"tag_name":"v2.0.0-rc1","draft":true}]
+[{"id":1,"tag_name":"v0.9.0","draft":false,"immutable":true}]
+[{"id":42,"tag_name":"v1.1.0","draft":true,"immutable":false},
+ {"id":43,"tag_name":"v1.0.0","draft":true,"immutable":false},
+ {"id":44,"tag_name":"v0.8.0","draft":false,"immutable":true},
+ {"id":45,"tag_name":"v2.0.0-rc1","draft":true,"immutable":false},
+ {"id":46,"tag_name":"v0.7.0","draft":false,"immutable":false},
+ {"id":47,"tag_name":"v0.7.1-rc1","draft":false,"immutable":false},
+ {"id":48,"tag_name":"v0.6.0","draft":false}]
 J
 S="$ROOT/scripts/release/release-state.sh"; U="$ROOT/scripts/release/upload-release-assets.sh"
 reset() { : > "$FAKE_LOG"; }
@@ -35,16 +38,31 @@ reset() { : > "$FAKE_LOG"; }
 echo "=== release-state ===" >&2
 [ "$($S v3.0.0)" = none ] || fail "none"
 [ "$($S v1.1.0)" = draft ] || fail "draft with no git tag"
-[ "$($S v0.8.0)" = published ] || fail "published (page 2)"
-[ "$($S v0.9.0)" = published ] || fail "published (page 1)"
+[ "$($S v0.8.0)" = published-immutable ] || fail "immutable (page 2)"
+[ "$($S v0.9.0)" = published-immutable ] || fail "immutable (page 1)"
+[ "$($S v0.7.0)" = published ] || fail "published, not immutable"
+[ "$($S v0.6.0)" = published ] || fail "published, immutable field absent"
 [ "$($S --id v1.1.0)" = 42 ] || fail "id"
 echo "PASS" >&2
 
-echo "=== published: fails, no uploads ===" >&2
+echo "=== published-immutable: fails, no uploads ===" >&2
 reset
 out="$($U v0.8.0 deadbeef a.dmg 2>&1)" && fail "published should exit non-zero"
-grep -q "already published and immutable" <<<"$out" || fail "message: $out"
+grep -q "immutable release; use a new version\|cannot add assets to an immutable release" <<<"$out" || fail "message: $out"
 grep -q "POST\|PATCH\|release create" "$FAKE_LOG" && fail "made changes for published"
+echo "PASS" >&2
+
+echo "=== published (not immutable): gh release upload --clobber, no publish ===" >&2
+reset
+$U v0.7.0 deadbeef a.dmg a.dmg.sha256 >/dev/null
+grep -qF 'release upload v0.7.0 a.dmg a.dmg.sha256 --clobber' "$FAKE_LOG" || fail "upload: $(cat "$FAKE_LOG")"
+grep -q 'PATCH\|release create\|release edit\|--notes\|--title' "$FAKE_LOG" && fail "touched release: $(cat "$FAKE_LOG")"
+reset
+$U v0.7.1-rc1 deadbeef a.dmg >/dev/null
+grep -qF 'release edit v0.7.1-rc1 --prerelease' "$FAKE_LOG" || fail "suffix prerelease edit"
+reset
+RELEASE_PRERELEASE=1 $U v0.7.0 deadbeef a.dmg >/dev/null
+grep -qF 'release edit v0.7.0 --prerelease' "$FAKE_LOG" || fail "unsigned prerelease edit"
 echo "PASS" >&2
 
 echo "=== draft, tag missing: upload then PATCH with target_commitish ===" >&2

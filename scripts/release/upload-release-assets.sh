@@ -3,7 +3,9 @@
 #
 # GitHub immutable releases lock assets and the tag once a release is PUBLISHED, so assets can only be
 # added while it is a draft. Behaviour by state (see release-state.sh):
-#   published  exit 1: the release is immutable and cannot take assets; use a new version.
+#   published-immutable  exit 1: an immutable release cannot take assets; use a new version.
+#   published  `gh release upload --clobber`; title, notes and published state untouched (a `-` suffix
+#              or RELEASE_PRERELEASE=1 also runs `gh release edit --prerelease`).
 #   draft      upload every file to the draft, then publish it (draft=false). The owner's title and
 #              notes are left untouched. If the git tag does not exist yet, target_commitish is set to
 #              <commit> so publishing creates the tag at the built commit. make_latest is true only for
@@ -34,9 +36,13 @@ if [[ "$VERSION" == *-* || "${RELEASE_PRERELEASE:-}" == 1 ]]; then PRERELEASE=tr
 
 STATE="$("$HERE/release-state.sh" "$TAG")"
 case "$STATE" in
-  published)
-    echo "::error::release $TAG is already published and immutable; assets cannot be added; use a new version"
+  published-immutable)
+    echo "::error::release $TAG is published and immutable; cannot add assets to an immutable release; use a new version"
     exit 1 ;;
+  published)
+    # Not immutable: attach the assets; title, notes and published state stay as the owner left them.
+    gh release upload "$TAG" "$@" --clobber
+    if [ "$PRERELEASE" = true ]; then gh release edit "$TAG" --prerelease; fi ;;
   draft)
     ID="$("$HERE/release-state.sh" --id "$TAG")"
     for f in "$@"; do
@@ -47,6 +53,10 @@ case "$STATE" in
     if [ "${DRY_PUBLISH:-}" = 1 ]; then
       echo "DRY_PUBLISH=1: assets uploaded, not publishing release $TAG (id $ID)"
       exit 0
+    fi
+    # Keep a prerelease flag the owner set on the draft.
+    if [ "$(gh api "repos/${GITHUB_REPOSITORY}/releases/${ID}" --jq .prerelease 2>/dev/null || true)" = true ]; then
+      PRERELEASE=true; LATEST=false
     fi
     args=(-F draft=false -F "prerelease=$PRERELEASE" -f "make_latest=$LATEST")
     if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then

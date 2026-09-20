@@ -1,13 +1,19 @@
-# Release workflow. The repository has GitHub IMMUTABLE RELEASES enabled: once a release is published its
-# assets and tag are locked, so assets can only be attached while it is a DRAFT (or supplied when the release
-# is created). The flow is therefore:
-#   1. The owner drafts a release in the GitHub UI for a NEW tag (title and notes are theirs), saves it as a
-#      DRAFT and never clicks Publish. Drafts fire no release events.
-#   2. The owner runs this workflow: `workflow_dispatch` with the `tag` input, or pushes the `v*` tag.
-#   3. It fails at once if that tag is already published (scripts/release/release-state.sh), then builds the
-#      tag's commit, uploads the assets to the draft and publishes it (scripts/release/upload-release-assets.sh),
-#      which also creates the git tag at the built commit if it did not exist. With no draft, it creates the
-#      release itself with generated notes.
+# Release workflow. Two ways to cut a release; the owner writes the title and notes in the GitHub UI either way:
+#   1. Save a DRAFT release for a new `v*` tag (do not publish) and run this workflow manually
+#      (workflow_dispatch with the `tag` input). Drafts fire no release events, so a saved draft does nothing
+#      by itself. The workflow builds, uploads the assets to the draft and publishes it, creating the tag at
+#      the built commit if needed.
+#   2. PUBLISH the release in the UI (`release: published`, tags starting with `v`). The workflow then builds
+#      the tag's commit and attaches the assets to the published release; the release is visible without
+#      assets for the roughly 30 minutes the build takes.
+# There is no tag-push trigger: publishing a release in the UI creates the tag and would fire both.
+# With no release at all, a manual run creates it with generated notes. Releases for other tags (for example
+# beta-*) are ignored.
+#
+# Immutable releases: if the repository's GitHub "immutable releases" setting is on, a published release's
+# assets and tag are locked and nothing can be uploaded to it (upload fails with HTTP 422). Only the draft
+# flow can work then. The setting is currently OFF. An early step (scripts/release/release-state.sh) fails the
+# run immediately when the tag is published AND immutable, instead of after a 30 minute build.
 #
 # One macOS job builds the app in Release (scripts/ci/build-release.sh), then:
 #   - With ALL Apple signing secrets set (see docs/release.md): signs, notarizes and staples the app,
@@ -21,12 +27,12 @@
 name: Release
 
 on:
-  push:
-    tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag, e.g. v0.1.0 (a new tag: draft its release in the UI first; never publish it by hand)'
+        description: 'Release tag, e.g. v0.1.0 (created from the selected commit if it does not exist; a saved draft release for it is used)'
         required: true
         type: string
 
@@ -39,25 +45,28 @@ jobs:
     # Requires approval from the repository owner (Settings > Environments > release) and only
     # runs for master or v* tags.
     environment: release
+    # startsWith is case-insensitive in expressions (so an uppercase V passes here); the "Validate the tag"
+    # step below is case-sensitive and fails such a tag before any signing or build work.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'v')
     env:
-      TAG: ${{ inputs.tag || github.ref_name }}
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
         with:
-          # The tag itself for a tag push (github.ref is already qualified, so a branch named like the tag
-          # cannot shadow it); the selected commit for a manual run.
-          ref: ${{ github.event_name == 'push' && github.ref || github.sha }}
+          # The tag's commit for a published release; the selected ref for a manual run.
+          # Qualified so a branch named like the tag cannot shadow it.
+          ref: ${{ github.event.release.tag_name && format('refs/tags/{0}', github.event.release.tag_name) || github.sha }}
           fetch-depth: 0
       - name: Validate the tag
         run: scripts/ci/compute-versions.sh stable "$TAG" >/dev/null
-      - name: Refuse an already published release
+      - name: Refuse an immutable published release
         run: |
-          # Published releases are immutable: fail now instead of after a 30 minute build.
+          # Assets cannot be added to a published immutable release: fail now, not after a 30 minute build.
           STATE="$(scripts/release/release-state.sh "$TAG")"
           echo "Release state for $TAG: $STATE"
-          if [ "$STATE" = published ]; then
-            echo "::error::release $TAG is already published and immutable; assets cannot be added; use a new version"
+          if [ "$STATE" = published-immutable ]; then
+            echo "::error::release $TAG is published and immutable; cannot add assets to an immutable release; use a new version"
             exit 1
           fi
       - name: Build the tag's commit when the tag exists
@@ -76,7 +85,7 @@ jobs:
             echo "::error::Releases can only be cut from commits on master; $COMMIT is not."
             exit 1
           fi
-          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$COMMIT" != "$(git rev-parse "refs/tags/$TAG^{commit}")" ]; then
+          if [ "$GITHUB_EVENT_NAME" = release ] && [ "$COMMIT" != "$(git rev-parse "refs/tags/$TAG^{commit}")" ]; then
             echo "::error::Checked-out commit $COMMIT is not the commit of tag $TAG."
             exit 1
           fi
@@ -140,6 +149,7 @@ jobs:
         if: steps.signing.outputs.has_signing == 'true'
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           VERSION="$(cat dist/version.txt)"
           ZIP="dist/TimeTug-${VERSION}.zip"
@@ -152,7 +162,7 @@ jobs:
           SIG_VALUE="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<<"$SIG")"
           [ -n "$SIG_VALUE" ] || { echo "::error::could not read edSignature from sign_update output"; exit 1; }
           UPDATE_CHANNEL=""
-          if [[ "$VERSION" == *-* ]]; then UPDATE_CHANNEL=beta; fi
+          if [[ "$VERSION" == *-* || "$RELEASE_PRERELEASE" == true ]]; then UPDATE_CHANNEL=beta; fi
           echo "UPDATE_ZIP=$ZIP" >> "$GITHUB_ENV"
           echo "UPDATE_SIGNATURE=$SIG_VALUE" >> "$GITHUB_ENV"
           echo "UPDATE_LENGTH=$(stat -f%z "$ZIP")" >> "$GITHUB_ENV"

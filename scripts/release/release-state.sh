@@ -2,7 +2,8 @@
 # Prints the state of the GitHub release for a tag in $GITHUB_REPOSITORY: exactly one of
 #   none       no release has this tag_name
 #   draft      a draft release has it (assets can still be attached)
-#   published  a published release has it (immutable: assets and tag are locked)
+#   published  a published release has it (assets can still be added unless it is immutable)
+#   published-immutable  a published release whose `immutable` field is true (assets and tag are locked)
 # Looks at ALL releases including drafts. A draft created in the UI for a tag that does not exist yet
 # still carries that tag_name (there is just no git tag), so the tag_name is what is matched.
 #
@@ -18,7 +19,7 @@ TAG="${1:?usage: release-state.sh [--id] <tag>}"
 
 # --paginate prints one JSON array per page; jq reads the stream.
 row="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" \
-  | jq -r --arg t "$TAG" '.[] | select(.tag_name == $t) | "\(.id) \(.draft)"' | head -n 1)"
+  | jq -r --arg t "$TAG" '.[] | select(.tag_name == $t) | "\(.id) \(.draft) \(.immutable // false)"' | head -n 1)"
 
 if [ "$mode" = id ]; then
   echo "${row%% *}"
@@ -26,6 +27,7 @@ if [ "$mode" = id ]; then
 fi
 case "$row" in
   "") echo none ;;
-  *" true") echo draft ;;
+  *" true "*) echo draft ;;
+  *" true") echo published-immutable ;;
   *) echo published ;;
 esac
