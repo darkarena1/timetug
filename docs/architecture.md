@@ -8,7 +8,7 @@ Read `docs/superpowers/specs/2026-09-18-timetug-core-design.md` for the full des
   `DayAgenda`, `TakeoverRequest`, `TakeoverSettings` (including `disabled`), `WidgetSnapshot` and `WidgetTimeline` (widget data and entry dates, ADR 0010). Note: `additionalCalendarKeys` tracks when a meeting
   appears on multiple opted-in calendars so takeover opt-in on any calendar counts.
 - `Packages/EventKitSource`: Apple Calendar adapter. Only place EventKit is imported.
-- `Packages/CalendarConnectors`: portable calendar connector library (ADR 0012); not yet used by the app.
+- `Packages/CalendarConnectors`: portable calendar connector library (ADR 0012); the app uses it through `Packages/CalendarBridge` (event mapping and source adapters), with `Packages/CalendarApple` supplying the Keychain credential store and loopback OAuth. It also holds `AllDay` and the file-backed connection and sync-state stores. Google needs an OAuth client from a git-ignored xcconfig (see `AGENTS.md`).
 - `Packages/AppleIntelligenceInference`: Apple on-device model adapter for duplicate detection (macOS 26+, compile-guarded). Only place with Foundation Models imports.
 - `Apps/macOS`: menu bar item, popover, overlay windows, settings, wiring (`AppCoordinator`).
 - `Apps/macOS/Widgets`: WidgetKit extension (Next Up, Today, macOS 26 controls) that reads the app-written snapshot from the App Group; `Apps/macOS/Shared` holds the code compiled into both targets (ADR 0010).

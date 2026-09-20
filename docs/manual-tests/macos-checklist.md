@@ -19,7 +19,7 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Declined, solo, all-day and non-opted-in events never take over.
 - [ ] Menu bar modes: icon only, next meeting (long titles truncated), countdown only.
 - [ ] Launch at login toggle works.
-- [ ] Settings sidebar order is General, Calendars, Tug Rules; General has "Software Update" (first), "App", "Shortcut", "Menu bar" and "Appearance" (last) sections.
+- [ ] Settings sidebar order is General, Accounts, Calendars, Tug Rules; General has "Software Update" (first), "App", "Shortcut", "Menu bar" and "Appearance" (last) sections.
 - [ ] Left-click popup: it is only as tall as its content (one event = short popup; many events scroll the list under a fixed header, max about 520 pt); light and dark both look right.
 - [ ] Popup header shows the weekday, the date and "N meetings left" ("No meetings today" when empty, with the puppy empty state); the gear button opens Settings.
 - [ ] Event cards use the real calendar colors; the current meeting shows a "Now" pill and a progress bar; the next meeting has the blue border and an orange "in 3h 40m" countdown; finished meetings stay readable.
@@ -81,3 +81,13 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Each of the three controls (Skip All Day Events, Use Intelligence, Disable Tug) flips the matching Settings toggle and behaves as expected (Disable Tug: no takeover fires while on).
 - [ ] Toggling each setting in Settings updates the matching control in Control Center.
 - [ ] An ad-hoc build runs normally, with no widgets loading and no crash.
+- [ ] Settings > Accounts lists "Apple Calendar (this Mac)" with an enable checkbox and a `+ −` bar. Turning the checkbox off removes the Apple calendars from Calendars and the popup; turning it back on restores them with their Tug/Show choices intact.
+- [ ] With Calendar access denied in System Settings, the Apple Calendar row says "Calendar access is off" and "Open System Settings" opens the Calendars privacy pane.
+- [ ] (Needs the Google client) `+` > Google opens the browser; after signing in the account appears with its email as status "Connected" and its calendars appear in Calendars under that email. Cancel during "Waiting for your browser…" leaves nothing behind.
+- [ ] Adding a second Google account works; adding the same account again says it is already added and leaves no extra Keychain item.
+- [ ] Select an account and `−`, confirm: its calendars and their Tug/Show choices disappear, the Keychain item (service com.timetug.app.credentials) is gone, and relaunching does not bring it back.
+- [ ] Relaunch: Google accounts reconnect with no browser and no prompt.
+- [ ] Revoke TimeTug at myaccount.google.com/permissions: within a minute the account shows "Sign in again"; clicking it and signing in as the same account restores it and edits made in Google appear within about a minute (the change listener restarted). Signing in as a different account is refused.
+- [ ] Edit an event's title in Google Calendar: the popup shows the new title within about a minute.
+- [ ] An all-day event created in Google in another time zone (for example a Tokyo calendar) appears on the same calendar date in the popup here, and an Apple all-day event created in another zone still appears on its date.
+- [ ] A meeting present in both Apple Calendar and a direct Google account merges into one popup entry.
