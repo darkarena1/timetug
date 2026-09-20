@@ -164,6 +164,40 @@ class AppcastTests(unittest.TestCase):
         self.assertEqual(len(it), 1)
         self.assertEqual(it[0].find("sparkle:shortVersionString", NS).text, "b")
 
+    def _add_url(self, version, url, sig, channel=None):
+        args = ["add", "--file", self.path, "--title", "t", "--version", str(version), "--short", "1",
+                "--url", url, "--length", "1", "--signature", sig, "--min-system", "14.0"]
+        if channel:
+            args += ["--channel", channel]
+        return run(*args)
+
+    def test_add_same_url_different_version_replaces(self):
+        u = "https://example.com/TimeTug-1.2.3.zip"
+        self.assertEqual(self._add_url(20260919143005, u, "OLD==").returncode, 0)
+        self.assertEqual(self._add_url(20260919150000, u, "NEW==").returncode, 0)
+        it = items(self.path)
+        self.assertEqual(len(it), 1)
+        self.assertEqual(version(it[0]), "20260919150000")
+        self.assertEqual(it[0].find("enclosure").get("{%s}edSignature" % NS["sparkle"]), "NEW==")
+
+    def test_add_same_version_different_url_still_errors(self):
+        self.assertEqual(self._add_url(5, "https://example.com/a.zip", "A==").returncode, 0)
+        r = self._add_url(5, "https://example.com/b.zip", "B==")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(len(items(self.path)), 1)
+
+    def test_add_orders_14_digit_stable_above_12_digit_beta(self):
+        add(self.path, 202609191430, channel="beta")
+        add(self.path, 20260919143005)
+        self.assertEqual([version(i) for i in items(self.path)], ["20260919143005", "202609191430"])
+
+    def test_add_later_stable_sorts_above_earlier_betas(self):
+        add(self.path, 20260919143001, channel="beta")
+        add(self.path, 20260919143002, channel="beta")
+        add(self.path, 20260919143003)
+        self.assertEqual([version(i) for i in items(self.path)],
+                         ["20260919143003", "20260919143002", "20260919143001"])
+
     def _append_raw(self, version_text, channel_text, enclosure=True):
         tree = ET.parse(self.path)
         channel = tree.getroot().find("channel")

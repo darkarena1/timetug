@@ -52,7 +52,9 @@ def cmd_add(a):
         enc = old.find("enclosure")
         if enc is None or enc.get("url") != a.url:
             sys.exit(f"error: sparkle:version {a.version} already exists with a different enclosure url")
-    for old in same:
+    same_url = [i for i in channel.findall("item")
+                if i.find("enclosure") is not None and i.find("enclosure").get("url") == a.url]
+    for old in {id(x): x for x in same + same_url}.values():
         channel.remove(old)
     item = ET.Element("item")
     ET.SubElement(item, "title").text = a.title
