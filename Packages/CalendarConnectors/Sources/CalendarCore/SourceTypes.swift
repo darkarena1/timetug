@@ -33,6 +33,8 @@ public enum SourceError: Error, Sendable, Equatable {
 }
 
 public enum CalendarChange: Equatable, Sendable {
+    /// The calendar set changed. Consumers must reload the calendar list AND events; event changes detected in the
+    /// same check are not reported separately.
     case calendarsChanged
     /// nil calendar ids mean the scope is unknown.
     case eventsChanged(calendarIDs: Set<String>?)

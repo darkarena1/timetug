@@ -109,7 +109,6 @@ public final class GoogleCalendarSource: PollingCalendarSource {
         }
         await syncState.setToken(setKey, for: connectionID, scope: Self.calendarSetScope)
 
-        if previousKey == nil { return nil } // first call: baseline only
         if setChanged { return .calendarsChanged }
         return changed.isEmpty ? nil : .eventsChanged(calendarIDs: changed)
     }

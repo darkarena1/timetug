@@ -81,6 +81,7 @@ private func routes(_ transport: FakeTransport, email: String = "me@x.com", refr
     let store = InMemoryCredentialStore()
     let interaction = FakeInteraction()
     await #expect(throws: SourceError.self) { try await kind(transport).authorize(using: interaction, credentials: store) }
+    #expect(await store.isEmpty)
     #expect(await interaction.recorder.closeCount == 1)
 }
 

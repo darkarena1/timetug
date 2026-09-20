@@ -24,6 +24,15 @@ private func bootstrapRoutes(_ h: Harness, meToken: String = "m1", teamToken: St
     #expect(!url.contains("timeMin") && !url.contains("syncToken"))
 }
 
+@Test func aRetryAfterAPartlyFailedFirstCallStillReportsRealChanges() async throws {
+    // A first call bootstrapped calendar "me" then failed before the calendar-set key was written.
+    let sync = InMemorySyncStateStore()
+    await sync.setToken("m1", for: "c1", scope: "me@x.com")
+    let h = try await Harness(calendarList: listJSON(["me@x.com"]), sync: sync)
+    await h.transport.route("syncToken=m1", [.json(["items": [["id": "e1"]], "nextSyncToken": "m2"])])
+    #expect(try await h.source.checkForChanges() == .eventsChanged(calendarIDs: ["me@x.com"]))
+}
+
 @Test func bootstrapWalksEveryPageAndTakesTheLastToken() async throws {
     let h = try await Harness()
     await h.transport.route(team, [.json(["items": [], "nextSyncToken": "t1"])])
