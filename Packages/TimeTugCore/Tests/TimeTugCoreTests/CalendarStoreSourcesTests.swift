@@ -67,3 +67,15 @@ actor GateSource: CalendarSource {
     await store.setSources([gate])
     #expect(await store.setInferenceEnabled(false, now: now).events.isEmpty)
 }
+
+@Test func aRemovedThenReAddedSourceShowsNothingUntilItsNextRefresh() async {
+    let a = FakeSource(id: "a"), b = FakeSource(id: "b")
+    await b.set(events: .success([makeEvent("2", title: "Other", start: "2026-09-18T12:00:00Z")]))
+    let store = CalendarStore(sources: [a, b], calendar: utcCalendar)
+    _ = await store.refresh(now: now, leadTime: 60)
+    await store.setSources([a])
+    await store.setSources([a, b])
+    let snapshot = await store.setInferenceEnabled(false, now: now)
+    #expect(snapshot.events.isEmpty)
+    #expect(snapshot.statuses["b"] == nil)
+}
