@@ -57,8 +57,10 @@ FRAMEWORK="$APP_PATH/Contents/Frameworks/Sparkle.framework"
 if [ -d "$FRAMEWORK" ]; then
   while IFS= read -r xpc; do sign --preserve-metadata=entitlements "$xpc"; done \
     < <(find "$FRAMEWORK" -name '*.xpc' -type d)
-  [ -f "$FRAMEWORK/Versions/B/Autoupdate" ] && sign "$FRAMEWORK/Versions/B/Autoupdate"
-  [ -d "$FRAMEWORK/Versions/B/Updater.app" ] && sign "$FRAMEWORK/Versions/B/Updater.app"
+  [ -f "$FRAMEWORK/Versions/B/Autoupdate" ] || { echo "error: $FRAMEWORK/Versions/B/Autoupdate not found (Sparkle layout changed?)" >&2; exit 1; }
+  [ -d "$FRAMEWORK/Versions/B/Updater.app" ] || { echo "error: $FRAMEWORK/Versions/B/Updater.app not found (Sparkle layout changed?)" >&2; exit 1; }
+  sign "$FRAMEWORK/Versions/B/Autoupdate"
+  sign "$FRAMEWORK/Versions/B/Updater.app"
   sign "$FRAMEWORK"
 else
   echo "warning: Sparkle.framework not found in the app; signing without it" >&2
