@@ -27,6 +27,8 @@ jobs:
       - name: Build
         run: scripts/ci/build-release.sh
       - name: Pack app
+        env:
+          COPYFILE_DISABLE: '1'   # no AppleDouble ._ members; the publish job rejects anything outside TimeTug.app/
         run: tar -cf dist/TimeTug.tar -C dist TimeTug.app
       - uses: actions/upload-artifact@v4
         with:

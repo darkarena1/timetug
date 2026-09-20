@@ -1,6 +1,7 @@
 # Signs and publishes the beta built by beta-build.yml. Runs from the DEFAULT branch: it never checks out
 # or executes pull-request code; the downloaded app is treated as untrusted input. Version and build
-# number are read back from the app's plist and validated, not taken from artifact metadata.
+# number are computed by the trusted compute-versions.sh from workflow_run fields and stamped into the
+# plists; nothing is taken from the artifact except the app bytes.
 name: Beta publish
 
 on:
@@ -61,11 +62,17 @@ jobs:
           if gh release view "beta-${BUILD_NUMBER}" >/dev/null 2>&1; then
             echo "::error::release beta-${BUILD_NUMBER} already exists"; exit 1
           fi
+          if git ls-remote --exit-code --tags origin "refs/tags/beta-${BUILD_NUMBER}" >/dev/null 2>&1; then
+            echo "::error::tag beta-${BUILD_NUMBER} already exists"; exit 1
+          fi
           echo "VERSION=$APP_VERSION" >> "$GITHUB_ENV"
           echo "BUILD=$BUILD_NUMBER" >> "$GITHUB_ENV"
           for PLIST in dist/TimeTug.app/Contents/Info.plist dist/TimeTug.app/Contents/PlugIns/TimeTugWidgets.appex/Contents/Info.plist; do
             /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$PLIST"
             /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$PLIST"
+            [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")" = "$APP_VERSION" ] \
+              && [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")" = "$BUILD_NUMBER" ] \
+              || { echo "::error::stamped version mismatch in $PLIST"; exit 1; }
           done
       - name: Sign with Developer ID (no notarization)
         env:
