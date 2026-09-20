@@ -25,7 +25,7 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Event cards use the real calendar colors; the current meeting shows a "Now" pill and a progress bar; the next meeting has the blue border and an orange "in 3h 40m" countdown; finished meetings stay readable.
 - [ ] The Join button on the next or current meeting (labelled Zoom / Google Meet / Teams / etc.) opens the link and closes the popup.
 - [ ] Popup footer shows the lead time ("Tugs you 1 min before", "Tugs you at start").
-- [ ] Right-click the menu bar icon: About TimeTug (own window, follows Light/Dark), separator, Settings…, separator, Quit. The About window shows logo, version and Done.
+- [ ] Right-click the menu bar icon: About TimeTug (own window, follows Light/Dark), Check for Updates…, separator, Settings…, separator, Quit TimeTug. The About window shows logo, version and Done.
 - [ ] Appearance Auto/Light/Dark changes Settings, the popover and the About window; Auto follows the OS setting (the takeover overlay stays dark).
 - [ ] Settings > General > Appearance > Popup cards: switch Glass / Frosted / Solid and open the popup: cards change live; with Reduce Transparency on the cards are solid.
 - [ ] About window is readable in both Light and Dark appearance (logo lockup, tagline pill, version, Done).

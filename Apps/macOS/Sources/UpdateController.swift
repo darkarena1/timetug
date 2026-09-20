@@ -47,6 +47,14 @@ final class UpdateController: ObservableObject {
     }
 }
 
+/// Inert updater for the XCTest host, so the test run never starts live Sparkle.
+final class NoOpUpdater: UpdaterDriving {
+    var automaticallyChecksForUpdates = false
+    var lastUpdateCheckDate: Date? { nil }
+    var onUpdateCycleFinished: (() -> Void)?
+    func checkForUpdates() {}
+}
+
 /// Production updater: Sparkle's standard controller with our channel policy.
 final class SparkleUpdater: NSObject, UpdaterDriving, SPUUpdaterDelegate {
     private let includeBetas: () -> Bool

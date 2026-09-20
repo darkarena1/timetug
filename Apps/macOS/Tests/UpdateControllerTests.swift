@@ -23,6 +23,20 @@ final class UpdateControllerTests: XCTestCase {
         UpdateController(driver: driver, defaults: defaults ?? freshDefaults(), currentVersion: "0.2.0")
     }
 
+    func testNoOpUpdaterDoesNothing() {
+        let updater = NoOpUpdater()
+        XCTAssertFalse(updater.automaticallyChecksForUpdates)
+        XCTAssertNil(updater.lastUpdateCheckDate)
+        updater.checkForUpdates()
+        updater.automaticallyChecksForUpdates = true
+        XCTAssertTrue(updater.automaticallyChecksForUpdates)
+        var finished = false
+        updater.onUpdateCycleFinished = { finished = true }
+        XCTAssertNotNil(updater.onUpdateCycleFinished)
+        XCTAssertFalse(finished)
+        XCTAssertNil(updater.lastUpdateCheckDate)
+    }
+
     func testBetasOffByDefault() {
         XCTAssertFalse(make().includeBetas)
     }

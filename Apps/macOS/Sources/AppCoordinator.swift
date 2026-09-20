@@ -19,7 +19,9 @@ final class AppCoordinator {
     let model = AppModel()
     let navigation = SettingsNavigation()
     let updates = UpdateController(
-        driver: SparkleUpdater(includeBetas: { UserDefaults.standard.bool(forKey: UpdateController.betaKey) }),
+        driver: ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+            ? SparkleUpdater(includeBetas: { UserDefaults.standard.bool(forKey: UpdateController.betaKey) })
+            : NoOpUpdater(),
         currentVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?")
 
     private let eventKit = EventKitSource()
