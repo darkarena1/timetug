@@ -61,36 +61,44 @@ else
 fi
 
 WORK="$(mktemp -d)"
-KEYCHAIN="$WORK/signing.keychain-db"
-KEYCHAIN_PASSWORD="$(uuidgen)"
-ORIGINAL_KEYCHAINS="$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')"
 
-cleanup() {
+if [ "$MODE" = dmg ]; then
+  # `dmg` mode signs with the certificate itself, so it needs the temporary keychain. `app` mode
+  # leaves all key handling to sign-app.sh, so no second unlocked keychain holds the key while
+  # notarizing.
+  KEYCHAIN="$WORK/signing.keychain-db"
+  KEYCHAIN_PASSWORD="$(uuidgen)"
+  ORIGINAL_KEYCHAINS="$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')"
+
+  cleanup() {
+    # shellcheck disable=SC2086
+    security list-keychains -d user -s $ORIGINAL_KEYCHAINS >/dev/null 2>&1 || true
+    security delete-keychain "$KEYCHAIN" >/dev/null 2>&1 || true
+    rm -rf "$WORK"
+  }
+  trap cleanup EXIT
+
+  # 1. Import the certificate into a temporary keychain.
+  echo "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$WORK/cert.p12"
+  security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+  security set-keychain-settings -lut 21600 "$KEYCHAIN"
+  security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+  security import "$WORK/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERTIFICATE_PASSWORD" \
+    -T /usr/bin/codesign -T /usr/bin/security >/dev/null
+  security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
   # shellcheck disable=SC2086
-  security list-keychains -d user -s $ORIGINAL_KEYCHAINS >/dev/null 2>&1 || true
-  security delete-keychain "$KEYCHAIN" >/dev/null 2>&1 || true
-  rm -rf "$WORK"
-}
-trap cleanup EXIT
+  security list-keychains -d user -s "$KEYCHAIN" $ORIGINAL_KEYCHAINS
 
-# 1. Import the certificate into a temporary keychain.
-echo "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$WORK/cert.p12"
-security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-security set-keychain-settings -lut 21600 "$KEYCHAIN"
-security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-security import "$WORK/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERTIFICATE_PASSWORD" \
-  -T /usr/bin/codesign -T /usr/bin/security >/dev/null
-security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
-# shellcheck disable=SC2086
-security list-keychains -d user -s "$KEYCHAIN" $ORIGINAL_KEYCHAINS
-
-IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" \
-  | sed -n "s/.*\"\(Developer ID Application: .*(${APPLE_TEAM_ID})\)\".*/\1/p" | head -n 1)"
-if [ -z "$IDENTITY" ]; then
-  echo "error: no 'Developer ID Application' identity for team $APPLE_TEAM_ID in the certificate" >&2
-  exit 1
+  IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" \
+    | sed -n "s/.*\"\(Developer ID Application: .*(${APPLE_TEAM_ID})\)\".*/\1/p" | head -n 1)"
+  if [ -z "$IDENTITY" ]; then
+    echo "error: no 'Developer ID Application' identity for team $APPLE_TEAM_ID in the certificate" >&2
+    exit 1
+  fi
+  echo "Signing with: $IDENTITY"
+else
+  trap 'rm -rf "$WORK"' EXIT
 fi
-echo "Signing with: $IDENTITY"
 
 echo "$NOTARY_API_KEY_P8_BASE64" | base64 --decode > "$WORK/AuthKey.p8"
 notarize() { # notarize <file>: submit and wait; fail loudly unless Apple accepts it
