@@ -11,7 +11,7 @@ Status: draft for review. Phase 1 (the portable `Packages/CalendarConnectors` li
 
 ## Non-goals
 
-Write support (Phase 3), Microsoft (Phase 4), CalDAV/iCloud-direct, webhook push, iOS, any UI beyond the Accounts pane and the existing Calendars tab. Shipping a Google OAuth client inside release builds is a separate follow-up (see "OAuth client configuration").
+Removing the bridge by making `TimeTugCore` use the library's types directly (planned as **Phase 2.5**, after this phase lands: it needs a dependency-free model target split out of `CalendarCore` so Core does not pick up swift-crypto, a `TimeTugCalendarEvent` that wraps the library event plus `sourceID` and merge state, and zone-aware all-day handling inside Core), write support (Phase 3), Microsoft (Phase 4), CalDAV/iCloud-direct, webhook push, iOS, any UI beyond the Accounts pane and the existing Calendars tab. Shipping a Google OAuth client inside release builds is a separate follow-up (see "OAuth client configuration").
 
 ## Global constraints
 
