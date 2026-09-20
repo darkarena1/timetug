@@ -13,7 +13,7 @@ struct OverlayView: View {
     private enum Field { case join, dismiss }
     @FocusState private var focus: Field?
 
-    private var event: CalendarEvent { request.event }
+    private var event: TimeTugCalendarEvent { request.event }
 
     var body: some View {
         ZStack {

@@ -65,12 +65,12 @@ struct PopupRowModel: Identifiable, Equatable {
     }
 
     /// Distinct events (by content) among the merged copies, in first-appearance order.
-    private static func distinctMembers(_ e: CalendarEvent) -> [MergedMember] {
+    private static func distinctMembers(_ e: TimeTugCalendarEvent) -> [MergedMember] {
         var seen = Set<String>()
         return e.mergedMembers.filter { seen.insert($0.contentKey).inserted }
     }
 
-    private static func mergeSummary(_ e: CalendarEvent) -> String? {
+    private static func mergeSummary(_ e: TimeTugCalendarEvent) -> String? {
         let distinct = distinctMembers(e).count
         guard distinct > 1 else { return nil }
         if let badge = MergeBadge.text(e.mergeProvenance) { return "\(badge) \u{00B7} \(distinct) events" }
@@ -79,7 +79,7 @@ struct PopupRowModel: Identifiable, Equatable {
 
     private static let tooltipLimit = 120
 
-    private static func mergeTooltip(_ e: CalendarEvent) -> String? {
+    private static func mergeTooltip(_ e: TimeTugCalendarEvent) -> String? {
         let distinct = distinctMembers(e)
         guard distinct.count > 1 else { return nil }
         let text = distinct.map(\.title).joined(separator: " + ")
@@ -106,7 +106,7 @@ struct MergedMemberRow: Identifiable, Equatable {
     let isShown: Bool
     let members: [MergedMember]
 
-    static func rows(for event: CalendarEvent, calendars: [CalendarInfo],
+    static func rows(for event: TimeTugCalendarEvent, calendars: [CalendarInfo],
                      locale: Locale = .current, timeZone: TimeZone = .current) -> [MergedMemberRow] {
         let byKey = Dictionary(calendars.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
         var order: [String] = []

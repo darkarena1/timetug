@@ -18,11 +18,11 @@ The exact title+time merge misses real duplicates ("Scott: Doctor" vs "Intermoun
 
 - Grouping is three literal phases: (1) identical items, (2) those groups by the other rules and learned `same` lessons, (3) model verdicts between groups, one request per pair of groups. Phases 1 and 2 are uncapped; hard blocks (rule `.separate`, learned `different`) hold at every phase across all members.
 - The model is asked once per pair of groups, from the richest copy of each (ties: earliest index), so identical copies cannot get different answers. The request fingerprint excludes calendar keys. The prompt carries rule-computed facts (offsets, overlap, detail fields, no conflicts) and calendar titles but never account names; its instructions say a missing detail is not a mismatch and give worked examples.
-- A merged event displays the longer copy's time range (`CalendarEvent.displayStart`, read through `shownStart`). Its tug time (`start`, which everything schedules on) is the start of the copy carrying a conference link, else the start of the longer copy.
+- A merged event displays the longer copy's time range (`TimeTugCalendarEvent.displayStart`, read through `shownStart`). Its tug time (`start`, which everything schedules on) is the start of the copy carrying a conference link, else the start of the longer copy.
 
 - Merged cards expand to show each merged event (title, calendar, own time; `MergedMember` carries `start`/`end`). Copies with the same `contentKey` are listed once ("×N"), and a group whose members are all identical copies is presented as one plain event (no summary, list or "Unmerge all"; Core still keeps every member for the ledger). A per-row **Split off** (`CalendarStore.separate(_:from:now:)`) records `different` lessons between each of the row's copies and every participant outside the row, so a wrong event can be split off without undoing the rest; the card-level action is **Unmerge all**. Lessons key on normalized title plus calendar, so two copies with the same title on the same calendar cannot be told apart and are separated together.
 
 ## Consequences
-- `CalendarEvent` gained attendees, organizer, external UID and merge data; EventKit supplies them (emails are often missing).
+- `TimeTugCalendarEvent` gained attendees, organizer, external UID and merge data; EventKit supplies them (emails are often missing).
 - A wrong AI merge is visible (badge) and reversible in one click.
 - Other platforms add an adjudicator package; Core stays portable.

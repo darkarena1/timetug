@@ -199,21 +199,21 @@ final class AppCoordinator {
         await resolvePending()
     }
 
-    func unmerge(_ event: CalendarEvent) {
+    func unmerge(_ event: TimeTugCalendarEvent) {
         Task { @MainActor in
             apply(await store.unmerge(event, now: Date()))
             await persistDedup()
         }
     }
 
-    func separate(_ event: CalendarEvent, members: [MergedMember]) {
+    func separate(_ event: TimeTugCalendarEvent, members: [MergedMember]) {
         Task { @MainActor in
             apply(await store.separate(members, from: event, now: Date()))
             await persistDedup()
         }
     }
 
-    func merge(_ a: CalendarEvent, _ b: CalendarEvent) {
+    func merge(_ a: TimeTugCalendarEvent, _ b: TimeTugCalendarEvent) {
         Task { @MainActor in
             apply(await store.merge(a, b, now: Date()))
             await persistDedup()
@@ -255,7 +255,7 @@ final class AppCoordinator {
 
     /// Always checks the ledger and the current calendar snapshot BEFORE showing anything: the
     /// event captured when the timer was armed may be stale.
-    private func fire(_ event: CalendarEvent) {
+    private func fire(_ event: TimeTugCalendarEvent) {
         let now = Date()
         let decision = TakeoverGuard.evaluate(
             event: event, currentEvents: snapshot.events, settings: settings.takeover,
@@ -329,7 +329,7 @@ final class AppCoordinator {
     /// Settings' "Test tug" button: a sample event that never touches the ledger.
     func fireTest() {
         let now = Date()
-        let sample = CalendarEvent(
+        let sample = TimeTugCalendarEvent(
             sourceEventID: "test", sourceID: "test", calendarID: "test", title: "Sample meeting",
             start: now.addingTimeInterval(settings.takeover.leadTime),
             end: now.addingTimeInterval(settings.takeover.leadTime + 1800),

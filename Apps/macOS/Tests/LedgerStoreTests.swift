@@ -9,9 +9,9 @@ final class LedgerStoreTests: XCTestCase {
         return dir.appendingPathComponent("nested/takeover-ledger.json")
     }
 
-    private func event(_ id: String = "e1") -> CalendarEvent {
+    private func event(_ id: String = "e1") -> TimeTugCalendarEvent {
         let start = Date(timeIntervalSince1970: 1_800_000_000)
-        return CalendarEvent(sourceEventID: id, sourceID: "s", calendarID: "c", title: "Standup",
+        return TimeTugCalendarEvent(sourceEventID: id, sourceID: "s", calendarID: "c", title: "Standup",
                              start: start, end: start.addingTimeInterval(1800))
     }
 

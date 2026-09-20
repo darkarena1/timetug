@@ -3,7 +3,7 @@
 Read `docs/superpowers/specs/2026-09-18-timetug-core-design.md` for the full design. This is the map.
 
 ## Modules
-- `Packages/TimeTugCore`: pure Swift. `CalendarEvent` model, `CalendarSource` protocol, `CalendarStore`
+- `Packages/TimeTugCore`: pure Swift. `TimeTugCalendarEvent` model, `CalendarSource` protocol, `CalendarStore`
   (merge/dedupe/last-good), duplicate rules, resolver, lessons and the adjudicator interface (ADR 0009), `TakeoverPolicy`, `TakeoverLedger` + `Scheduler`, `ConferenceLinkDetector`,
   `DayAgenda`, `TakeoverRequest`, `TakeoverSettings` (including `disabled`), `WidgetSnapshot` and `WidgetTimeline` (widget data and entry dates, ADR 0010). Note: `additionalCalendarKeys` tracks when a meeting
   appears on multiple opted-in calendars so takeover opt-in on any calendar counts.

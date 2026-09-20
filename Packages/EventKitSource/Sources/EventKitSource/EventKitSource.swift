@@ -35,7 +35,7 @@ public final class EventKitSource: CalendarSource, @unchecked Sendable {
         return String(format: "#%02X%02X%02X", v[0], v[1], v[2])
     }
 
-    public func events(in interval: DateInterval) async throws -> [CalendarEvent] {
+    public func events(in interval: DateInterval) async throws -> [TimeTugCalendarEvent] {
         try requireAccess()
         let predicate = store.predicateForEvents(withStart: interval.start, end: interval.end, calendars: nil)
         return store.events(matching: predicate).map(map)
@@ -56,7 +56,7 @@ public final class EventKitSource: CalendarSource, @unchecked Sendable {
         }
     }
 
-    private func map(_ event: EKEvent) -> CalendarEvent {
+    private func map(_ event: EKEvent) -> TimeTugCalendarEvent {
         let attendees = event.attendees ?? []
         let me = attendees.first { $0.isCurrentUser }
         let status: ResponseStatus
@@ -67,7 +67,7 @@ public final class EventKitSource: CalendarSource, @unchecked Sendable {
         case .pending: status = .pending
         default: status = .unknown
         }
-        return CalendarEvent(
+        return TimeTugCalendarEvent(
             sourceEventID: event.eventIdentifier ?? event.calendarItemIdentifier,
             sourceID: id,
             calendarID: event.calendar.calendarIdentifier,

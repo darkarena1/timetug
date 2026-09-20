@@ -8,11 +8,11 @@ enum TakeoverLog {
     private static let logger = Logger(subsystem: "com.timetug.app", category: "takeover")
 
     /// Why a takeover is shown: "lead time", "late after wake", "snooze expired".
-    static func presented(reason: String, event: CalendarEvent) {
+    static func presented(reason: String, event: TimeTugCalendarEvent) {
         logger.info("present (\(reason, privacy: .public)) id=\(event.id, privacy: .public) title=\(event.title, privacy: .private)")
     }
 
-    static func suppressed(_ reason: TakeoverGuard.Reason, event: CalendarEvent) {
+    static func suppressed(_ reason: TakeoverGuard.Reason, event: TimeTugCalendarEvent) {
         logger.info("suppress (\(reason.rawValue, privacy: .public)) id=\(event.id, privacy: .public) title=\(event.title, privacy: .private)")
     }
 

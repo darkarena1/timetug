@@ -13,7 +13,7 @@ final class AppModel: ObservableObject {
     /// State of the optional on-device duplicate finder, for the Calendars pane.
     @Published var inferenceStatus: InferenceStatus = .disabled
     /// Look-alike events kept separate (event id -> others), for the popup's manual "Merge".
-    @Published var candidates: [String: [CalendarEvent]] = [:]
+    @Published var candidates: [String: [TimeTugCalendarEvent]] = [:]
     /// How the popup cards are drawn; mirrors the setting.
     @Published var popupCardStyle: PopupCardStyle = .defaultStyle
 }

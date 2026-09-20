@@ -1,7 +1,7 @@
 import Foundation
 
 public struct CalendarSnapshot: Sendable {
-    public let events: [CalendarEvent]
+    public let events: [TimeTugCalendarEvent]
     public let calendars: [CalendarInfo]
     /// Keyed by `CalendarSource.id`.
     public let statuses: [String: SourceStatus]
@@ -9,10 +9,10 @@ public struct CalendarSnapshot: Sendable {
     public let sourceNames: [String: String]
     public let fetchedAt: Date
     /// Look-alike events kept separate (event id -> other events), for a manual "Merge".
-    public let candidates: [String: [CalendarEvent]]
+    public let candidates: [String: [TimeTugCalendarEvent]]
 
-    public init(events: [CalendarEvent], calendars: [CalendarInfo], statuses: [String: SourceStatus],
-                sourceNames: [String: String], fetchedAt: Date, candidates: [String: [CalendarEvent]] = [:]) {
+    public init(events: [TimeTugCalendarEvent], calendars: [CalendarInfo], statuses: [String: SourceStatus],
+                sourceNames: [String: String], fetchedAt: Date, candidates: [String: [TimeTugCalendarEvent]] = [:]) {
         self.events = events
         self.calendars = calendars
         self.statuses = statuses
@@ -51,7 +51,7 @@ public actor CalendarStore {
 
     private let sources: [any CalendarSource]
     private let calendar: Calendar
-    private var lastEvents: [String: [CalendarEvent]] = [:]
+    private var lastEvents: [String: [TimeTugCalendarEvent]] = [:]
     private var lastCalendars: [String: [CalendarInfo]] = [:]
     private var statuses: [String: SourceStatus] = [:]
 
@@ -82,7 +82,7 @@ public actor CalendarStore {
         let window = fetchWindow(now: now, leadTime: leadTime)
 
         let results = await withTaskGroup(
-            of: (String, Result<([CalendarInfo], [CalendarEvent]), Error>).self
+            of: (String, Result<([CalendarInfo], [TimeTugCalendarEvent]), Error>).self
         ) { group in
             for source in sources {
                 group.addTask {
@@ -95,7 +95,7 @@ public actor CalendarStore {
                     }
                 }
             }
-            var collected: [(String, Result<([CalendarInfo], [CalendarEvent]), Error>)] = []
+            var collected: [(String, Result<([CalendarInfo], [TimeTugCalendarEvent]), Error>)] = []
             for await result in group { collected.append(result) }
             return collected
         }
@@ -161,7 +161,7 @@ public actor CalendarStore {
 
     /// The user says this merged event is not one meeting: remember every pair of its participants.
     /// `LessonBook.record` skips same-calendar pairs unless they are exact duplicates.
-    public func unmerge(_ event: CalendarEvent, now: Date) -> CalendarSnapshot {
+    public func unmerge(_ event: TimeTugCalendarEvent, now: Date) -> CalendarSnapshot {
         let parts = event.participants
         for (index, a) in parts.enumerated() {
             for b in parts[(index + 1)...] { lessons.record(a, b, decision: .different, now: now) }
@@ -172,7 +172,7 @@ public actor CalendarStore {
     /// The user says these copies of a merged event are not the same meeting as the rest: remember a "different"
     /// lesson between each given copy and every other participant not in `members`. Pairs among the given
     /// copies are not recorded, so they stay together.
-    public func separate(_ members: [MergedMember], from event: CalendarEvent, now: Date) -> CalendarSnapshot {
+    public func separate(_ members: [MergedMember], from event: TimeTugCalendarEvent, now: Date) -> CalendarSnapshot {
         let chosen = Set(members.map { "\($0.calendarKey)|\($0.contentKey)" })
         let rest = event.participants.filter { !chosen.contains("\($0.calendarKey)|\($0.contentKey)") }
         for member in members {
@@ -182,7 +182,7 @@ public actor CalendarStore {
     }
 
     /// The user says these two displayed events are one meeting.
-    public func merge(_ a: CalendarEvent, _ b: CalendarEvent, now: Date) -> CalendarSnapshot {
+    public func merge(_ a: TimeTugCalendarEvent, _ b: TimeTugCalendarEvent, now: Date) -> CalendarSnapshot {
         for x in a.participants { for y in b.participants { lessons.record(x, y, decision: .same, now: now) } }
         return makeSnapshot(now: now)
     }

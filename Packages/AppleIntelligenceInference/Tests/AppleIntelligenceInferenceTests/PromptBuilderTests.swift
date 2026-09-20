@@ -8,7 +8,7 @@ private func event(_ title: String, location: String? = nil, notes: String? = ni
     var info: CalendarInfo?
     if let calendar { info = CalendarInfo(sourceID: "s", calendarID: "c", title: calendar, accountName: account) }
     let start = Date(timeIntervalSince1970: 1_800_000_000)
-    let source = CalendarEvent(
+    let source = TimeTugCalendarEvent(
         sourceEventID: "1", sourceID: "s", calendarID: "c", title: title, start: start,
         end: start.addingTimeInterval(3600), location: location, notes: notes,
         attendees: names.map { Attendee(name: $0, email: "\($0)@example.com") })

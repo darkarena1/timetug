@@ -4,7 +4,7 @@
 
 ## Context
 
-The full-screen takeover sometimes appeared for a meeting that already had one, or that no longer qualified. Five causes: (1) the ledger of fired/snoozed events was in memory only, so every relaunch made in-progress meetings fire again; (2) `AppCoordinator.fire` trusted the event captured when its timer was armed, so a deleted, moved, declined or opted-out meeting still took over; (3) identity was `CalendarEvent.id`, and EventKit's `eventIdentifier` can change after an edit or sync; (4) a second timer firing while an overlay was visible replaced it, losing the first meeting; (5) a cold launch fired "Started N min ago" for meetings the user was already in.
+The full-screen takeover sometimes appeared for a meeting that already had one, or that no longer qualified. Five causes: (1) the ledger of fired/snoozed events was in memory only, so every relaunch made in-progress meetings fire again; (2) `AppCoordinator.fire` trusted the event captured when its timer was armed, so a deleted, moved, declined or opted-out meeting still took over; (3) identity was `TimeTugCalendarEvent.id`, and EventKit's `eventIdentifier` can change after an edit or sync; (4) a second timer firing while an overlay was visible replaced it, losing the first meeting; (5) a cold launch fired "Started N min ago" for meetings the user was already in.
 
 ## Decision
 
