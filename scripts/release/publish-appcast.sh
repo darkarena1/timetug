@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Add an item to appcast.xml on the gh-pages branch of <remote> and push. Never force-pushes: a rejected
-# push is fetched, rebased and retried (bounded). Serialise callers with the `appcast` concurrency group.
+# push is fetched, rebased and retried (bounded). Beta runs share the `appcast` concurrency group; release runs
+# do not (a shared group could cancel a queued release), so they rely on this fetch/reset/retry loop.
 # Usage: publish-appcast.sh <remote> [--keep-betas N] -- <appcast.py add args, without --file>
 # Prints the enclosure URL of every pruned beta, one per line (stdout); progress goes to stderr.
 set -euo pipefail

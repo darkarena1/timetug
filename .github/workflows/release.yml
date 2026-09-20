@@ -45,6 +45,11 @@ jobs:
     # Requires approval from the repository owner (Settings > Environments > release) and only
     # runs for master or v* tags.
     environment: release
+    # Serialises two runs for the same tag (for example a UI publish plus a manual dispatch). Not the
+    # `appcast` group: sharing it lets GitHub cancel a queued release run when betas queue behind it.
+    concurrency:
+      group: release-${{ github.event.release.tag_name || inputs.tag }}
+      cancel-in-progress: false
     # startsWith is case-insensitive in expressions (so an uppercase V passes here); the "Validate the tag"
     # step below is case-sensitive and fails such a tag before any signing or build work.
     if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'v')

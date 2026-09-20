@@ -6,7 +6,8 @@
 #   published-immutable  exit 1: an immutable release cannot take assets; use a new version.
 #   published  `gh release upload --clobber`; title, notes and published state untouched (a `-` suffix
 #              or RELEASE_PRERELEASE=1 also runs `gh release edit --prerelease`).
-#   draft      upload every file to the draft, then publish it (draft=false). The owner's title and
+#   draft      upload every file to the draft (an existing asset of the same name is deleted first, so a
+#              re-run recovers a stuck draft), then publish it (draft=false). The owner's title and
 #              notes are left untouched. If the git tag does not exist yet, target_commitish is set to
 #              <commit> so publishing creates the tag at the built commit. make_latest is true only for
 #              a version without a `-` suffix; a `-` suffix (or RELEASE_PRERELEASE=1) is a prerelease.
@@ -46,8 +47,16 @@ case "$STATE" in
   draft)
     ID="$("$HERE/release-state.sh" --id "$TAG")"
     for f in "$@"; do
+      NAME="$(basename "$f")"
+      # A re-run: replace an asset of the same name left by an earlier attempt.
+      gh api --paginate "repos/${GITHUB_REPOSITORY}/releases/${ID}/assets" \
+        | jq -r --arg n "$NAME" '.[] | select(.name == $n) | .id' \
+        | while read -r aid; do
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/${aid}" >/dev/null
+          done
       echo "Uploading $f to draft release $TAG (id $ID)"
-      gh api --method POST "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${ID}/assets?name=$(basename "$f")" \
+      ENC="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$NAME")"
+      gh api --method POST "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${ID}/assets?name=${ENC}" \
         -H "Content-Type: application/octet-stream" --input "$f" >/dev/null
     done
     if [ "${DRY_PUBLISH:-}" = 1 ]; then

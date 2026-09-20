@@ -93,7 +93,7 @@ echo '[{"id":900,"name":"a.dmg"},{"id":901,"name":"other.txt"}]' > "$T/assets.js
 FAKE_ASSETS="$T/assets.json" $U v1.1.0 deadbeef a.dmg a.dmg.sha256 >/dev/null
 [ "$(grep -c 'method DELETE' "$FAKE_LOG")" = 1 ] || fail "one delete: $(cat "$FAKE_LOG")"
 grep -q 'method DELETE repos/o/r/releases/assets/900' "$FAKE_LOG" || fail "delete id 900"
-[ "$(grep -n 'DELETE' "$FAKE_LOG" | cut -d: -f1)" -lt "$(grep -n 'POST.*name=a.dmg -H' "$FAKE_LOG" | cut -d: -f1)" ] || fail "delete before post"
+[ "$(grep -n 'DELETE' "$FAKE_LOG" | cut -d: -f1)" -lt "$(grep -n 'POST.*name=a.dmg$' "$FAKE_LOG" | cut -d: -f1)" ] || fail "delete before post"
 reset
 $U v1.1.0 deadbeef a.dmg >/dev/null
 grep -q DELETE "$FAKE_LOG" && fail "delete without matching asset"
