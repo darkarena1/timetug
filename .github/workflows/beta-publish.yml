@@ -88,9 +88,12 @@ jobs:
           scripts/release/make-update-zip.sh dist/TimeTug.app "$ZIP"
           BIN="$(scripts/release/fetch-sparkle-tools.sh "$RUNNER_TEMP/sparkle")"
           KEY="$RUNNER_TEMP/sparkle.key"; umask 077
+          trap 'rm -f "$KEY"' EXIT
           printf '%s' "$SPARKLE_PRIVATE_KEY" > "$KEY"
           SIG="$("$BIN/sign_update" --ed-key-file "$KEY" "$ZIP")"; rm -f "$KEY"
-          echo "SIGNATURE=$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<<"$SIG")" >> "$GITHUB_ENV"
+          SIG_VALUE="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<<"$SIG")"
+          [ -n "$SIG_VALUE" ] || { echo "::error::could not read edSignature from sign_update output"; exit 1; }
+          echo "SIGNATURE=$SIG_VALUE" >> "$GITHUB_ENV"
           echo "LENGTH=$(stat -f%z "$ZIP")" >> "$GITHUB_ENV"
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
       - name: Create and publish the prerelease

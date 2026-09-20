@@ -4,7 +4,8 @@
 #   - With ALL Apple signing secrets set (see docs/release.md): signs, notarizes and staples the app,
 #     builds TimeTug-<version>.dmg, then signs, notarizes and staples the DMG too, and publishes a
 #     normal GitHub Release. That release also carries the Sparkle update zip (built from the notarized
-#     app, EdDSA-signed), and only after the release is published is the stable item added to the appcast.
+#     app, EdDSA-signed), and only after the release is published is the item added to the appcast (stable feed; a suffixed
+#     tag such as v1.2.3-rc1 is a prerelease routed to the beta channel).
 #   - Without them: builds TimeTug-<version>-unsigned.dmg and publishes a PRERELEASE.
 # An unsigned release never enters the update feed (no zip, no appcast item).
 # Both paths run scripts/release/verify-dmg.sh on the DMG before publishing.
@@ -104,11 +105,17 @@ jobs:
           scripts/release/make-update-zip.sh dist/TimeTug.app "$ZIP"
           BIN="$(scripts/release/fetch-sparkle-tools.sh "$RUNNER_TEMP/sparkle")"
           KEY="$RUNNER_TEMP/sparkle.key"; umask 077
+          trap 'rm -f "$KEY"' EXIT
           printf '%s' "$SPARKLE_PRIVATE_KEY" > "$KEY"
           SIG="$("$BIN/sign_update" --ed-key-file "$KEY" "$ZIP")"; rm -f "$KEY"
+          SIG_VALUE="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<<"$SIG")"
+          [ -n "$SIG_VALUE" ] || { echo "::error::could not read edSignature from sign_update output"; exit 1; }
+          UPDATE_CHANNEL=""
+          if [[ "$VERSION" == *-* ]]; then UPDATE_CHANNEL=beta; fi
           echo "UPDATE_ZIP=$ZIP" >> "$GITHUB_ENV"
-          echo "UPDATE_SIGNATURE=$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<<"$SIG")" >> "$GITHUB_ENV"
+          echo "UPDATE_SIGNATURE=$SIG_VALUE" >> "$GITHUB_ENV"
           echo "UPDATE_LENGTH=$(stat -f%z "$ZIP")" >> "$GITHUB_ENV"
+          echo "UPDATE_CHANNEL=$UPDATE_CHANNEL" >> "$GITHUB_ENV"
       - name: Verify DMG
         if: steps.signing.outputs.has_signing == 'true'
         run: |
@@ -127,20 +134,25 @@ jobs:
         if: steps.signing.outputs.has_signing == 'true'
         run: |
           VERSION="$(cat dist/version.txt)"
+          EXTRA=()
+          if [ "$UPDATE_CHANNEL" = beta ]; then EXTRA+=(--prerelease); fi
           gh release create "$TAG" \
             "dist/TimeTug-${VERSION}.dmg" "dist/TimeTug-${VERSION}.dmg.sha256" "$UPDATE_ZIP" \
+            "${EXTRA[@]}" \
             --title "TimeTug ${VERSION}" --target "$GITHUB_SHA" --generate-notes \
             --notes "SHA-256: $(cut -d' ' -f1 "dist/TimeTug-${VERSION}.dmg.sha256")"
-      - name: Add stable item to the appcast
+      - name: Add item to the appcast
         if: steps.signing.outputs.has_signing == 'true'
         run: |
           VERSION="$(cat dist/version.txt)"
           URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/$(basename "$UPDATE_ZIP")"
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          CHANNEL_ARGS=()
+          if [ "$UPDATE_CHANNEL" = beta ]; then CHANNEL_ARGS+=(--channel beta); fi
           scripts/release/publish-appcast.sh "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" -- \
             --title "TimeTug ${VERSION}" --version "$BUILD_NUMBER" --short "$VERSION" --url "$URL" \
-            --length "$UPDATE_LENGTH" --signature "$UPDATE_SIGNATURE" --min-system 14.0
+            --length "$UPDATE_LENGTH" --signature "$UPDATE_SIGNATURE" --min-system 14.0 "${CHANNEL_ARGS[@]}"
       - name: Publish unsigned prerelease
         if: steps.signing.outputs.has_signing != 'true'
         run: |
