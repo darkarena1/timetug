@@ -1040,7 +1040,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Create: `Packages/EventKitSource/Tests/EventKitSourceTests/{EventKitMappingTests,EventKitConnectorKindTests}.swift`
 
 **Interfaces:**
-- Consumes: `CalendarCore` (`CalendarSource`, `CalendarEvent`, `CalendarDescriptor`, `CalendarChange`, `SourceError`, `ConnectorKind`, `Connection`, `Platform`, `AuthorizationMethod`, `Attendee`, `ResponseStatus`, `AttendeeRole`, `AllDay`).
+- Consumes: `CalendarCore` (`CalendarSource`, `CalendarEvent`, `CalendarDescriptor`, `CalendarChange`, `SourceError`, `ConnectorKind`, `Connection`, `Platform`, `AuthorizationMethod`, `Attendee`, `ResponseStatus`, `AttendeeRole`). EventKit's all-day rule (floating dates, end-of-day `endDate`) is its own function, not `AllDay`.
 - Produces:
   - `public final class EventKitSource: CalendarCore.CalendarSource` with `public static let sourceID = "eventkit"`, `public func requestAccess() async -> Bool`
   - `public struct EventKitConnectorKind: ConnectorKind` (`kindID "eventkit"`, `.macOS`, `.system`), `public static let connection: Connection`, `init(source: EventKitSource = EventKitSource())`
@@ -1619,7 +1619,7 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
         listener.newConnectionHandler = { [weak session] connection in session?.accept(connection) }
         let port: UInt16 = try await withCheckedThrowingContinuation { continuation in
             let once = Once()
-            listener.stateDidChange = { state in
+            listener.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
                     if let raw = listener.port?.rawValue { once.run { continuation.resume(returning: raw) } }
@@ -1804,7 +1804,7 @@ final class SourceReconcilerTests: XCTestCase {
     private func makeReconciler(failing: Set<ConnectionID> = []) -> SourceReconciler {
         SourceReconciler(
             buildAccount: { [unowned self] c in
-                if failing.contains(c.connectionID) { throw SourceError.authExpired }
+                if failing.contains(c.connectionID) { throw TimeTugCore.SourceError.authExpired }
                 let s = FakeCoreSource(id: c.sourceID)   // library rule: google source id == Connection.sourceID
                 built[c.connectionID] = s
                 return s
@@ -1976,7 +1976,7 @@ import XCTest
 @testable import TimeTug
 
 private struct NoInteraction: AuthorizationInteraction {
-    func beginOAuthRedirect() async throws -> any OAuthRedirectSession { throw SourceError.invalidResponse("unused") }
+    func beginOAuthRedirect() async throws -> any OAuthRedirectSession { throw CalendarCore.SourceError.invalidResponse("unused") }
     func promptCredentials(_ fields: [CredentialField]) async throws -> [String: String] { [:] }
 }
 
@@ -2176,7 +2176,7 @@ final class AccountsController: ObservableObject {
 
     private static func describe(_ error: Error) -> String {
         switch error {
-        case SourceError.authExpired: "Sign-in was not completed."
+        case CalendarCore.SourceError.authExpired: "Sign-in was not completed."
         case let e as CalendarCore.SourceError: "Sign-in failed (\(e))."
         default: error.localizedDescription
         }
@@ -2347,7 +2347,7 @@ link_one "${TIMETUG_GOOGLE_XCCONFIG:-${HOME:-/nonexistent}/.config/timetug/googl
     private let syncState = FileSyncStateStore(url: AppSupportFiles.url("sync-state.json"))
     private lazy var reconciler = SourceReconciler(
         buildAccount: { [unowned self] connection in
-            guard let kind = registry.kind(id: connection.kindID) else { throw SourceError.invalidResponse("unknown account type") }
+            guard let kind = registry.kind(id: connection.kindID) else { throw CalendarCore.SourceError.invalidResponse("unknown account type") }
             return ConnectedSource(try kind.makeSource(for: connection, credentials: credentials, syncState: syncState))
         },
         buildEventKit: { [unowned self] in ConnectedSource(eventKit) },
