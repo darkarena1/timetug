@@ -59,11 +59,20 @@ final class SourceReconciler {
         }
         for connection in connections {
             let key = connection.connectionID
-            if key == rebuilding { entries[key]?.listener.cancel(); entries[key] = nil }
-            if entries[key] == nil {
+            if key == rebuilding {
+                // Build the replacement first: a failed build must not take down the source that still works.
+                do {
+                    let replacement = start(try buildAccount(connection))
+                    entries[key]?.listener.cancel()
+                    entries[key] = replacement
+                } catch {
+                    failures[key] = String(describing: error)
+                }
+            } else if entries[key] == nil {
                 do { entries[key] = start(try buildAccount(connection)) }
                 catch { failures[key] = String(describing: error); continue }
             }
+            if entries[key] == nil { continue }
             wanted.append(key)
         }
         for key in entries.keys where !wanted.contains(key) {

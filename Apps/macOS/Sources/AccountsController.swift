@@ -70,8 +70,10 @@ final class AccountsController: ObservableObject {
         isWorking = true
         errorMessage = nil
         defer { isWorking = false }
+        var authorized: Connection?
         do {
             let connection = try await kind.authorize(using: interaction, credentials: credentials)
+            authorized = connection
             if accounts.contains(where: { $0.kindID == connection.kindID && $0.displayName == connection.displayName }) {
                 try? await credentials.removeSecrets(for: connection.connectionID)
                 errorMessage = "\(connection.displayName) is already added."
@@ -82,7 +84,13 @@ final class AccountsController: ObservableObject {
             await reconcileAndApply()
         } catch is CancellationError {
             // The user cancelled the sign-in.
+            if let authorized, !accounts.contains(where: { $0.connectionID == authorized.connectionID }) {
+                try? await credentials.removeSecrets(for: authorized.connectionID)
+            }
         } catch {
+            if let authorized, !accounts.contains(where: { $0.connectionID == authorized.connectionID }) {
+                try? await credentials.removeSecrets(for: authorized.connectionID)
+            }
             errorMessage = Self.describe(error)
         }
     }

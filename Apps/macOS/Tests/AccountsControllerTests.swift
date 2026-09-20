@@ -115,6 +115,19 @@ final class AccountsControllerTests: XCTestCase {
         XCTAssertNotNil(first)
     }
 
+    func testAFailedAccountSaveDiscardsTheNewSignIn() async throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let blocker = directory.appendingPathComponent("blocker")
+        try Data("x".utf8).write(to: blocker)
+        connectionStore = FileConnectionStore(url: blocker.appendingPathComponent("connections.json"))
+        let controller = makeController()
+        await controller.addAccount(kindID: "google")
+        XCTAssertNotNil(controller.errorMessage)
+        XCTAssertTrue(controller.accounts.isEmpty)
+        let secrets = try await credentials.secrets(for: "1")
+        XCTAssertNil(secrets)
+    }
+
     func testRemoveDeletesConnectionSelectionsSecretsAndSyncState() async throws {
         let controller = makeController()
         await controller.addAccount(kindID: "google")

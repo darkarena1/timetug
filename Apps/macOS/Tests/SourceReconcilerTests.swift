@@ -25,11 +25,12 @@ final class SourceReconcilerTests: XCTestCase {
     private let b = Connection(kindID: "google", connectionID: "2", displayName: "b@x.test")
     private var built: [String: FakeCoreSource] = [:]
     private var changeCount = 0
+    private var failNext: Set<ConnectionID> = []
 
     private func makeReconciler(failing: Set<ConnectionID> = []) -> SourceReconciler {
         SourceReconciler(
             buildAccount: { [unowned self] c in
-                if failing.contains(c.connectionID) { throw TimeTugCore.SourceError.authExpired }
+                if failing.contains(c.connectionID) || failNext.contains(c.connectionID) { throw TimeTugCore.SourceError.authExpired }
                 let s = FakeCoreSource(id: c.sourceID)   // library rule: google source id == Connection.sourceID
                 built[c.connectionID] = s
                 return s
@@ -95,6 +96,21 @@ final class SourceReconcilerTests: XCTestCase {
         XCTAssertTrue((update.sources.first as AnyObject) === new)
         try await Task.sleep(for: .milliseconds(50))
         new.continuation.yield()
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(changeCount, 1)
+    }
+
+    func testAFailedRebuildKeepsTheWorkingSourceAndItsListener() async throws {
+        let r = makeReconciler()
+        _ = r.reconcile(connections: [a], eventKitEnabled: false)
+        let old = built["1"]!
+        try await Task.sleep(for: .milliseconds(50))
+        failNext = ["1"]
+        let update = r.rebuild(a, connections: [a], eventKitEnabled: false)
+        XCTAssertEqual(update.sources.count, 1)
+        XCTAssertTrue((update.sources.first as AnyObject) === old)
+        XCTAssertNotNil(update.failures["1"])
+        old.continuation.yield()
         try await Task.sleep(for: .milliseconds(50))
         XCTAssertEqual(changeCount, 1)
     }
