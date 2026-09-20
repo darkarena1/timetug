@@ -6,7 +6,7 @@ Date: 2026-09-19. Status: approved; the beta and release pipeline was redesigned
 1. TimeTug updates itself when a new version is available, using Sparkle 2.
 2. Settings gets controls that mimic macOS Software Update: Check for Updates, Automatic Updates, Beta Updates.
 3. CI publishes a beta build for every merge to `master` that passes CI. Betas are full signed apps delivered through Sparkle (Sparkle replaces the whole bundle; partial updates are not possible). Pull requests never sign or publish anything.
-4. When the owner publishes a GitHub Release on a `v*` tag, CI builds the full DMG as before, uploads it and the stable Sparkle update to that release, and adds it to the feed.
+4. When the owner runs the Release workflow for a drafted GitHub Release on a `v*` tag, CI builds the full DMG as before, uploads it and the stable Sparkle update to the draft, publishes it, and adds it to the feed.
 
 ## Decisions
 - Library: Sparkle 2 via Swift Package, pinned exactly in `Apps/macOS/project.yml` (precedent: ADR 0005). New ADR records it.
@@ -44,14 +44,14 @@ Trigger: `workflow_run` of `CI` completed, `branches: [master]`, and the job run
 **Appcast generation.** `scripts/release/appcast.py` (Python stdlib) edits the XML: it inserts an `<item>` with `sparkle:version`, `sparkle:shortVersionString`, `sparkle:minimumSystemVersion`, the enclosure URL (the release asset), `length`, `sparkle:edSignature`, a release-notes link and, for betas, `<sparkle:channel>beta</sparkle:channel>`. It rejects an add with the same `sparkle:version` but a different URL, and replaces an item with the same enclosure URL (so re-running a release replaces its item). It does not depend on `generate_appcast`.
 
 ### `release.yml` (stable)
-Trigger: `release: published` for a tag starting with `v` (`beta-*` releases are ignored), and `workflow_dispatch` with a `tag` input as a fallback. Pushing a tag alone does nothing. The owner drafts the release in the GitHub UI, reviews it and clicks Publish.
+Trigger: `workflow_dispatch` with a `tag` input, or a push of a `v*` tag. The repository has GitHub immutable releases: a published release's assets and tag are locked, so assets can only be attached to a DRAFT. The owner drafts the release in the GitHub UI for a new tag, saves it as a draft and never publishes it by hand; the workflow uploads the assets and publishes it. Drafts fire no release events, which is why `release: published` is not a trigger. Early in the run `scripts/release/release-state.sh` fails the run if the tag is already published.
 - For the release event, checks out `refs/tags/<tag>` (so a branch named like the tag cannot shadow it) and fails if HEAD is not the tag's commit. A `Validate the tag` step runs `compute-versions.sh stable` right after checkout, so a bad tag (e.g. uppercase `V1.2.3`) fails before any build or secrets.
 - Builds the tag's commit (for dispatch: the tag's commit if the tag exists, otherwise the selected ref, and the workflow then creates the tag). The commit must be on `master`. The job needs the owner's approval through the `release` environment (reviewers, deployments limited to `master` and `v*` tags).
 - Fails early if the Apple secrets exist but `SPARKLE_PRIVATE_KEY` does not.
-- With all Apple secrets: sign, notarize and staple the app and the DMG, build the Sparkle zip from the stapled app and EdDSA-sign it, then UPLOAD the DMG, its `.sha256` and the zip to the release the owner published (the owner's title and notes are not overwritten), then add the stable appcast item. A `-` suffix tag (for example `v1.2.3-rc1`), or a release the owner marked as a pre-release in the GitHub UI, goes to the beta channel.
+- With all Apple secrets: sign, notarize and staple the app and the DMG, build the Sparkle zip from the stapled app and EdDSA-sign it, then UPLOAD the DMG, its `.sha256` and the zip to the owner's draft and publish it (`scripts/release/upload-release-assets.sh`; the owner's title and notes are not overwritten, and the tag is created at the built commit if it does not exist), then add the stable appcast item. A `-` suffix tag (for example `v1.2.3-rc1`) is published as a prerelease and goes to the beta channel. With no draft, the workflow creates the release with generated notes.
 - Without them: upload an unsigned DMG, mark the release a prerelease and never add it to the feed.
-- The release is visible without assets for the roughly 30 minutes the build takes; the appcast item appears only after the upload.
-- Re-running for an existing tag builds new bytes with a new build number, re-uploads with `--clobber` and replaces the tag's appcast item (same enclosure URL). Recovery is in `docs/release.md`.
+- The release stays a draft (invisible) during the roughly 30 minute build; the appcast item appears only after publishing.
+- A published release is immutable, so a re-run for it is refused. If the run fails before publishing, the draft is intact and the workflow can be re-run. Recovery for an appcast failure is in `docs/release.md`.
 
 ### Scripts
 Logic lives in `scripts/release/` and `scripts/ci/` (`compute-versions.sh`, `sign-app.sh`, `make-update-zip.sh`, `fetch-sparkle-tools.sh`, `publish-appcast.sh`, `appcast.py`); YAML only wires them together (AGENTS.md rule). The version, appcast and publish scripts have fixture-based tests runnable locally without GitHub.
