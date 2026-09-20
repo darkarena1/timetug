@@ -17,6 +17,8 @@ public struct ChangeMonitor: Sendable {
         self.sleep = sleep
     }
 
+    /// Polling starts as soon as the stream is created, and stops only when the consuming task is cancelled
+    /// (or the stream finishes, e.g. on `authExpired`). Dropping the stream without cancelling does NOT stop it.
     public func changes(polling source: some PollingCalendarSource) -> AsyncStream<CalendarChange> {
         let interval = interval, maxBackoff = maxBackoff, sleep = sleep
         return AsyncStream { continuation in

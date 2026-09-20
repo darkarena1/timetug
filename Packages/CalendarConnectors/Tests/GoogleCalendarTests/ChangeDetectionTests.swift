@@ -159,3 +159,13 @@ private func nextChange<S: AsyncSequence & Sendable>(of stream: S, timeout: Dura
         return nil
     }
 }
+
+@Test func aPollItemThatCannotBeParsedStillCountsAsAChangeAndAdvancesTheToken() async throws {
+    let h = try await Harness()
+    await bootstrapRoutes(h)
+    _ = try await h.source.checkForChanges()
+    await h.transport.route("syncToken=t1", [.json(["items": [], "nextSyncToken": "t2"])])
+    await h.transport.route("syncToken=m1", [.json(["items": [["noId": true]], "nextSyncToken": "m2"])])
+    #expect(try await h.source.checkForChanges() == .eventsChanged(calendarIDs: ["me@x.com"]))
+    #expect(await h.sync.token(for: "c1", scope: "me@x.com") == "m2")
+}

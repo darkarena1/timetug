@@ -158,3 +158,23 @@ private func routes(_ transport: FakeTransport, email: String = "me@x.com", refr
     #expect(k.supportedPlatforms.contains(.macOS) && k.supportedPlatforms.contains(.linux))
     if case .oauth = k.authorization {} else { Issue.record("expected oauth") }
 }
+
+@Test func authorizeMapsProviderErrorsFromTheCalendarListToSourceError() async throws {
+    let transport = FakeTransport()
+    await routes(transport)
+    await transport.route("users/me/calendarList", [.json(["error": ["code": 404]], status: 404)])
+    let store = InMemoryCredentialStore()
+    await #expect(throws: SourceError.self) { try await kind(transport).authorize(using: FakeInteraction(), credentials: store) }
+    #expect(await store.isEmpty)
+}
+
+@Test func reauthorizeMapsProviderErrorsFromTheCalendarListToSourceError() async throws {
+    let transport = FakeTransport()
+    await routes(transport, refresh: "rt-2")
+    await transport.route("users/me/calendarList", [.json(["error": ["code": 404]], status: 404)])
+    let store = InMemoryCredentialStore()
+    try await store.setSecrets([AccessTokenProvider.refreshTokenKey: "rt-old"], for: "keep-me")
+    let existing = Connection(kindID: "google", connectionID: "keep-me", displayName: "me@x.com", config: ["email": "me@x.com"])
+    await #expect(throws: SourceError.self) { try await kind(transport).reauthorize(existing, using: FakeInteraction(), credentials: store) }
+    #expect(try await store.secrets(for: "keep-me")?[AccessTokenProvider.refreshTokenKey] == "rt-old")
+}

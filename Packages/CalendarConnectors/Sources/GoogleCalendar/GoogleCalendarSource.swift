@@ -25,11 +25,7 @@ public final class GoogleCalendarSource: PollingCalendarSource {
 
     public func calendars() async throws -> [CalendarDescriptor] {
         let account = connection.config["email"]
-        do {
-            return try await api.calendarList().compactMap { GoogleEventMapper.descriptor(from: $0, accountName: account) }
-        } catch let error as GoogleAPIError {
-            throw error.sourceError
-        }
+        return try await api.calendarList().compactMap { GoogleEventMapper.descriptor(from: $0, accountName: account) }
     }
 
     public func events(in interval: DateInterval) async throws -> [CalendarEvent] {
@@ -60,7 +56,7 @@ public final class GoogleCalendarSource: PollingCalendarSource {
             try await api.pages(
                 GoogleEventsPageDTO.self, path: GoogleAPIClient.calendarPath(calendar.id, "/events"), query: query,
                 next: { $0.nextPageToken },
-                handle: { events += ($0.items ?? []).compactMap { GoogleEventMapper.map($0, calendar: calendar) } })
+                handle: { events += ($0.items ?? []).compactMap(\.value).compactMap { GoogleEventMapper.map($0, calendar: calendar) } })
         } catch let error as GoogleAPIError {
             // A calendar that was removed or lost access is skipped; anything else is not ours to interpret.
             if error == .notFound || error == .forbidden { return [] }
@@ -74,8 +70,9 @@ public final class GoogleCalendarSource: PollingCalendarSource {
     static let calendarSetScope = "_calendars"
 
     private struct SyncPageDTO: Decodable {
-        struct Item: Decodable { var id: String }
-        var items: [Item]?
+        // Items are only counted; an item that fails to parse is still a change.
+        var items: [LenientItem<Item>]?
+        struct Item: Decodable { var id: String? }
         var nextPageToken: String?
         var nextSyncToken: String?
     }

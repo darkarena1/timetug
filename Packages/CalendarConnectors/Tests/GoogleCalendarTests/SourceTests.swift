@@ -176,3 +176,23 @@ actor SleepRecorder {
     #expect(!c.canWrite && c.providesConference && c.syncKind == .token && !c.supportsPush)
     #expect(h.source.id == "google-c1" && h.source.displayName == "me@x.com")
 }
+
+@Test func anItemWithoutAnIdIsDroppedNotFatal() async throws {
+    let h = try await Harness()
+    await h.transport.route("calendars/team%40group.calendar.google.com/events", [.json(["items": []])])
+    await h.transport.route("calendars/me%40x.com/events", [.json(["items": [
+        eventJSON("one", start: "2026-09-21T10:00:00Z"), ["noId": true], eventJSON("two", start: "2026-09-21T11:00:00Z"),
+    ]])])
+    let events = try await h.source.events(in: DateInterval(start: .now, duration: 3600))
+    #expect(events.map(\.eventID) == ["one", "two"])
+}
+
+@Test func anItemWithAWronglyTypedFieldIsDroppedNotFatal() async throws {
+    let h = try await Harness()
+    var bad = eventJSON("bad", start: "2026-09-21T09:00:00Z")
+    bad["reminders"] = ["overrides": [["minutes": "ten"]]]
+    await h.transport.route("calendars/team%40group.calendar.google.com/events", [.json(["items": []])])
+    await h.transport.route("calendars/me%40x.com/events", [.json(["items": [bad, eventJSON("good", start: "2026-09-21T10:00:00Z")]])])
+    let events = try await h.source.events(in: DateInterval(start: .now, duration: 3600))
+    #expect(events.map(\.eventID) == ["good"])
+}

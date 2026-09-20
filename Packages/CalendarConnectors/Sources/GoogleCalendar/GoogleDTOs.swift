@@ -75,8 +75,15 @@ struct GoogleEventDTO: Decodable {
     var reminders: GoogleRemindersDTO?
 }
 
+/// Decodes one array element without ever throwing, so a single malformed item is dropped (`value == nil`)
+/// instead of failing the whole page.
+struct LenientItem<T: Decodable>: Decodable {
+    let value: T?
+    init(from decoder: Decoder) throws { value = try? T(from: decoder) }
+}
+
 struct GoogleEventsPageDTO: Decodable {
-    var items: [GoogleEventDTO]?
+    var items: [LenientItem<GoogleEventDTO>]?
     var nextPageToken: String?
 }
 
