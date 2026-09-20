@@ -16,6 +16,7 @@ private final class FakeKind: ConnectorKind, @unchecked Sendable {
     var nextEmail = "a@x.test"
     var nextConnectionID = "1"
     var reauthorizeError: Error?
+    var reauthorizeSuspends = false
     private(set) var reauthorized = 0
     func authorize(using interaction: any AuthorizationInteraction, credentials: any CredentialStore) async throws -> Connection {
         let c = Connection(kindID: id, connectionID: nextConnectionID, displayName: nextEmail, config: ["email": nextEmail])
@@ -23,6 +24,7 @@ private final class FakeKind: ConnectorKind, @unchecked Sendable {
         return c
     }
     func reauthorize(_ connection: Connection, using interaction: any AuthorizationInteraction, credentials: any CredentialStore) async throws -> Connection {
+        if reauthorizeSuspends { try await Task.sleep(for: .seconds(30)) }
         if let reauthorizeError { throw reauthorizeError }
         reauthorized += 1
         return connection
@@ -113,6 +115,35 @@ final class AccountsControllerTests: XCTestCase {
         XCTAssertNil(secrets)
         let first = try await credentials.secrets(for: "1")
         XCTAssertNotNil(first)
+    }
+
+    func testADuplicateSignInThatReusesTheStoredConnectionIDKeepsTheStoredSecrets() async throws {
+        let controller = makeController()
+        await controller.addAccount(kindID: "google")
+        await controller.addAccount(kindID: "google")
+        XCTAssertEqual(controller.accounts.map(\.connectionID), ["1"])
+        let stored = await connectionStore.connections()
+        XCTAssertEqual(stored.map(\.connectionID), ["1"])
+        XCTAssertNotNil(controller.errorMessage)
+        let secrets = try await credentials.secrets(for: "1")
+        XCTAssertNotNil(secrets)
+    }
+
+    func testCancelDuringSignInAgainStopsItAndChangesNothing() async throws {
+        let controller = makeController()
+        await controller.addAccount(kindID: "google")
+        let before = controller.accounts
+        let buildsBefore = buildCount
+        kind.reauthorizeSuspends = true
+        controller.beginReauthorize(connectionID: "1")
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertTrue(controller.isWorking)
+        controller.cancelAuthorization()
+        for _ in 0..<50 where controller.isWorking { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertFalse(controller.isWorking)
+        XCTAssertEqual(controller.accounts, before)
+        XCTAssertEqual(buildCount, buildsBefore)
+        XCTAssertNil(controller.errorMessage)
     }
 
     func testAFailedAccountSaveDiscardsTheNewSignIn() async throws {

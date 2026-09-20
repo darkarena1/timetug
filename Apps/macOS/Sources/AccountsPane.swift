@@ -88,7 +88,7 @@ struct AccountsPane: View {
             }
             Spacer()
             if status == .authExpired || failure != nil {
-                Button("Sign in again") { Task { await accounts.reauthorize(connectionID: connection.connectionID) } }
+                Button("Sign in again") { accounts.beginReauthorize(connectionID: connection.connectionID) }
                     .disabled(accounts.isWorking)
             }
         }
@@ -128,7 +128,7 @@ struct AccountsPane: View {
         HStack(spacing: 8) {
             ProgressView().controlSize(.small)
             Text("Waiting for your browser…").font(.callout)
-            Button("Cancel") { accounts.cancelAdd() }.buttonStyle(.link)
+            Button("Cancel") { accounts.cancelAuthorization() }.buttonStyle(.link)
         }
     }
 

@@ -20,7 +20,7 @@ final class AccountsController: ObservableObject {
     private let reconciler: SourceReconciler
     private let applySources: ([any TimeTugCore.CalendarSource]) async -> Void
     private let requestEventKitAccess: () async -> Void
-    private var addTask: Task<Void, Never>?
+    private var authTask: Task<Void, Never>?
 
     init(
         registry: ConnectorRegistry, connectionStore: FileConnectionStore, credentials: any CredentialStore,
@@ -75,7 +75,7 @@ final class AccountsController: ObservableObject {
             let connection = try await kind.authorize(using: interaction, credentials: credentials)
             authorized = connection
             if accounts.contains(where: { $0.kindID == connection.kindID && $0.displayName == connection.displayName }) {
-                try? await credentials.removeSecrets(for: connection.connectionID)
+                await discardSecretsIfUnowned(connection.connectionID)
                 errorMessage = "\(connection.displayName) is already added."
                 return
             }
@@ -84,22 +84,32 @@ final class AccountsController: ObservableObject {
             await reconcileAndApply()
         } catch is CancellationError {
             // The user cancelled the sign-in.
-            if let authorized, !accounts.contains(where: { $0.connectionID == authorized.connectionID }) {
-                try? await credentials.removeSecrets(for: authorized.connectionID)
-            }
+            if let authorized { await discardSecretsIfUnowned(authorized.connectionID) }
         } catch {
-            if let authorized, !accounts.contains(where: { $0.connectionID == authorized.connectionID }) {
-                try? await credentials.removeSecrets(for: authorized.connectionID)
-            }
+            if let authorized { await discardSecretsIfUnowned(authorized.connectionID) }
             errorMessage = Self.describe(error)
         }
     }
 
-    /// Starts `addAccount` as a cancellable task (the pane's Cancel button calls `cancelAdd`).
-    func beginAddAccount(kindID: String) {
-        addTask = Task { await addAccount(kindID: kindID) }
+    /// Deletes a discarded sign-in's secrets, unless a stored account has the same connection id. A connector that
+    /// reuses one id per account has then just overwritten that account's own secrets with a fresh sign-in, which stays.
+    private func discardSecretsIfUnowned(_ connectionID: ConnectionID) async {
+        guard !accounts.contains(where: { $0.connectionID == connectionID }) else { return }
+        try? await credentials.removeSecrets(for: connectionID)
     }
-    func cancelAdd() { addTask?.cancel() }
+
+    /// Starts `addAccount` as a cancellable task (the pane's Cancel button calls `cancelAuthorization`).
+    func beginAddAccount(kindID: String) {
+        authTask = Task { await addAccount(kindID: kindID) }
+    }
+
+    /// Starts `reauthorize` as the same cancellable task, so Cancel works during "Sign in again" too.
+    func beginReauthorize(connectionID: ConnectionID) {
+        guard !isWorking else { return }
+        authTask = Task { await reauthorize(connectionID: connectionID) }
+    }
+
+    func cancelAuthorization() { authTask?.cancel() }
 
     /// Order matters so an interruption never leaves a half-removed account that looks alive: the stored connection
     /// goes first (it is what makes the account exist), the source is then stopped through the reconciler, the
