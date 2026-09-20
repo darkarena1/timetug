@@ -49,7 +49,8 @@ public actor CalendarStore {
     /// Extra time past the lead time so events just after midnight are already loaded.
     public static let fetchBuffer: TimeInterval = 300
 
-    private let sources: [any CalendarSource]
+    private var sources: [any CalendarSource]
+    private var generation = 0
     private let calendar: Calendar
     private var lastEvents: [String: [TimeTugCalendarEvent]] = [:]
     private var lastCalendars: [String: [CalendarInfo]] = [:]
@@ -71,6 +72,17 @@ public actor CalendarStore {
         self.adjudicator = adjudicator
     }
 
+    /// Replaces the source set. Removed sources lose their cached events, calendars and status. Bumps the
+    /// generation so a `refresh` that was suspended when this ran discards its results instead of restoring them.
+    public func setSources(_ newSources: [any CalendarSource]) {
+        let keep = Set(newSources.map(\.id))
+        lastEvents = lastEvents.filter { keep.contains($0.key) }
+        lastCalendars = lastCalendars.filter { keep.contains($0.key) }
+        statuses = statuses.filter { keep.contains($0.key) }
+        sources = newSources
+        generation += 1
+    }
+
     /// Local midnight today through next local midnight + lead time + buffer.
     public func fetchWindow(now: Date, leadTime: TimeInterval) -> DateInterval {
         let dayStart = calendar.startOfDay(for: now)
@@ -80,11 +92,13 @@ public actor CalendarStore {
 
     public func refresh(now: Date, leadTime: TimeInterval) async -> CalendarSnapshot {
         let window = fetchWindow(now: now, leadTime: leadTime)
+        let startedGeneration = generation
+        let current = sources
 
         let results = await withTaskGroup(
             of: (String, Result<([CalendarInfo], [TimeTugCalendarEvent]), Error>).self
         ) { group in
-            for source in sources {
+            for source in current {
                 group.addTask {
                     do {
                         let calendars = try await source.calendars()
@@ -100,17 +114,19 @@ public actor CalendarStore {
             return collected
         }
 
-        for (sourceID, result) in results {
-            switch result {
-            case .success(let (calendars, events)):
-                lastCalendars[sourceID] = calendars
-                lastEvents[sourceID] = events
-                statuses[sourceID] = .ok
-            case .failure(let error):
-                switch error {
-                case SourceError.needsPermission: statuses[sourceID] = .needsPermission
-                case SourceError.authExpired: statuses[sourceID] = .authExpired
-                default: statuses[sourceID] = .failing(String(describing: error))
+        if generation == startedGeneration {
+            for (sourceID, result) in results {
+                switch result {
+                case .success(let (calendars, events)):
+                    lastCalendars[sourceID] = calendars
+                    lastEvents[sourceID] = events
+                    statuses[sourceID] = .ok
+                case .failure(let error):
+                    switch error {
+                    case SourceError.needsPermission: statuses[sourceID] = .needsPermission
+                    case SourceError.authExpired: statuses[sourceID] = .authExpired
+                    default: statuses[sourceID] = .failing(String(describing: error))
+                    }
                 }
             }
         }
@@ -203,6 +219,7 @@ public actor CalendarStore {
 
     private func makeSnapshot(now: Date) -> CalendarSnapshot {
         let window = lastWindow ?? DateInterval(start: now, duration: 0)
+        let ids = Set(sources.map(\.id))
         let calendars = sources.flatMap { lastCalendars[$0.id] ?? [] }
         let raw = sources.flatMap { source in
             (lastEvents[source.id] ?? []).filter { $0.end > window.start && $0.start < window.end }
@@ -219,7 +236,7 @@ public actor CalendarStore {
                 notes: resolution.events[index].notes)
         }
         return CalendarSnapshot(
-            events: resolution.events, calendars: calendars, statuses: statuses,
+            events: resolution.events, calendars: calendars, statuses: statuses.filter { ids.contains($0.key) },
             sourceNames: Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0.displayName) }),
             fetchedAt: now, candidates: resolution.candidates)
     }
