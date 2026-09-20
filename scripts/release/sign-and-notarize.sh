@@ -2,7 +2,8 @@
 # Sign, notarize and staple TimeTug release artifacts with a Developer ID Application certificate.
 #
 # Usage: scripts/release/sign-and-notarize.sh [app|dmg]
-#   app  (default) sign dist/TimeTug.app (hardened runtime), notarize it, staple, verify with spctl.
+#   app  (default) sign dist/TimeTug.app (hardened runtime; delegates the signing to sign-app.sh),
+#        notarize it, staple, verify with spctl.
 #   dmg  codesign the DMG, notarize it, staple the ticket, verify with spctl. Run after make-dmg.sh.
 # Release flow: build app -> `app` -> make-dmg.sh -> `dmg`. Each run imports the certificate into a
 # temporary keychain, so the secret handling below is shared by both modes.
@@ -99,15 +100,8 @@ notarize() { # notarize <file>: submit and wait; fail loudly unless Apple accept
 }
 
 if [ "$MODE" = app ]; then
-  # 2. Re-sign with hardened runtime and a secure timestamp, inside-out: the widget
-  #    extension first, then the app that contains it.
-  APPEX="$APP_PATH/Contents/PlugIns/TimeTugWidgets.appex"
-  [ -d "$APPEX" ] || { echo "error: widget extension missing at $APPEX" >&2; exit 1; }
-  codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN" --options runtime --timestamp \
-    --entitlements Apps/macOS/Widgets/TimeTugWidgets.entitlements "$APPEX"
-  codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN" --options runtime --timestamp \
-    --entitlements "$ENTITLEMENTS" "$APP_PATH"
-  codesign --verify --strict --deep --verbose=2 "$APP_PATH"
+  # 2. Re-sign with hardened runtime and a secure timestamp, inside-out (scripts/release/sign-app.sh).
+  scripts/release/sign-app.sh "$APP_PATH"
 
   # 3. Notarize with the App Store Connect API key.
   ditto -c -k --keepParent "$APP_PATH" "$WORK/notarize.zip"
