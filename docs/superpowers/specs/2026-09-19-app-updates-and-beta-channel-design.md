@@ -1,21 +1,21 @@
 # App updates and beta channel: design
 
-Date: 2026-09-19. Status: approved in conversation, pending written-spec review.
+Date: 2026-09-19. Status: approved; the beta and release pipeline was redesigned after first implementation (this document describes the redesign).
 
 ## Goals
 1. TimeTug updates itself when a new version is available, using Sparkle 2.
 2. Settings gets controls that mimic macOS Software Update: Check for Updates, Automatic Updates, Beta Updates.
-3. CI publishes a beta build for the latest green PR. Betas are full signed apps delivered through Sparkle (Sparkle replaces the whole bundle; partial updates are not possible).
-4. A tagged release builds the full DMG as it does today and also publishes the stable Sparkle update.
+3. CI publishes a beta build for every merge to `master` that passes CI. Betas are full signed apps delivered through Sparkle (Sparkle replaces the whole bundle; partial updates are not possible). Pull requests never sign or publish anything.
+4. When the owner publishes a GitHub Release on a `v*` tag, CI builds the full DMG as before, uploads it and the stable Sparkle update to that release, and adds it to the feed.
 
 ## Decisions
 - Library: Sparkle 2 via Swift Package, pinned exactly in `Apps/macOS/project.yml` (precedent: ADR 0005). New ADR records it.
 - Hosting: builds are GitHub Releases assets; the appcast is `appcast.xml` on the `gh-pages` branch (GitHub Pages).
 - One appcast. Stable items carry no channel; beta items carry `<sparkle:channel>beta</sparkle:channel>`. The app opts in to the `beta` channel through Sparkle's `allowedChannels(for:)` delegate method.
-- Ordering key: `CFBundleVersion` (`sparkle:version`) is a UTC timestamp `YYYYMMDDHHMM`. It is stamped by `scripts/ci/build-release.sh` from the `BUILD_NUMBER` environment variable (the script already does this for both the app and widget plists); the workflows set `BUILD_NUMBER=$(date -u +%Y%m%d%H%M)`. The script's fallback to `GITHUB_RUN_NUMBER` is removed, because run numbers are per workflow and would not order betas against releases. The value is never a hash and is shared by beta and release workflows, so a release always outranks earlier betas. The literal `CFBundleVersion: "2"` values in `project.yml` remain only as the local-dev default.
-- Display version (`CFBundleShortVersionString`): beta is `<base>-beta.<PR number>.<run number>`; stable is the tag without `v`. `<base>` is the existing `CFBundleShortVersionString` in `Apps/macOS/project.yml` (the value `build-release.sh` already reads when no tag is given), bumped by hand when a release cycle starts. `<run number>` is `github.run_number` of the beta build workflow.
+- Ordering key: `CFBundleVersion` (`sparkle:version`) is a UTC timestamp `YYYYMMDDHHMMSS` (14 digits, second resolution so a beta and a release cannot collide). It is stamped by `scripts/ci/build-release.sh` from the `BUILD_NUMBER` environment variable (for both the app and widget plists); `scripts/ci/compute-versions.sh` produces it. The script's fallback to `GITHUB_RUN_NUMBER` is removed, because run numbers are per workflow and would not order betas against releases. The value is never a hash and is shared by beta and release workflows, so a release always outranks earlier betas. `appcast.py` refuses to replace an item with the same `sparkle:version` but a different download URL. The literal `CFBundleVersion: "2"` values in `project.yml` remain only as the local-dev default.
+- Display version (`CFBundleShortVersionString`): beta is `<base>-beta.<run number>`; stable is the tag without `v`. `<base>` is the existing `CFBundleShortVersionString` in `Apps/macOS/project.yml`, bumped by hand when a release cycle starts. `<run number>` is `github.run_number` of the `Beta` workflow.
 - Signing: betas are signed with the Developer ID Application certificate in CI and NOT notarized. Sparkle-installed updates are not quarantined, so Gatekeeper does not check them; the first install still comes from the notarized DMG. Developer ID signing keeps widgets/controls working (they need team signing) and keeps the signing identity stable across updates. Every zip also carries a Sparkle EdDSA signature.
-- Retention: keep the 5 newest beta prereleases and their appcast entries; prune the rest.
+- Retention: keep the 5 newest beta prereleases and their appcast entries; prune the rest (their releases and tags are deleted).
 
 ## App changes
 - `UpdateController` in `Apps/macOS/Sources`, wrapping `SPUStandardUpdaterController`, behind a small protocol so tests never launch Sparkle. Exposes `checkForUpdates()`, `automaticallyChecks` (bound to Sparkle's own preference), `includeBetas` (stored in the app's `UserDefaults`, key `updates.includeBetas.v1`; the widgets do not need it; drives `allowedChannels(for:)`, returning `["beta"]` when on, empty set when off), `lastCheckDate`, current version string.
@@ -26,37 +26,44 @@ Date: 2026-09-19. Status: approved in conversation, pending written-spec review.
 - Testing: unit tests for `UpdateController` logic (channel selection, defaults, persistence) using a fake updater. Real Sparkle UI verified by hand; steps added to `docs/manual-tests/macos-checklist.md`.
 
 ## CI changes
-### Beta pipeline (two workflows, so PR code never runs with the keys)
-PR-authored scripts (`build-release.sh`, `project.yml`, XcodeGen run-script phases) can be changed by anyone who can push a branch, so they must never execute in a job that holds the Developer ID certificate or `SPARKLE_PRIVATE_KEY`.
+Pull requests run only `ci.yml` (build and tests). There is no signing, no secret and no artifact for a PR, so PR code never runs with the keys. Secrets are used only by workflows that run merged code.
 
-**`beta-build.yml` (unprivileged).** Trigger: `pull_request`, same-repo PRs only (`github.event.pull_request.head.repo.full_name == github.repository`); no secrets, `permissions: contents: read`. It builds the app with `BUILD_NUMBER` set to the timestamp and the beta display version, ad-hoc signed as CI does today, and uploads `dist/TimeTug.app` (as a tar/zip preserving the bundle) plus a small `meta.json` (PR number, head SHA, timestamp, version) as an artifact. It runs after, or as part of, the same checks as CI; the publish workflow only proceeds when the build workflow succeeded.
+### `beta.yml` (name `Beta`, automatic, no approval)
+Trigger: `workflow_run` of `CI` completed, `branches: [master]`, and the job runs only when the conclusion is `success`, the event is `push` and the head repository is this repository. It has no environment, so it reads repository-scoped secrets.
+1. Check out the CI-verified `head_sha` and require it to be an ancestor of `origin/master`. Build only the tip of `master`: if the commit is no longer the tip, skip with a notice (the newer commit gets its own run; this also makes re-running an old run harmless).
+2. Skip (green run, notice) if the Developer ID certificate, its password, the team id or `SPARKLE_PRIVATE_KEY` is missing.
+3. Build with `scripts/ci/build-release.sh`, with `APP_VERSION` and `BUILD_NUMBER` from `scripts/ci/compute-versions.sh beta <run number>`.
+4. Sign with Developer ID, without notarizing: `scripts/release/sign-app.sh` (split out of `sign-and-notarize.sh`, whose `app` mode calls it). Order: Sparkle's nested XPC services and `Autoupdate` helper, then `Sparkle.framework`, then the widget extension, then the app, hardened runtime, in a temporary keychain that is deleted at the end.
+5. `scripts/release/make-update-zip.sh` (`ditto -c -k --keepParent`), then `sign_update --ed-key-file` for the EdDSA signature and length.
+6. Create the GitHub prerelease as a DRAFT tagged `beta-<BUILD_NUMBER>` with the zip attached, then PUBLISH it. An existing release or tag of that name fails the run.
+7. Only then `scripts/release/publish-appcast.sh` adds a beta item (with a release-notes link) to `appcast.xml` on `gh-pages` and prunes to the newest 5 betas. The release is published before the feed lists it so the feed never points at an asset that cannot be downloaded. If the appcast step fails the run fails visibly and the release stays public but unlisted.
+8. Pruned beta releases and tags are deleted; a failed delete warns but does not fail the run.
 
-**`beta-publish.yml` (privileged, trusted code only).** Trigger: `workflow_run` on `beta-build` completed with `conclusion == success`. A `gate` job first checks `github.event.workflow_run.head_repository.full_name == github.repository` and `.event == 'pull_request'`, then waits for the `CI` workflow on `.head_sha` to succeed (`scripts/ci/wait-for-ci.sh`; it looks at the newest CI run for that commit). The `publish` job checks out the DEFAULT branch (never the PR head) and runs only default-branch scripts. The downloaded artifact is untrusted input:
-0. Extract `TimeTug.tar` into a throwaway directory OUTSIDE the workspace after rejecting absolute, `..`, non-`TimeTug.app` and out-of-tree-symlink members; move only `TimeTug.app` into `dist/`.
-0b. Version and build number are NOT read from the artifact. They are computed by the trusted `scripts/ci/compute-versions.sh beta <PR number from workflow_run.pull_requests[0]> <workflow_run.run_number>` and stamped into the app and widget `Info.plist` files before signing. A `beta-<timestamp>` tag that already exists fails the run.
-1. Re-sign the app inside-out with Developer ID, without notarizing: `scripts/release/sign-app.sh` (new, split out of `sign-and-notarize.sh`, whose `app` mode calls it). Order: Sparkle's nested XPC services and `Autoupdate` helper, then `Sparkle.framework`, then the widget extension, then the app, hardened runtime, in a temporary keychain that is deleted at the end.
-2. `scripts/release/make-update-zip.sh` (`ditto -c -k --keepParent`).
-3. `sign_update --ed-key-file` adds the EdDSA signature and length.
-4. Create the GitHub prerelease as a DRAFT tagged `beta-<timestamp>` with the zip attached, then PUBLISH it.
-5. Only then `scripts/release/publish-appcast.sh` adds a beta item to `appcast.xml` on `gh-pages` (see below). The release is published before the feed lists it so the feed never points at an asset that cannot be downloaded. If the appcast step fails the workflow fails visibly and the release stays public but unlisted (nobody is offered it).
-6. Pruned beta releases (from the appcast prune step) are deleted; a failed delete warns but does not fail the run.
+**Appcast writes.** Beta runs are serialised by the concurrency group `appcast` (`cancel-in-progress: false`). `release.yml` has no such group (it would block betas behind a whole release); instead every write goes through `publish-appcast.sh`, which never force-pushes and re-applies its edit onto the latest `gh-pages` after a rejected push (bounded retries), so concurrent writers both land.
 
-**Appcast writes.** Beta publishes are serialised by the concurrency group `appcast` (`cancel-in-progress: false`). `release.yml` has no such group (it would block betas behind a whole release and can drop queued runs); instead every write, beta or release, goes through `publish-appcast.sh`, which never force-pushes and re-applies its edit onto the latest `gh-pages` after a rejected push (bounded retries), so concurrent writers both land. Note GitHub keeps at most one pending run per group, so a beta for an intermediate green PR can be skipped when several finish at once; that is acceptable because only the newest beta matters.
+**Appcast generation.** `scripts/release/appcast.py` (Python stdlib) edits the XML: it inserts an `<item>` with `sparkle:version`, `sparkle:shortVersionString`, `sparkle:minimumSystemVersion`, the enclosure URL (the release asset), `length`, `sparkle:edSignature`, a release-notes link and, for betas, `<sparkle:channel>beta</sparkle:channel>`. It refuses to replace an item with the same `sparkle:version` but a different URL. It does not depend on `generate_appcast`.
 
-**Appcast generation.** `scripts/release/update-appcast.sh` edits the XML with a small script (Python stdlib): it inserts an `<item>` with `sparkle:version`, `sparkle:shortVersionString`, `sparkle:minimumSystemVersion`, the enclosure URL (the release asset), `length`, `sparkle:edSignature` and, for betas, `<sparkle:channel>beta</sparkle:channel>`. It does not depend on `generate_appcast`.
-
-### `release.yml` (existing, tag-triggered)
-- Existing build, sign, notarize and DMG steps are unchanged.
-- Added, only when `steps.signing.outputs.has_signing == 'true'` (an unsigned/ad-hoc release never enters the update feed): after the app is signed, notarized and stapled, build the Sparkle zip from that stapled app, EdDSA-sign it, attach it to the release, and add a stable item to `appcast.xml` through `publish-appcast.sh`, after the GitHub release exists.
-- Uses the same timestamp `CFBundleVersion` scheme.
+### `release.yml` (stable)
+Trigger: `release: published` for a tag starting with `v` (`beta-*` releases are ignored), and `workflow_dispatch` with a `tag` input as a fallback. Pushing a tag alone does nothing. The owner drafts the release in the GitHub UI, reviews it and clicks Publish.
+- Builds the tag's commit (for dispatch: the tag's commit if the tag exists, otherwise the selected ref, and the workflow then creates the tag). The commit must be on `master`. The job needs the owner's approval through the `release` environment (reviewers, deployments limited to `master` and `v*` tags).
+- Fails early if the Apple secrets exist but `SPARKLE_PRIVATE_KEY` does not.
+- With all Apple secrets: sign, notarize and staple the app and the DMG, build the Sparkle zip from the stapled app and EdDSA-sign it, then UPLOAD the DMG, its `.sha256` and the zip to the release the owner published (the owner's title and notes are not overwritten), then add the stable appcast item. A `-` suffix tag (for example `v1.2.3-rc1`) is marked prerelease and goes to the beta channel.
+- Without them: upload an unsigned DMG, mark the release a prerelease and never add it to the feed.
+- The release is visible without assets for the roughly 30 minutes the build takes; the appcast item appears only after the upload.
+- The workflow is not idempotent after the appcast step fails; recovery is in `docs/release.md`.
 
 ### Scripts
-Logic lives in `scripts/release/` and `scripts/ci/` (`make-update-zip.sh`, `update-appcast.sh`, `prune-betas.sh`); YAML only wires them together (AGENTS.md rule). The appcast and prune scripts get fixture-based tests runnable locally without GitHub.
+Logic lives in `scripts/release/` and `scripts/ci/` (`compute-versions.sh`, `sign-app.sh`, `make-update-zip.sh`, `fetch-sparkle-tools.sh`, `publish-appcast.sh`, `appcast.py`); YAML only wires them together (AGENTS.md rule). The version, appcast and publish scripts have fixture-based tests runnable locally without GitHub.
 
-## One-time setup (documented in the rewritten `docs/release.md`)
+## Security model
+Secrets are only used by `beta.yml` (a `master` commit that passed CI) and `release.yml` (a `master` commit with owner approval). A pull request can never reach the signing keys. Keep `master` protected (rulesets "Protect master" and "Protect release tags") and keep the `release` environment with required reviewers and a `master` / `v*` deployment policy. Anyone with write access can publish a release on a `v*` tag, so the environment approval and the tag ruleset are the real guards for stable; the on-`master` check in the workflow is a safety net. Betas ship whatever is merged to `master`, so merges need the review already required.
+
+## One-time setup (documented in `docs/release.md`)
 - `generate_keys` creates the Sparkle keypair; public key into Info.plist, private key into the `SPARKLE_PRIVATE_KEY` secret. Never commit the private key.
 - Create the `gh-pages` branch and enable Pages.
-- The beta publish workflow needs the existing `MACOS_CERTIFICATE_P12_BASE64` and `MACOS_CERTIFICATE_PASSWORD` secrets (and `APPLE_TEAM_ID`); notarization secrets stay release-only.
+- `beta.yml` needs `MACOS_CERTIFICATE_P12_BASE64`, `MACOS_CERTIFICATE_PASSWORD`, `APPLE_TEAM_ID` and `SPARKLE_PRIVATE_KEY` as repository secrets (it has no environment); notarization secrets are used only by `release.yml`.
+- Keep the `release` environment and both rulesets in place.
+- First real run: confirm `workflow_run` fires for `CI` on `master` pushes and the secrets are visible to `beta.yml`.
 
 ## Documentation
 - Rewrite `docs/release.md` (channels, versioning, secrets, setup, how to cut a release, how betas work).
@@ -64,4 +71,4 @@ Logic lives in `scripts/release/` and `scripts/ci/` (`make-update-zip.sh`, `upda
 - New ADR: Sparkle, channel model, timestamp build numbers, unnotarized Developer-ID-signed betas.
 
 ## Out of scope
-Delta updates, notarizing betas, per-PR opt-in, self-hosted feed, updating from within a sandbox.
+Delta updates, notarizing betas, betas built from pull requests (PRs get no signing or secrets), per-PR opt-in, self-hosted feed, updating from within a sandbox.

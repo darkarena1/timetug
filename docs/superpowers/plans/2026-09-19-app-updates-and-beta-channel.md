@@ -1,5 +1,7 @@
 # App Updates and Beta Channel Implementation Plan
 
+> **Superseded in part.** Tasks 7 and 8 (the PR-triggered beta-build and beta-publish workflows and the tag-push release) were superseded by a redesign: betas build on merge to `master` (`.github/workflows/beta.yml`), the stable release runs when a GitHub Release is published (`release.yml`), and the build number is a 14-digit timestamp `YYYYMMDDHHMMSS`. This plan is kept as a historical record. The spec (`docs/superpowers/specs/2026-09-19-app-updates-and-beta-channel-design.md`) and the code are authoritative.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** TimeTug updates itself through Sparkle, with Software-Update-style settings (including beta), and CI publishes a signed beta for the latest green same-repo PR; a tagged release also publishes the stable update.
