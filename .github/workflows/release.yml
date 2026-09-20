@@ -34,6 +34,8 @@ jobs:
     # Requires approval from the repository owner (Settings > Environments > release) and only
     # runs for master or v* tags.
     environment: release
+    # startsWith is case-insensitive in expressions (so an uppercase V passes here); the "Validate the tag"
+    # step below is case-sensitive and fails such a tag before any signing or build work.
     if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'v')
     env:
       TAG: ${{ github.event.release.tag_name || inputs.tag }}
@@ -42,8 +44,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           # The tag's commit for a published release; the selected ref for a manual run.
-          ref: ${{ github.event.release.tag_name || github.sha }}
+          # Qualified so a branch named like the tag cannot shadow it.
+          ref: ${{ github.event.release.tag_name && format('refs/tags/{0}', github.event.release.tag_name) || github.sha }}
           fetch-depth: 0
+      - name: Validate the tag
+        run: scripts/ci/compute-versions.sh stable "$TAG" >/dev/null
       - name: Build the tag's commit when the tag exists
         if: github.event_name == 'workflow_dispatch'
         run: |
@@ -58,6 +63,10 @@ jobs:
           COMMIT="$(git rev-parse HEAD)"
           if ! git merge-base --is-ancestor "$COMMIT" origin/master; then
             echo "::error::Releases can only be cut from commits on master; $COMMIT is not."
+            exit 1
+          fi
+          if [ "$GITHUB_EVENT_NAME" = release ] && [ "$COMMIT" != "$(git rev-parse "refs/tags/$TAG^{commit}")" ]; then
+            echo "::error::Checked-out commit $COMMIT is not the commit of tag $TAG."
             exit 1
           fi
           echo "COMMIT=$COMMIT" >> "$GITHUB_ENV"
@@ -120,6 +129,7 @@ jobs:
         if: steps.signing.outputs.has_signing == 'true'
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           VERSION="$(cat dist/version.txt)"
           ZIP="dist/TimeTug-${VERSION}.zip"
@@ -132,7 +142,7 @@ jobs:
           SIG_VALUE="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<<"$SIG")"
           [ -n "$SIG_VALUE" ] || { echo "::error::could not read edSignature from sign_update output"; exit 1; }
           UPDATE_CHANNEL=""
-          if [[ "$VERSION" == *-* ]]; then UPDATE_CHANNEL=beta; fi
+          if [[ "$VERSION" == *-* || "$RELEASE_PRERELEASE" == true ]]; then UPDATE_CHANNEL=beta; fi
           echo "UPDATE_ZIP=$ZIP" >> "$GITHUB_ENV"
           echo "UPDATE_SIGNATURE=$SIG_VALUE" >> "$GITHUB_ENV"
           echo "UPDATE_LENGTH=$(stat -f%z "$ZIP")" >> "$GITHUB_ENV"
