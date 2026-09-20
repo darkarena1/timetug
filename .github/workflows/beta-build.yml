@@ -1,0 +1,35 @@
+# Builds the app for a same-repo pull request. Holds NO secrets: PR-authored scripts run here.
+# beta-publish.yml signs and publishes the result with trusted default-branch scripts.
+name: Beta build
+
+on:
+  pull_request:
+
+concurrency:
+  group: beta-build-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - name: Select newest Xcode
+        run: scripts/ci/select-xcode.sh
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Compute versions
+        run: scripts/ci/compute-versions.sh beta "${{ github.event.pull_request.number }}" "${{ github.run_number }}" >> "$GITHUB_ENV"
+      - name: Build
+        run: scripts/ci/build-release.sh
+      - name: Pack app
+        run: tar -cf dist/TimeTug.tar -C dist TimeTug.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: beta-app
+          path: dist/TimeTug.tar
+          retention-days: 3

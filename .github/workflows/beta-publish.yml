@@ -1,0 +1,93 @@
+# Signs and publishes the beta built by beta-build.yml. Runs from the DEFAULT branch: it never checks out
+# or executes pull-request code; the downloaded app is treated as untrusted input. Version and build
+# number are read back from the app's plist and validated, not taken from artifact metadata.
+name: Beta publish
+
+on:
+  workflow_run:
+    workflows: ['Beta build']
+    types: [completed]
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: appcast
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Wait for CI on the PR head
+        run: scripts/ci/wait-for-ci.sh "${{ github.event.workflow_run.head_sha }}"
+
+  publish:
+    needs: gate
+    runs-on: macos-26
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7   # default branch: trusted scripts only
+      - name: Download the built app
+        uses: actions/download-artifact@v4
+        with:
+          name: beta-app
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Unpack and read validated versions
+        run: |
+          mkdir -p dist && tar -C dist -xf TimeTug.tar
+          PLIST=dist/TimeTug.app/Contents/Info.plist
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")"
+          BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")"
+          [[ "$BUILD" =~ ^[0-9]{12}$ ]] || { echo "::error::bad build number"; exit 1; }
+          [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*([-+][0-9A-Za-z.-]+)?-beta\.[0-9]+\.[0-9]+$ ]] || { echo "::error::bad version"; exit 1; }
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "BUILD=$BUILD" >> "$GITHUB_ENV"
+      - name: Sign with Developer ID (no notarization)
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: scripts/release/sign-app.sh dist/TimeTug.app
+      - name: Zip and EdDSA-sign
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          ZIP="dist/TimeTug-${VERSION}.zip"
+          scripts/release/make-update-zip.sh dist/TimeTug.app "$ZIP"
+          BIN="$(scripts/release/fetch-sparkle-tools.sh "$RUNNER_TEMP/sparkle")"
+          KEY="$RUNNER_TEMP/sparkle.key"; umask 077
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$KEY"
+          SIG="$("$BIN/sign_update" --ed-key-file "$KEY" "$ZIP")"; rm -f "$KEY"
+          echo "SIGNATURE=$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<<"$SIG")" >> "$GITHUB_ENV"
+          echo "LENGTH=$(stat -f%z "$ZIP")" >> "$GITHUB_ENV"
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+      - name: Create draft prerelease
+        run: |
+          gh release create "beta-${BUILD}" "$ZIP" --draft --prerelease \
+            --title "TimeTug ${VERSION}" --target "${{ github.event.workflow_run.head_sha }}" \
+            --notes "Beta build from PR head ${{ github.event.workflow_run.head_sha }}."
+      - name: Update appcast, then publish the release
+        run: |
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/beta-${BUILD}/$(basename "$ZIP")"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          PRUNED="$(scripts/release/publish-appcast.sh "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            --keep-betas 5 -- \
+            --title "TimeTug ${VERSION}" --version "$BUILD" --short "$VERSION" --url "$URL" \
+            --length "$LENGTH" --signature "$SIGNATURE" --min-system 14.0 --channel beta)"
+          gh release edit "beta-${BUILD}" --draft=false --prerelease
+          for u in $PRUNED; do
+            tag="$(sed -n 's#.*/download/\(beta-[0-9]*\)/.*#\1#p' <<<"$u")"
+            [ -n "$tag" ] && gh release delete "$tag" --cleanup-tag --yes || true
+          done
