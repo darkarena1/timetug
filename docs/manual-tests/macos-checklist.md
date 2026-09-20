@@ -48,6 +48,12 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Installer DMG (from a CI artifact or a release): opening it shows a cream window with the TimeTug icon on the left, the Applications shortcut on the right, a blue arrow between them and "Drag TimeTug to Applications"; no toolbar, sidebar or status bar.
 - [ ] Dragging TimeTug onto Applications copies the app (it then launches from /Applications); Eject works afterwards and the mounted volume shows the TimeTug icon.
 
+## Updates
+- [ ] Settings > General shows Software Update with the current version, Check for Updates, Automatic updates and Beta updates.
+- [ ] Right-click the menu bar icon: the menu has "Check for Updates…".
+- [ ] Against a test appcast (`defaults write com.timetug.app SUFeedURL <url>`; the feed needs a validly EdDSA-signed item): a newer stable item is offered; a beta item is offered only with Beta updates on; turning it off and checking again offers only stable. Afterwards `defaults delete com.timetug.app SUFeedURL`.
+- [ ] Installing an update relaunches the app and widgets still load (team-signed build).
+
 ## Duplicate detection (beta)
 - [ ] Settings > Calendars: the on-device intelligence toggle is off by default and shows a Beta badge.
 - [ ] With it off, "Scott: Doctor" vs a detailed entry for the same appointment stay separate.
