@@ -98,3 +98,33 @@ private func allDay(first: (Int, Int, Int), endExclusive: (Int, Int, Int), zone 
     let info = mapper().calendarInfo(d, sourceID: "google-1")
     #expect(info == CalendarInfo(sourceID: "google-1", calendarID: "c", title: "Work", accountName: "me@x.test", colorHex: "#AABBCC"))
 }
+
+@Test func allDayOnAFallBackDayCoversTheLongLocalDay() throws {
+    // New York falls back on 2026-11-01: local midnight is EDT (04:00Z) and the next is EST (05:00Z), a 25-hour day.
+    let source = allDay(first: (2026, 11, 1), endExclusive: (2026, 11, 2), zone: "Asia/Tokyo")
+    #expect(source.start == iso("2026-10-31T15:00:00Z") && source.end == iso("2026-11-01T15:00:00Z"))
+    let e = try #require(mapper().event(source, sourceID: "s"))
+    #expect(e.isAllDay)
+    #expect(e.start == iso("2026-11-01T04:00:00Z") && e.end == iso("2026-11-02T05:00:00Z"))
+}
+
+@Test func eventKitAndGoogleShapedEventsAgreeOnSharedKeysAndDedupAsExact() throws {
+    let me = CalendarCore.Attendee(name: "Me", email: "me@x.test", response: .accepted, isSelf: true)
+    let other = CalendarCore.Attendee(name: "Bo", email: "bo@x.test")
+    func library(_ configure: (inout CalendarCore.CalendarEvent) -> Void) -> CalendarCore.CalendarEvent {
+        var e = CalendarCore.CalendarEvent(
+            eventID: "id", uid: "UID-1", calendarID: "cal", title: "Design Review",
+            start: iso("2026-09-18T14:00:00Z"), end: iso("2026-09-18T14:30:00Z"))
+        configure(&e)
+        return e
+    }
+    let eventKit = library { $0.attendees = [me, other] }
+    let google = library { $0.attendees = [other]; $0.myResponse = .accepted }
+    let a = try #require(mapper().event(eventKit, sourceID: "eventkit"))
+    let b = try #require(mapper().event(google, sourceID: "google-1"))
+    #expect(a.externalUID == "UID-1" && a.externalUID == b.externalUID)
+    #expect(a.title == b.title && a.start == b.start && a.end == b.end)
+    #expect(a.contentKey == b.contentKey)
+    #expect(a.sourceID != b.sourceID)
+    #expect(DuplicateRules.decide(a, b) == .merge(.exactMatch))
+}

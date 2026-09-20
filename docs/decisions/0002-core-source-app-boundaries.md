@@ -13,7 +13,7 @@ Organize into three layers:
 - **Sources** (e.g., `Packages/EventKitSource`): Implement `CalendarSource` for a specific backend. May import platform frameworks but no UI. Sources contain no display logic or settings storage.
 - **App** (`Apps/macOS`): The composition root. Owns the UI, wires sources into the store, configures credential storage, and renders settings. The only place that instantiates sources and knows which exist at runtime.
 
-Dependency direction: `Apps/macOS -> EventKitSource -> TimeTugCore`. Core imports nothing else.
+Dependency direction: the app depends on `TimeTugCore`, `CalendarBridge`, `EventKitSource`, `CalendarApple` and the connector library (`CalendarCore`, `GoogleCalendar`). `CalendarBridge -> TimeTugCore + CalendarCore`; `EventKitSource`, `CalendarApple` and `GoogleCalendar -> CalendarCore`. Core imports nothing from the connector library, and the library imports nothing from TimeTug.
 
 Rejected alternative: Shared source configuration UI in the source package itself would couple sources to UI frameworks, prevent headless testing, and limit future iOS/CLI frontends.
 
