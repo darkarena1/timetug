@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import TimeTug
 
@@ -7,6 +8,7 @@ final class UpdateControllerTests: XCTestCase {
         var automaticallyChecksForUpdates = true
         var lastUpdateCheckDate: Date?
         var checks = 0
+        var onUpdateCycleFinished: (() -> Void)?
         func checkForUpdates() { checks += 1 }
     }
 
@@ -58,5 +60,16 @@ final class UpdateControllerTests: XCTestCase {
         let controller = make(driver)
         XCTAssertEqual(controller.lastCheckDate, date)
         XCTAssertEqual(controller.currentVersion, "0.2.0")
+    }
+
+    func testFinishedUpdateCycleNotifiesObservers() {
+        let driver = FakeDriver()
+        let controller = make(driver)
+        let changed = expectation(description: "objectWillChange")
+        changed.assertForOverFulfill = false
+        let sub = controller.objectWillChange.sink { changed.fulfill() }
+        driver.onUpdateCycleFinished?()
+        wait(for: [changed], timeout: 2)
+        sub.cancel()
     }
 }

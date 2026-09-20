@@ -5,6 +5,8 @@ import Sparkle
 protocol UpdaterDriving: AnyObject {
     var automaticallyChecksForUpdates: Bool { get set }
     var lastUpdateCheckDate: Date? { get }
+    /// Called when an update cycle ends (possibly off the main thread), so `lastUpdateCheckDate` can be re-read.
+    var onUpdateCycleFinished: (() -> Void)? { get set }
     func checkForUpdates()
 }
 
@@ -32,6 +34,9 @@ final class UpdateController: ObservableObject {
         self.currentVersion = currentVersion
         self.automaticallyChecks = driver.automaticallyChecksForUpdates
         self.includeBetas = defaults.bool(forKey: Self.betaKey)
+        driver.onUpdateCycleFinished = { [weak self] in
+            Task { @MainActor in self?.objectWillChange.send() }
+        }
     }
 
     func checkForUpdates() { driver.checkForUpdates() }
@@ -46,6 +51,7 @@ final class UpdateController: ObservableObject {
 final class SparkleUpdater: NSObject, UpdaterDriving, SPUUpdaterDelegate {
     private let includeBetas: () -> Bool
     private var controller: SPUStandardUpdaterController!
+    var onUpdateCycleFinished: (() -> Void)?
 
     init(includeBetas: @escaping () -> Bool) {
         self.includeBetas = includeBetas
@@ -59,6 +65,10 @@ final class SparkleUpdater: NSObject, UpdaterDriving, SPUUpdaterDelegate {
     }
     var lastUpdateCheckDate: Date? { controller.updater.lastUpdateCheckDate }
     func checkForUpdates() { controller.checkForUpdates(nil) }
+
+    func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
+        onUpdateCycleFinished?()
+    }
 
     func allowedChannels(for updater: SPUUpdater) -> Set<String> {
         UpdateController.allowedChannels(includeBetas: includeBetas())
