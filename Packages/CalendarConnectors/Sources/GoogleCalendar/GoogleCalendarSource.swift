@@ -71,9 +71,89 @@ public final class GoogleCalendarSource: PollingCalendarSource {
 
     public func changes() -> AsyncStream<CalendarChange> { monitor.changes(polling: self) }
 
-    // Temporary stub, replaced in Task 9. It probes the API so provider errors still map to SourceError.
+    static let calendarSetScope = "_calendars"
+
+    private struct SyncPageDTO: Decodable {
+        struct Item: Decodable { var id: String }
+        var items: [Item]?
+        var nextPageToken: String?
+        var nextSyncToken: String?
+    }
+
     public func checkForChanges() async throws -> CalendarChange? {
-        do { _ = try await api.calendarList(); return nil }
-        catch let error as GoogleAPIError { throw error.sourceError }
+        let calendars = try await self.calendars()
+        let ids = calendars.map(\.id).sorted()
+        let setKey = ids.joined(separator: "\n")
+        let connectionID = connection.connectionID
+
+        let previousKey = await syncState.token(for: connectionID, scope: Self.calendarSetScope)
+        let setChanged = previousKey != nil && previousKey != setKey
+        if let previousKey, setChanged {
+            for removed in Set(previousKey.split(separator: "\n").map(String.init)).subtracting(ids) {
+                await syncState.setToken(nil, for: connectionID, scope: removed)
+            }
+        }
+
+        var changed = Set<String>()
+        for id in ids {
+            do {
+                if let token = await syncState.token(for: connectionID, scope: id) {
+                    if try await poll(calendarID: id, token: token) { changed.insert(id) }
+                } else {
+                    try await bootstrap(calendarID: id)
+                }
+            } catch let error as GoogleAPIError {
+                if error == .notFound || error == .forbidden { continue } // removed or no longer readable
+                throw error.sourceError
+            }
+        }
+        await syncState.setToken(setKey, for: connectionID, scope: Self.calendarSetScope)
+
+        if previousKey == nil { return nil } // first call: baseline only
+        if setChanged { return .calendarsChanged }
+        return changed.isEmpty ? nil : .eventsChanged(calendarIDs: changed)
+    }
+
+    /// Lists the whole calendar (no time window; Google forbids combining a sync token with one) only to obtain a token.
+    private func bootstrap(calendarID: String) async throws {
+        var token: String?
+        try await api.pages(
+            SyncPageDTO.self, path: GoogleAPIClient.calendarPath(calendarID, "/events"),
+            query: [
+                URLQueryItem(name: "showDeleted", value: "true"),
+                URLQueryItem(name: "maxResults", value: "2500"),
+                URLQueryItem(name: "fields", value: "nextPageToken,nextSyncToken"),
+            ],
+            next: { $0.nextPageToken }, handle: { if let t = $0.nextSyncToken { token = t } })
+        guard let token else { throw SourceError.invalidResponse("no nextSyncToken") }
+        await syncState.setToken(token, for: connection.connectionID, scope: calendarID)
+    }
+
+    /// True when anything changed since `token`. Always walks to the final page, because only it carries the new token.
+    private func poll(calendarID: String, token: String) async throws -> Bool {
+        var anyItems = false
+        var newToken: String?
+        do {
+            try await api.pages(
+                SyncPageDTO.self, path: GoogleAPIClient.calendarPath(calendarID, "/events"),
+                query: [
+                    URLQueryItem(name: "syncToken", value: token),
+                    URLQueryItem(name: "showDeleted", value: "true"),
+                    URLQueryItem(name: "maxResults", value: "250"),
+                    URLQueryItem(name: "fields", value: "nextPageToken,nextSyncToken,items(id)"),
+                ],
+                next: { $0.nextPageToken },
+                handle: {
+                    if !($0.items ?? []).isEmpty { anyItems = true }
+                    if let t = $0.nextSyncToken { newToken = t }
+                })
+        } catch GoogleAPIError.gone {
+            await syncState.setToken(nil, for: connection.connectionID, scope: calendarID)
+            try await bootstrap(calendarID: calendarID)
+            return true
+        }
+        guard let newToken else { throw SourceError.invalidResponse("no nextSyncToken") }
+        await syncState.setToken(newToken, for: connection.connectionID, scope: calendarID)
+        return anyItems
     }
 }
