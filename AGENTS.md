@@ -6,6 +6,7 @@ TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
 ## Layout
 - `Packages/TimeTugCore`: pure Swift, platform-neutral logic. NO UI or Apple-only imports.
 - `Packages/EventKitSource`: Apple Calendar adapter (macOS only).
+- `Packages/CalendarConnectors`: portable connector library (ADR 0012). `CalendarCore` (model, `CalendarSource`, `ConnectorKind`, OAuth PKCE, `ChangeMonitor`; pure Swift, builds on Linux) and `GoogleCalendar` (read-only Google connector). Imports nothing from TimeTug; TimeTug is not wired to it yet. The host app supplies `CredentialStore`, the OAuth browser/loopback redirect and persistence.
 - `Packages/AppleIntelligenceInference`: Apple on-device model adapter for duplicate detection (macOS 26+, compile-guarded). Only place with Foundation Models imports.
 - `Apps/macOS`: AppKit/SwiftUI shell. Generated Xcode project (XcodeGen).
 - `Apps/macOS/Sources/UpdateController.swift`, `UpdatesSection.swift`: Sparkle in the app layer only (never Core). Beta opt-in is `updates.includeBetas.v1` in UserDefaults.
@@ -24,6 +25,7 @@ TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
 ## Commands
 - Core tests: `swift test --package-path Packages/TimeTugCore`
 - EventKitSource build: `swift build --package-path Packages/EventKitSource`
+- Connector library tests: `swift test --package-path Packages/CalendarConnectors` (first resolve fetches swift-crypto).
 - Inference package tests: `swift test --package-path Packages/AppleIntelligenceInference`
 - Generate app project: `xcodegen generate --spec Apps/macOS/project.yml`
 - Build app: `xcodebuild -project Apps/macOS/TimeTug.xcodeproj -scheme TimeTug -destination 'platform=macOS' build`

@@ -1,8 +1,8 @@
 # Continuous integration for TimeTug. Runs on every push to master and on every pull request.
 #
 # Jobs:
-#   core        Swift Testing suites for Packages/TimeTugCore and Packages/AppleIntelligenceInference, and a
-#               build of Packages/EventKitSource (macOS).
+#   core        Swift Testing suites for Packages/TimeTugCore, Packages/CalendarConnectors, and
+#               Packages/AppleIntelligenceInference, and a build of Packages/EventKitSource (macOS).
 #   app         Generates the Xcode project with XcodeGen, then builds and runs the app's XCTest suite (macOS).
 #   dmg         Builds the release app and the unsigned drag-to-install DMG, verifies it and uploads it
 #               as the `TimeTug-dmg` artifact (a fresh installer from every run).
@@ -38,6 +38,8 @@ jobs:
         run: swift build --package-path Packages/EventKitSource
       - name: Test AppleIntelligenceInference
         run: swift test --package-path Packages/AppleIntelligenceInference
+      - name: Test CalendarConnectors
+        run: swift test --package-path Packages/CalendarConnectors
 
   app:
     runs-on: macos-26
@@ -115,3 +117,5 @@ jobs:
       - uses: actions/checkout@v7
       - name: Test TimeTugCore
         run: swift test --package-path Packages/TimeTugCore
+      - name: Test CalendarConnectors
+        run: swift test --package-path Packages/CalendarConnectors
