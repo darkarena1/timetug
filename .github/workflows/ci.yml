@@ -1,12 +1,14 @@
 # Continuous integration for TimeTug. Runs on every push to master and on every pull request.
 #
 # Jobs:
-#   core        Swift Testing suites for Packages/TimeTugCore and Packages/AppleIntelligenceInference, and a
-#               build of Packages/EventKitSource (macOS).
+#   core        Swift Testing suites for Packages/TimeTugCore, Packages/CalendarConnectors, and
+#               Packages/AppleIntelligenceInference, and a build of Packages/EventKitSource (macOS).
 #   app         Generates the Xcode project with XcodeGen, then builds and runs the app's XCTest suite (macOS).
 #   dmg         Builds the release app and the unsigned drag-to-install DMG, verifies it and uploads it
 #               as the `TimeTug-dmg` artifact (a fresh installer from every run).
 #   core-linux  Runs the Core tests on Linux to prove Core stays portable. Allowed to fail (see below).
+#   connectors-linux  Runs the CalendarConnectors tests on Linux (swift:6.2) to prove that library is portable.
+#               Allowed to fail.
 #
 # The macOS jobs need an Xcode with the macOS 26 SDK or newer (Liquid Glass APIs behind #available).
 # If the `macos-26` runner label is not available to your account, change `runs-on` in both macOS jobs
@@ -38,6 +40,8 @@ jobs:
         run: swift build --package-path Packages/EventKitSource
       - name: Test AppleIntelligenceInference
         run: swift test --package-path Packages/AppleIntelligenceInference
+      - name: Test CalendarConnectors
+        run: swift test --package-path Packages/CalendarConnectors
 
   app:
     runs-on: macos-26
@@ -115,3 +119,14 @@ jobs:
       - uses: actions/checkout@v7
       - name: Test TimeTugCore
         run: swift test --package-path Packages/TimeTugCore
+
+  # Proves the connector library stays portable. Its swift-crypto dependency needs a newer toolchain than
+  # core-linux's swift:6.0 image, hence a separate job. Allowed to fail, like core-linux.
+  connectors-linux:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    container: swift:6.2
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test CalendarConnectors
+        run: swift test --package-path Packages/CalendarConnectors
