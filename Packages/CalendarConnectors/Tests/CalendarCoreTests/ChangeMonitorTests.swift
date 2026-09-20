@@ -82,3 +82,23 @@ private func standard(_ record: @escaping @Sendable (Duration) async -> Void) ->
     try? await Task.sleep(for: .milliseconds(30))
     #expect(await script.calls <= callsAtStop + 1)
 }
+
+private struct SleeperBoom: Error {}
+
+private actor FirstSleepThrows {
+    private var thrown = false
+    func sleep() throws {
+        if !thrown { thrown = true; throw SleeperBoom() }
+    }
+}
+
+@Test func sleeperErrorEndsTheMonitorWithoutCountingAsAFailure() async {
+    // Only the first sleep throws; if the error were treated as a polling failure the loop would retry.
+    let script = Script([.success(nil), .success(nil), .success(nil)])
+    let gate = FirstSleepThrows()
+    let monitor = ChangeMonitor(interval: .seconds(60), maxBackoff: .seconds(900), sleep: { _ in try await gate.sleep() })
+    var changes: [CalendarChange] = []
+    for await change in monitor.changes(polling: ScriptedSource(script: script)) { changes.append(change) }
+    #expect(await script.calls == 1)
+    #expect(changes.isEmpty)
+}

@@ -35,20 +35,34 @@ public actor AccessTokenProvider {
 
     private func refreshShared() async throws -> OAuthTokens {
         if let inflight { return try await inflight.value }
-        let task = Task { try await self.performRefresh() }
+        // The task clears `inflight` itself when the refresh finishes, so a cancelled first caller
+        // cannot let a second refresh start while this one is still running.
+        let task = Task {
+            do {
+                let tokens = try await self.performRefresh()
+                self.finishRefresh()
+                return tokens
+            } catch {
+                self.finishRefresh()
+                throw error
+            }
+        }
         inflight = task
-        defer { inflight = nil }
         return try await task.value
     }
 
+    private func finishRefresh() { inflight = nil }
+
     private func performRefresh() async throws -> OAuthTokens {
-        var secrets = try await credentials.secrets(for: connectionID) ?? [:]
+        let secrets = try await credentials.secrets(for: connectionID) ?? [:]
         guard let refreshToken = secrets[Self.refreshTokenKey] else { throw SourceError.authExpired }
         let tokens = try await refresh(refreshToken)
         cached = tokens
         if let rotated = tokens.refreshToken, rotated != refreshToken {
-            secrets[Self.refreshTokenKey] = rotated
-            try await credentials.setSecrets(secrets, for: connectionID)
+            // Re-read after the refresh so entries written meanwhile are not overwritten.
+            var latest = try await credentials.secrets(for: connectionID) ?? [:]
+            latest[Self.refreshTokenKey] = rotated
+            try await credentials.setSecrets(latest, for: connectionID)
         }
         return tokens
     }

@@ -94,3 +94,37 @@ private func makeProvider(
     #expect(try await provider.accessToken() == "seed")
     #expect(await refresher.calls == 0)
 }
+
+@Test func cancellingTheFirstCallerKeepsSingleFlight() async throws {
+    let now = TestNow()
+    let store = InMemoryCredentialStore()
+    try await store.setSecrets([AccessTokenProvider.refreshTokenKey: "rt0"], for: "c1")
+    let refresher = Refresher(now: now)
+    let provider = makeProvider(now: now, refresher: refresher, store: store)
+    let first = Task { try await provider.accessToken() }
+    for _ in 0..<200 where await refresher.calls == 0 { try await Task.sleep(for: .milliseconds(1)) }
+    #expect(await refresher.calls == 1)
+    first.cancel()
+    let token = try await provider.accessToken()
+    #expect(token == "at1")
+    #expect(await refresher.calls == 1)
+    _ = try? await first.value
+}
+
+@Test func rotationDoesNotOverwriteEntriesWrittenDuringRefresh() async throws {
+    let now = TestNow()
+    let store = InMemoryCredentialStore()
+    try await store.setSecrets([AccessTokenProvider.refreshTokenKey: "rt0", "other": "keep"], for: "c1")
+    let provider = AccessTokenProvider(
+        connectionID: "c1", credentials: store,
+        refresh: { _ in
+            try await store.setSecrets([AccessTokenProvider.refreshTokenKey: "rt0", "other": "keep", "other2": "x"], for: "c1")
+            return OAuthTokens(accessToken: "at", expiresAt: now.date.addingTimeInterval(3600), refreshToken: "rt1")
+        },
+        now: now.provider)
+    _ = try await provider.accessToken()
+    let secrets = try #require(try await store.secrets(for: "c1"))
+    #expect(secrets[AccessTokenProvider.refreshTokenKey] == "rt1")
+    #expect(secrets["other"] == "keep")
+    #expect(secrets["other2"] == "x")
+}

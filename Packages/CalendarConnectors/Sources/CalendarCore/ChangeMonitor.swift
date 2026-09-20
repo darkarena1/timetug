@@ -26,7 +26,6 @@ public struct ChangeMonitor: Sendable {
                     do {
                         if let change = try await source.checkForChanges() { continuation.yield(change) }
                         failures = 0
-                        try await sleep(interval)
                     } catch is CancellationError {
                         break
                     } catch SourceError.authExpired {
@@ -36,8 +35,11 @@ public struct ChangeMonitor: Sendable {
                         failures += 1
                         // Clamp the exponent before multiplying so a long outage cannot overflow.
                         let delay = min(maxBackoff, interval * (1 << min(failures, 10)))
+                        // A sleeper error is not a source failure: it just ends the monitor.
                         do { try await sleep(delay) } catch { break }
+                        continue
                     }
+                    do { try await sleep(interval) } catch { break }
                 }
                 continuation.finish()
             }
