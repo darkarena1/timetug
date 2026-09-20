@@ -26,7 +26,10 @@ def load(path):
 
 def version_of(item):
     node = item.find(q("version"))
-    return int(node.text) if node is not None and node.text.isdigit() else -1
+    if node is None:
+        return None
+    text = (node.text or "").strip()
+    return int(text) if text.isdigit() else None
 
 
 def is_beta(item):
@@ -62,7 +65,7 @@ def cmd_add(a):
     })
     first = next((i for i, e in enumerate(channel) if e.tag == "item"), len(channel))
     channel.insert(first, item)
-    items = sorted(channel.findall("item"), key=version_of, reverse=True)
+    items = sorted(channel.findall("item"), key=lambda x: version_of(x) if version_of(x) is not None else -1, reverse=True)
     for i in items:
         channel.remove(i)
     for i in items:
@@ -71,9 +74,12 @@ def cmd_add(a):
 
 
 def cmd_prune(a):
-    tree = load(a.file)
+    if not os.path.exists(a.file):
+        sys.exit(f"error: no appcast at {a.file}")
+    tree = ET.parse(a.file)
     channel = tree.getroot().find("channel")
-    betas = sorted((i for i in channel.findall("item") if is_beta(i)), key=version_of, reverse=True)
+    betas = [i for i in channel.findall("item") if is_beta(i) and version_of(i) is not None]
+    betas = sorted(betas, key=version_of, reverse=True)
     for item in betas[a.keep:]:
         print(item.find("enclosure").get("url"))
         channel.remove(item)

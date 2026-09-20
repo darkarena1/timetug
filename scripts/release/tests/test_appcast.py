@@ -71,5 +71,73 @@ class AppcastTests(unittest.TestCase):
                 "--url", "https://e/x.zip", "--length", "1", "--signature", "s", "--min-system", "14.0")
         self.assertNotEqual(r.returncode, 0)
 
+    def test_prune_exits_nonzero_when_file_missing(self):
+        r = run("prune-betas", "--file", self.path, "--keep", "1")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("error: no appcast at", r.stderr)
+        self.assertFalse(os.path.exists(self.path))
+
+    def test_add_handles_empty_version_tag(self):
+        add(self.path, 1, channel="beta")
+        # Manually add an item with empty version tag
+        tree = ET.parse(self.path)
+        channel = tree.getroot().find("channel")
+        item = ET.Element("item")
+        ET.SubElement(item, "title").text = "Empty Version"
+        ET.SubElement(item, "{%s}version" % NS["sparkle"]).text = ""
+        ET.SubElement(item, "{%s}channel" % NS["sparkle"]).text = "beta"
+        ET.SubElement(item, "enclosure", {"url": "https://example.com/empty.zip"})
+        channel.append(item)
+        tree.write(self.path, encoding="utf-8", xml_declaration=True)
+
+        # Adding another item should not crash
+        add(self.path, 2)
+        it = items(self.path)
+        self.assertEqual(len(it), 3)
+
+    def test_prune_skips_items_with_empty_version(self):
+        add(self.path, 1, channel="beta")
+        add(self.path, 2, channel="beta")
+        # Manually add an item with empty version tag
+        tree = ET.parse(self.path)
+        channel = tree.getroot().find("channel")
+        item = ET.Element("item")
+        ET.SubElement(item, "title").text = "Empty Version"
+        ET.SubElement(item, "{%s}version" % NS["sparkle"]).text = ""
+        ET.SubElement(item, "{%s}channel" % NS["sparkle"]).text = "beta"
+        ET.SubElement(item, "enclosure", {"url": "https://example.com/empty.zip"})
+        channel.append(item)
+        tree.write(self.path, encoding="utf-8", xml_declaration=True)
+
+        r = run("prune-betas", "--file", self.path, "--keep", "1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        # Should keep version 2 and the empty version, prune version 1
+        it = items(self.path)
+        self.assertEqual(len(it), 2)
+        versions = [version(i) if version(i) else "" for i in it]
+        self.assertIn("2", versions)
+        self.assertIn("", versions)
+
+    def test_add_handles_whitespace_padded_version(self):
+        # Manually create a file with whitespace-padded version
+        tree = ET.ElementTree(ET.Element("rss", {"version": "2.0"}))
+        channel = ET.SubElement(tree.getroot(), "channel")
+        ET.SubElement(channel, "title").text = "TimeTug"
+        item = ET.Element("item")
+        ET.SubElement(item, "title").text = "Padded Version"
+        ET.SubElement(item, "{%s}version" % NS["sparkle"]).text = " 202609191430 "
+        ET.SubElement(item, "{%s}channel" % NS["sparkle"]).text = "beta"
+        ET.SubElement(item, "enclosure", {"url": "https://example.com/padded.zip"})
+        channel.append(item)
+        tree.write(self.path, encoding="utf-8", xml_declaration=True)
+
+        # Add a new item
+        add(self.path, 202609191431)
+        it = items(self.path)
+        versions = [version(i) for i in it]
+        # Should parse whitespace-padded version correctly
+        self.assertIn("202609191431", versions)
+        self.assertIn(" 202609191430 ", versions)
+
 if __name__ == "__main__":
     unittest.main()
