@@ -683,7 +683,7 @@ public struct HTTPResponse: Sendable {
     public var body: Data
     public init(status: Int, headers: [String: String] = [:], body: Data = Data()) {
         self.status = status
-        self.headers = Dictionary(uniqueKeysWithValues: headers.map { ($0.key.lowercased(), $0.value) })
+        self.headers = Dictionary(headers.map { ($0.key.lowercased(), $0.value) }, uniquingKeysWith: { _, last in last })
         self.body = body
     }
     public func header(_ name: String) -> String? { headers[name.lowercased()] }
@@ -1875,7 +1875,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `HTTPTransport`, `AccessTokenProvider`, `Sleeper`, `SyncStateStore`, `ChangeMonitor`, mapper + DTOs.
-- Produces: `GoogleAPIError` (`.gone`, `.notFound`, `.forbidden`; internal), `GoogleAPIClient(transport:tokens:sleep:)` with `get(path:query:)`, `pages(_:path:query:next:handle:)`, `calendarList()`, `static func calendarPath(_:)`; `public final class GoogleCalendarSource: PollingCalendarSource` with `init(connection:api:syncState:monitor:)` (internal init), `calendars()`, `events(in:)`. `checkForChanges()` and `changes()` are added in Task 9 (a temporary stub is added here so the type compiles).
+- Produces: `GoogleAPIError` (`.gone`, `.notFound`, `.forbidden`, `.sourceError`; internal, never thrown out of a public method), `GoogleAPIClient(transport:tokens:sleep:)` with `get(path:query:)`, `pages(_:path:query:next:handle:)`, `calendarList()`, `static func calendarPath(_:)`; `public final class GoogleCalendarSource: PollingCalendarSource` with `init(connection:api:syncState:monitor:)` (internal init), `calendars()`, `events(in:)`. `checkForChanges()` and `changes()` are added in Task 9 (a temporary stub is added here so the type compiles).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1887,7 +1887,8 @@ import Foundation
 import Testing
 @testable import GoogleCalendar
 
-let calendarListJSON: [String: Any] = [
+// `[String: Any]` is not Sendable, so a Swift 6 global must be marked.
+nonisolated(unsafe) let calendarListJSON: [String: Any] = [
     "items": [
         ["id": "me@x.com", "summary": "me@x.com", "primary": true, "accessRole": "owner", "timeZone": "UTC", "backgroundColor": "#112233"],
         ["id": "team@group.calendar.google.com", "summary": "Team", "accessRole": "reader", "timeZone": "UTC"],
@@ -2012,6 +2013,14 @@ actor SleepRecorder {
     }
 }
 
+@Test func providerSpecificErrorsNeverEscapeAsGoogleTypes() async throws {
+    let h = try await Harness()
+    await h.transport.route("users/me/calendarList", [.json([:], status: 404)])
+    await #expect(throws: SourceError.self) { try await h.source.calendars() }
+    await h.transport.route("users/me/calendarList", [.json([:], status: 410)])
+    await #expect(throws: SourceError.self) { try await h.source.checkForChanges() }
+}
+
 @Test func capabilitiesDescribeAReadOnlyTokenSyncedSource() async throws {
     let h = try await Harness()
     let c = h.source.capabilities
@@ -2037,6 +2046,9 @@ enum GoogleAPIError: Error, Equatable {
     case gone       // 410: the sync token is no longer valid
     case notFound   // 404
     case forbidden  // 403 without a rate-limit reason
+
+    /// What a public `CalendarSource` method throws if it cannot handle the case itself.
+    var sourceError: SourceError { .invalidResponse("google: \(self)") }
 }
 
 struct GoogleAPIClient: Sendable {
@@ -2083,7 +2095,9 @@ struct GoogleAPIClient: Sendable {
                 let retryAfter = response.header("retry-after").flatMap(TimeInterval.init)
                 rateLimitRetries += 1
                 if rateLimitRetries > Self.maxRateLimitRetries { throw SourceError.rateLimited(retryAfter: retryAfter) }
-                try await sleep(.seconds(retryAfter ?? Double(1 << (rateLimitRetries - 1))))
+                // Honor Retry-After exactly; otherwise exponential backoff with jitter so several clients de-synchronize.
+                let fallback = Double(1 << (rateLimitRetries - 1)) * Double.random(in: 0.5...1.0)
+                try await sleep(.seconds(retryAfter ?? fallback))
             case 500...:
                 throw SourceError.server(status: response.status)
             default:
@@ -2163,7 +2177,11 @@ public final class GoogleCalendarSource: PollingCalendarSource {
 
     public func calendars() async throws -> [CalendarDescriptor] {
         let account = connection.config["email"]
-        return try await api.calendarList().compactMap { GoogleEventMapper.descriptor(from: $0, accountName: account) }
+        do {
+            return try await api.calendarList().compactMap { GoogleEventMapper.descriptor(from: $0, accountName: account) }
+        } catch let error as GoogleAPIError {
+            throw error.sourceError
+        }
     }
 
     public func events(in interval: DateInterval) async throws -> [CalendarEvent] {
@@ -2195,10 +2213,10 @@ public final class GoogleCalendarSource: PollingCalendarSource {
                 GoogleEventsPageDTO.self, path: GoogleAPIClient.calendarPath(calendar.id, "/events"), query: query,
                 next: { $0.nextPageToken },
                 handle: { events += ($0.items ?? []).compactMap { GoogleEventMapper.map($0, calendar: calendar) } })
-        } catch GoogleAPIError.notFound {
-            return []
-        } catch GoogleAPIError.forbidden {
-            return []
+        } catch let error as GoogleAPIError {
+            // A calendar that was removed or lost access is skipped; anything else is not ours to interpret.
+            if error == .notFound || error == .forbidden { return [] }
+            throw error.sourceError
         }
         return events
     }
@@ -2212,7 +2230,7 @@ public final class GoogleCalendarSource: PollingCalendarSource {
 - [ ] **Step 4: Run to verify pass**
 
 Run: `swift test --package-path Packages/CalendarConnectors --filter SourceTests`
-Expected: PASS (9 tests). Note: `Harness` is a struct holding a `let source` built in `init`; if Swift 6 flags `sleeps`/`now` use before `self` init, copy them into locals first as written.
+Expected: PASS (10 tests). Note: `Harness` is a struct holding a `let source` built in `init`; if Swift 6 flags `sleeps`/`now` use before `self` init, copy them into locals first as written.
 
 - [ ] **Step 5: Commit**
 
@@ -2408,10 +2426,9 @@ In `Sources/GoogleCalendar/GoogleCalendarSource.swift` replace the stub `checkFo
                 } else {
                     try await bootstrap(calendarID: id)
                 }
-            } catch GoogleAPIError.notFound {
-                continue
-            } catch GoogleAPIError.forbidden {
-                continue
+            } catch let error as GoogleAPIError {
+                if error == .notFound || error == .forbidden { continue } // removed or no longer readable
+                throw error.sourceError
             }
         }
         await syncState.setToken(setKey, for: connectionID, scope: Self.calendarSetScope)
