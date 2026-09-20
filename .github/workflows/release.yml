@@ -1,9 +1,12 @@
-# Release workflow. Runs when a tag `v*` is pushed, or manually (workflow_dispatch with a `tag` input).
+# Release workflow. Runs when the owner PUBLISHES a GitHub Release whose tag starts with `v` (the release
+# and its notes are created by the owner; this workflow builds the tag's commit and UPLOADS the assets to
+# it), or manually (workflow_dispatch with a `tag` input, a fallback that creates the release if it does
+# not exist). Releases for other tags (for example beta-*) are ignored. Pushing a tag alone does nothing.
 #
 # One macOS job builds the app in Release (scripts/ci/build-release.sh), then:
 #   - With ALL Apple signing secrets set (see docs/release.md): signs, notarizes and staples the app,
 #     builds TimeTug-<version>.dmg, then signs, notarizes and staples the DMG too, and publishes a
-#     normal GitHub Release. That release also carries the Sparkle update zip (built from the notarized
+#     normal GitHub Release (created by the owner, or by this workflow for a manual run). That release also carries the Sparkle update zip (built from the notarized
 #     app, EdDSA-signed), and only after the release is published is the item added to the appcast (stable feed; a suffixed
 #     tag such as v1.2.3-rc1 is a prerelease routed to the beta channel).
 #   - Without them: builds TimeTug-<version>-unsigned.dmg and publishes a PRERELEASE.
@@ -13,8 +16,8 @@
 name: Release
 
 on:
-  push:
-    tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -31,28 +34,25 @@ jobs:
     # Requires approval from the repository owner (Settings > Environments > release) and only
     # runs for master or v* tags.
     environment: release
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'v')
     env:
-      TAG: ${{ inputs.tag || github.ref_name }}
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
         with:
+          # The tag's commit for a published release; the selected ref for a manual run.
+          ref: ${{ github.event.release.tag_name || github.sha }}
           fetch-depth: 0
       - name: Require the release commit to be on master
         run: |
           git fetch --quiet origin master
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
-            echo "::error::Releases can only be cut from commits on master; $GITHUB_SHA is not."
+          COMMIT="$(git rev-parse HEAD)"
+          if ! git merge-base --is-ancestor "$COMMIT" origin/master; then
+            echo "::error::Releases can only be cut from commits on master; $COMMIT is not."
             exit 1
           fi
-      - name: Select newest Xcode
-        run: scripts/ci/select-xcode.sh
-      - name: Install XcodeGen
-        run: brew install xcodegen
-      - name: Compute build number
-        run: scripts/ci/compute-versions.sh stable "$TAG" >> "$GITHUB_ENV"
-      - name: Build Release app
-        run: scripts/ci/build-release.sh
+          echo "COMMIT=$COMMIT" >> "$GITHUB_ENV"
       - name: Check for signing secrets
         id: signing
         env:
@@ -62,15 +62,28 @@ jobs:
           NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
           NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
           NOTARY_API_KEY_P8_BASE64: ${{ secrets.NOTARY_API_KEY_P8_BASE64 }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
           if [ -n "$MACOS_CERTIFICATE_P12_BASE64" ] && [ -n "$MACOS_CERTIFICATE_PASSWORD" ] \
             && [ -n "$APPLE_TEAM_ID" ] && [ -n "$NOTARY_API_KEY_ID" ] \
             && [ -n "$NOTARY_API_ISSUER_ID" ] && [ -n "$NOTARY_API_KEY_P8_BASE64" ]; then
+            if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+              echo "::error::SPARKLE_PRIVATE_KEY is not set; cannot publish a signed release"
+              exit 1
+            fi
             echo "has_signing=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_signing=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Signing secrets are not set; publishing an unsigned prerelease."
           fi
+      - name: Select newest Xcode
+        run: scripts/ci/select-xcode.sh
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Compute build number
+        run: scripts/ci/compute-versions.sh stable "$TAG" >> "$GITHUB_ENV"
+      - name: Build Release app
+        run: scripts/ci/build-release.sh
       - name: Sign and notarize app
         if: steps.signing.outputs.has_signing == 'true'
         env:
@@ -134,13 +147,16 @@ jobs:
         if: steps.signing.outputs.has_signing == 'true'
         run: |
           VERSION="$(cat dist/version.txt)"
-          EXTRA=()
-          if [ "$UPDATE_CHANNEL" = beta ]; then EXTRA+=(--prerelease); fi
-          gh release create "$TAG" \
-            "dist/TimeTug-${VERSION}.dmg" "dist/TimeTug-${VERSION}.dmg.sha256" "$UPDATE_ZIP" \
-            "${EXTRA[@]}" \
-            --title "TimeTug ${VERSION}" --target "$GITHUB_SHA" --generate-notes \
-            --notes "SHA-256: $(cut -d' ' -f1 "dist/TimeTug-${VERSION}.dmg.sha256")"
+          FILES=("dist/TimeTug-${VERSION}.dmg" "dist/TimeTug-${VERSION}.dmg.sha256" "$UPDATE_ZIP")
+          if [ "$GITHUB_EVENT_NAME" = release ] || gh release view "$TAG" >/dev/null 2>&1; then
+            # The owner's release (title and notes) is left as it is.
+            gh release upload "$TAG" "${FILES[@]}" --clobber
+          else
+            gh release create "$TAG" "${FILES[@]}" \
+              --title "TimeTug ${VERSION}" --target "$COMMIT" --generate-notes \
+              --notes "SHA-256: $(cut -d' ' -f1 "dist/TimeTug-${VERSION}.dmg.sha256")"
+          fi
+          if [ "$UPDATE_CHANNEL" = beta ]; then gh release edit "$TAG" --prerelease; fi
       - name: Add item to the appcast
         if: steps.signing.outputs.has_signing == 'true'
         run: |
@@ -158,7 +174,12 @@ jobs:
         if: steps.signing.outputs.has_signing != 'true'
         run: |
           VERSION="$(cat dist/version.txt)"
-          gh release create "$TAG" \
-            "dist/TimeTug-${VERSION}-unsigned.dmg" "dist/TimeTug-${VERSION}-unsigned.dmg.sha256" \
-            --title "TimeTug ${VERSION} (unsigned)" --target "$GITHUB_SHA" --prerelease --generate-notes \
-            --notes "Unsigned build: macOS will warn on first open; right-click Open. If macOS says the app is damaged, run: xattr -dr com.apple.quarantine /Applications/TimeTug.app. SHA-256: $(cut -d' ' -f1 "dist/TimeTug-${VERSION}-unsigned.dmg.sha256")"
+          FILES=("dist/TimeTug-${VERSION}-unsigned.dmg" "dist/TimeTug-${VERSION}-unsigned.dmg.sha256")
+          if [ "$GITHUB_EVENT_NAME" = release ] || gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${FILES[@]}" --clobber
+          else
+            gh release create "$TAG" "${FILES[@]}" \
+              --title "TimeTug ${VERSION} (unsigned)" --target "$COMMIT" --generate-notes \
+              --notes "Unsigned build: macOS will warn on first open; right-click Open. If macOS says the app is damaged, run: xattr -dr com.apple.quarantine /Applications/TimeTug.app. SHA-256: $(cut -d' ' -f1 "dist/TimeTug-${VERSION}-unsigned.dmg.sha256")"
+          fi
+          gh release edit "$TAG" --prerelease
