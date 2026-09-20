@@ -66,6 +66,14 @@ class AppcastTests(unittest.TestCase):
         run("prune-betas", "--file", self.path, "--keep", "1")
         self.assertEqual([version(i) for i in items(self.path)], ["1000000000000"])
 
+    def test_prune_orders_14_digit_second_versions_above_12_digit_minute_versions(self):
+        add(self.path, 202609191430, channel="beta")      # legacy minute resolution
+        add(self.path, 20260919143005, channel="beta")
+        add(self.path, 20260919143001, channel="beta")
+        r = run("prune-betas", "--file", self.path, "--keep", "1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual([version(i) for i in items(self.path)], ["20260919143005"])
+
     def test_rejects_non_numeric_version(self):
         r = run("add", "--file", self.path, "--title", "t", "--version", "abc", "--short", "1",
                 "--url", "https://e/x.zip", "--length", "1", "--signature", "s", "--min-system", "14.0")

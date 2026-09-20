@@ -2,13 +2,13 @@
 # Print APP_VERSION and BUILD_NUMBER for a beta or stable build (see docs/release.md, "Versioning").
 #   compute-versions.sh beta <run-number>               -> <base>-beta.<run>
 #   compute-versions.sh stable <tag like v1.2.3>        -> 1.2.3
-# BUILD_NUMBER is a UTC timestamp YYYYMMDDHHMM shared by beta and release so a release always outranks
+# BUILD_NUMBER is a UTC timestamp YYYYMMDDHHMMSS shared by beta and release so a release always outranks
 # earlier betas. TT_NOW overrides the clock (tests only).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 kind="${1:-}"
-now="${TT_NOW:-$(date -u +%Y%m%d%H%M)}"
-[[ "$now" =~ ^[0-9]{12}$ ]] || { echo "error: bad timestamp '$now'" >&2; exit 1; }
+now="${TT_NOW:-$(date -u +%Y%m%d%H%M%S)}"
+[[ "$now" =~ ^[0-9]{14}$ ]] || { echo "error: bad timestamp '$now'" >&2; exit 1; }
 case "$kind" in
   beta)
     run="${2:-}"
