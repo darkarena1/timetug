@@ -5,6 +5,7 @@ import Network
 public enum LoopbackError: Error, Equatable {
     case couldNotOpenBrowser, timedOut, cancelled, credentialPromptUnavailable
     case listenerFailed(String)
+    case alreadyWaiting
 }
 
 /// OAuth via a loopback redirect: listens on 127.0.0.1 (ephemeral port), hands the authorization URL to the
@@ -46,8 +47,16 @@ private final class Once: @unchecked Sendable {
 }
 
 final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
-    private(set) var redirectURI = URL(string: "http://127.0.0.1")!
-    private var port: UInt16 = 0
+    private var boundPort: UInt16 = 0
+    private var waitClaimed = false
+    var redirectURI: URL {
+        lock.lock(); defer { lock.unlock() }
+        return boundPort == 0 ? URL(string: "http://127.0.0.1")! : URL(string: "http://127.0.0.1:\(boundPort)")!
+    }
+    private var port: UInt16 {
+        lock.lock(); defer { lock.unlock() }
+        return boundPort
+    }
     private let listener: NWListener
     private let openURL: LoopbackAuthorizationInteraction.OpenURL
     private let timeout: Duration
@@ -74,7 +83,12 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
             listener.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
-                    if let raw = listener.port?.rawValue { once.run { continuation.resume(returning: raw) } }
+                    if let raw = listener.port?.rawValue {
+                        once.run {
+                            session.publish(port: raw)
+                            continuation.resume(returning: raw)
+                        }
+                    }
                 case .failed(let error):
                     once.run { continuation.resume(throwing: LoopbackError.listenerFailed(String(describing: error))) }
                 case .cancelled:
@@ -84,9 +98,13 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
             }
             listener.start(queue: session.queue)
         }
-        session.port = port
-        session.redirectURI = URL(string: "http://127.0.0.1:\(port)")!
+        _ = port
         return session
+    }
+
+    private func publish(port: UInt16) {
+        lock.lock(); defer { lock.unlock() }
+        boundPort = port
     }
 
     func authorize(at authorizationURL: URL) async throws -> URL {
@@ -116,7 +134,11 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
     }
 
     private func waitForRedirect() async throws -> URL {
-        try await withTaskCancellationHandler {
+        lock.lock()
+        if waitClaimed { lock.unlock(); throw LoopbackError.alreadyWaiting }
+        waitClaimed = true
+        lock.unlock()
+        return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
                 lock.lock()
                 if let early = received {
@@ -139,17 +161,38 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
     <h2>You're signed in</h2><p>You can close this window and return to TimeTug.</p></body>
     """
 
+    private static let maxRequestBytes = 16_384
+
     private func accept(_ connection: NWConnection) {
         connection.start(queue: queue)
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 16_384) { [weak self] data, _, _, _ in
+        receiveRequest(on: connection, buffer: Data())
+    }
+
+    private func receiveRequest(on connection: NWConnection, buffer: Data) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: Self.maxRequestBytes) { [weak self] data, _, isComplete, error in
             guard let self else { connection.cancel(); return }
-            let redirect = data.flatMap { LoopbackRequest.redirectURL(from: $0, port: self.port) }
-            let status = redirect == nil ? "404 Not Found" : "200 OK"
-            let body = redirect == nil ? "" : Self.page
-            let head = "HTTP/1.1 \(status)\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n"
-            connection.send(content: Data((head + body).utf8), contentContext: .finalMessage, isComplete: true,
-                            completion: .contentProcessed { _ in connection.cancel() })
+            var buffer = buffer
+            if let data { buffer.append(data) }
+            let lineComplete = buffer.range(of: Data("\r\n".utf8)) != nil
+            if !lineComplete {
+                if error != nil || isComplete || buffer.count >= Self.maxRequestBytes {
+                    self.respond(on: connection, redirect: nil)
+                } else {
+                    self.receiveRequest(on: connection, buffer: buffer)
+                }
+                return
+            }
+            let redirect = LoopbackRequest.redirectURL(from: buffer, port: self.port)
+            self.respond(on: connection, redirect: redirect)
             if let redirect { self.deliver(.success(redirect)) }
         }
+    }
+
+    private func respond(on connection: NWConnection, redirect: URL?) {
+        let status = redirect == nil ? "404 Not Found" : "200 OK"
+        let body = redirect == nil ? "" : Self.page
+        let head = "HTTP/1.1 \(status)\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n"
+        connection.send(content: Data((head + body).utf8), contentContext: .finalMessage, isComplete: true,
+                        completion: .contentProcessed { _ in connection.cancel() })
     }
 }

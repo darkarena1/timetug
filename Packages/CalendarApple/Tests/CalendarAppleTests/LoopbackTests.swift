@@ -1,5 +1,6 @@
 import CalendarCore
 import Foundation
+import Network
 import Testing
 @testable import CalendarApple
 
@@ -57,4 +58,37 @@ private func interaction(timeout: Duration = .seconds(5), opened: @escaping @Sen
     await #expect(throws: LoopbackError.credentialPromptUnavailable) {
         _ = try await interaction().promptCredentials([CredentialField(key: "u", label: "User")])
     }
+}
+
+@Test func secondConcurrentAuthorizeFailsFastAndFirstStillCompletes() async throws {
+    let session = try await interaction().beginOAuthRedirect()
+    let first = Task { try await session.authorize(at: URL(string: "https://accounts.example/auth")!) }
+    try await Task.sleep(for: .milliseconds(200))
+    await #expect(throws: LoopbackError.alreadyWaiting) { try await session.authorize(at: URL(string: "https://accounts.example/auth")!) }
+    _ = try await URLSession.shared.data(from: URL(string: session.redirectURI.absoluteString + "/?code=one&state=s")!)
+    let received = try await first.value
+    #expect(received.query?.contains("code=one") == true)
+    await session.close()
+}
+
+@Test func requestSplitAcrossChunksIsReassembled() async throws {
+    let session = try await interaction().beginOAuthRedirect()
+    let waiting = Task { try await session.authorize(at: URL(string: "https://accounts.example/auth")!) }
+    try await Task.sleep(for: .milliseconds(100))
+    let port = NWEndpoint.Port(rawValue: UInt16(session.redirectURI.port!))!
+    let client = NWConnection(host: "127.0.0.1", port: port, using: .tcp)
+    client.start(queue: DispatchQueue(label: "test.client"))
+    func send(_ text: String) async {
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+            client.send(content: Data(text.utf8), completion: .contentProcessed { _ in c.resume() })
+        }
+    }
+    await send("GET /?co")
+    try await Task.sleep(for: .milliseconds(100))
+    await send("de=abc&state=xyz HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    let watchdog = Task { try await Task.sleep(for: .seconds(5)); waiting.cancel() }
+    defer { watchdog.cancel(); client.cancel() }
+    let received = try await waiting.value
+    #expect(received.query?.contains("code=abc") == true)
+    await session.close()
 }
