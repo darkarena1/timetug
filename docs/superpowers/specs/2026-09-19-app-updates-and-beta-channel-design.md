@@ -35,7 +35,7 @@ Trigger: `workflow_run` of `CI` completed, `branches: [master]`, and the job run
 3. Build with `scripts/ci/build-release.sh`, with `APP_VERSION` and `BUILD_NUMBER` from `scripts/ci/compute-versions.sh beta`.
 4. Sign with Developer ID, without notarizing: `scripts/release/sign-app.sh` (split out of `sign-and-notarize.sh`, whose `app` mode calls it). Order: Sparkle's nested XPC services and `Autoupdate` helper, then `Sparkle.framework`, then the widget extension, then the app, hardened runtime, in a temporary keychain that is deleted at the end.
 5. `scripts/release/make-update-zip.sh` (`ditto -c -k --keepParent`), then `sign_update --ed-key-file` for the EdDSA signature and length.
-6. Create the GitHub prerelease as a DRAFT tagged `beta-<BUILD_NUMBER>` with the zip attached, then PUBLISH it. An existing release or tag of that name fails the run.
+6. Create the GitHub prerelease as a DRAFT tagged `v<APP_VERSION>` (`v<base>-beta.<BUILD_NUMBER>`; the two betas published earlier use the legacy `beta-<BUILD_NUMBER>` tag and are pruned by the same logic) with the zip attached, then PUBLISH it. An existing release or tag of that name fails the run.
 7. Only then `scripts/release/publish-appcast.sh` adds a beta item (with a release-notes link) to `appcast.xml` on `gh-pages` and prunes to the newest 5 betas. The release is published before the feed lists it so the feed never points at an asset that cannot be downloaded. If the appcast step fails the run fails visibly and the release stays public but unlisted.
 8. Pruned beta releases and tags are deleted; a failed delete warns but does not fail the run.
 
@@ -44,7 +44,7 @@ Trigger: `workflow_run` of `CI` completed, `branches: [master]`, and the job run
 **Appcast generation.** `scripts/release/appcast.py` (Python stdlib) edits the XML: it inserts an `<item>` with `sparkle:version`, `sparkle:shortVersionString`, `sparkle:minimumSystemVersion`, the enclosure URL (the release asset), `length`, `sparkle:edSignature`, a release-notes link and, for betas, `<sparkle:channel>beta</sparkle:channel>`. It rejects an add with the same `sparkle:version` but a different URL, and replaces an item with the same enclosure URL (so re-running a release replaces its item). It does not depend on `generate_appcast`.
 
 ### `release.yml` (stable)
-Trigger: `release: published` for a tag starting with `v` (`beta-*` releases are ignored), and `workflow_dispatch` with a `tag` input as a fallback. Pushing a tag alone does nothing. The owner drafts the release in the GitHub UI, reviews it and clicks Publish.
+Trigger: `release: published` for a tag starting with `v` (beta releases are created with the workflow token, which never triggers workflows), and `workflow_dispatch` with a `tag` input as a fallback. Pushing a tag alone does nothing. The owner drafts the release in the GitHub UI, reviews it and clicks Publish.
 - For the release event, checks out `refs/tags/<tag>` (so a branch named like the tag cannot shadow it) and fails if HEAD is not the tag's commit. A `Validate the tag` step runs `compute-versions.sh stable` right after checkout, so a bad tag (e.g. uppercase `V1.2.3`) fails before any build or secrets.
 - Builds the tag's commit (for dispatch: the tag's commit if the tag exists, otherwise the selected ref, and the workflow then creates the tag). The commit must be on `master`. The job needs the owner's approval through the `release` environment (reviewers, deployments limited to `master` and `v*` tags).
 - Fails early if the Apple secrets exist but `SPARKLE_PRIVATE_KEY` does not.
