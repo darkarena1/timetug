@@ -11,6 +11,12 @@ packages:
     path: ../../Packages/EventKitSource
   AppleIntelligenceInference:
     path: ../../Packages/AppleIntelligenceInference
+  CalendarConnectors:
+    path: ../../Packages/CalendarConnectors
+  CalendarBridge:
+    path: ../../Packages/CalendarBridge
+  CalendarApple:
+    path: ../../Packages/CalendarApple
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
     exactVersion: 2.4.0
@@ -37,6 +43,14 @@ targets:
         product: EventKitSource
       - package: AppleIntelligenceInference
         product: AppleIntelligenceInference
+      - package: CalendarConnectors
+        product: CalendarCore
+      - package: CalendarConnectors
+        product: GoogleCalendar
+      - package: CalendarBridge
+        product: CalendarBridge
+      - package: CalendarApple
+        product: CalendarApple
       - package: KeyboardShortcuts
         product: KeyboardShortcuts
       - package: Sparkle
@@ -91,6 +105,16 @@ targets:
     sources: [Tests]
     dependencies:
       - target: TimeTug
+      - package: TimeTugCore
+        product: TimeTugCore
+      - package: CalendarConnectors
+        product: CalendarCore
+      - package: CalendarConnectors
+        product: GoogleCalendar
+      - package: CalendarBridge
+        product: CalendarBridge
+      - package: CalendarApple
+        product: CalendarApple
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

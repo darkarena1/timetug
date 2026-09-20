@@ -13,6 +13,7 @@ final class SettingsStore: ObservableObject {
     private static let appearanceKey = "appearanceMode.v1"
     private static let cardStyleKey = "popupCardStyle.v1"
     private static let inferenceKey = "dedupInference.v1"
+    private static let eventKitKey = "eventKitEnabled.v1"
     private let defaults: UserDefaults
     let shared: SharedSettings
     /// True while `reloadFromShared()` assigns values that came from the suite; the observers must not write them back.
@@ -40,6 +41,9 @@ final class SettingsStore: ObservableObject {
     @Published var popupCardStyle: PopupCardStyle {
         didSet { defaults.set(popupCardStyle.rawValue, forKey: Self.cardStyleKey) }
     }
+    @Published var eventKitEnabled: Bool {
+        didSet { defaults.set(eventKitEnabled, forKey: Self.eventKitKey) }
+    }
     @Published var inferenceEnabled: Bool {
         didSet {
             defaults.set(inferenceEnabled, forKey: Self.inferenceKey)
@@ -66,6 +70,7 @@ final class SettingsStore: ObservableObject {
             .flatMap(PopupCardStyle.init(rawValue:))
             .flatMap { PopupCardStyle.available.contains($0) ? $0 : nil } ?? PopupCardStyle.defaultStyle
         self.inferenceEnabled = shared.bool(.useIntelligence) ?? defaults.bool(forKey: Self.inferenceKey)
+        self.eventKitEnabled = defaults.object(forKey: Self.eventKitKey) as? Bool ?? true
         // One-time migration: seed the suite so widgets and controls see current values.
         mirrorToShared()
         shared.set(inferenceEnabled, for: .useIntelligence)

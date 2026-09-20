@@ -1,5 +1,6 @@
 import AppKit
 import AppleIntelligenceInference
+import CalendarBridge
 import Combine
 import EventKitSource
 import KeyboardShortcuts
@@ -25,6 +26,7 @@ final class AppCoordinator {
         currentVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?")
 
     private let eventKit = EventKitSource()
+    private let eventKitCore: ConnectedSource
     private let store: CalendarStore
     private var snapshot = CalendarSnapshot.empty
     private let ledgerStore = LedgerStore()
@@ -51,7 +53,8 @@ final class AppCoordinator {
     }
 
     init() {
-        store = CalendarStore(sources: [eventKit], adjudicator: AppleIntelligence.makeAdjudicator())
+        eventKitCore = ConnectedSource(eventKit)
+        store = CalendarStore(sources: [eventKitCore], adjudicator: AppleIntelligence.makeAdjudicator())
         var loaded = ledgerStore.load()
         loaded.prune(now: Date())
         ledger = loaded
@@ -114,7 +117,7 @@ final class AppCoordinator {
         await refresh()
         if settings.takeover.takeoverCalendarKeys.isEmpty { openSettings(pane: .calendars) }
 
-        for await _ in eventKit.changes() { await refresh() }
+        for await _ in eventKitCore.changes() { await refresh() }
     }
 
     /// Hosting controller that reports its content size so the popover is exactly as tall as the popup.
