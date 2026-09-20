@@ -28,7 +28,7 @@ for attempt in 1 2 3 4 5; do
     pruned="$(python3 "$ROOT/scripts/release/appcast.py" prune-betas --file "$repo/appcast.xml" --keep "$keep")"
   fi
   git -C "$repo" add -A
-  git -C "$repo" commit -q -m "appcast: update" || true
+  git -C "$repo" diff --cached --quiet || git -C "$repo" commit -q -m "appcast: update"
   if git -C "$repo" push -q origin gh-pages >&2 2>&1; then
     [ -n "$pruned" ] && echo "$pruned"
     exit 0
