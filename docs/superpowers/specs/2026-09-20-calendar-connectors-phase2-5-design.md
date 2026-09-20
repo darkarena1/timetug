@@ -33,7 +33,7 @@ Status: draft for review. Phases 1 and 2 are merged (#16, #17, `ef212ec`). This 
 | `GoogleCalendar` | Google connector | `CalendarCore`, `CalendarOAuth` |
 | `CalendarTestSupport` | fakes, `AllDayConformance` | `CalendarCore` |
 
-`OAuth.swift`, `AccessTokenProvider.swift` and `PKCE.swift` move from `CalendarCore` to `CalendarOAuth` (their tests move to a new `CalendarOAuthTests` target). Only `GoogleCalendar` uses them today. The `swift-crypto` dependency and its pin are removed from the manifest.
+`OAuth.swift`, `AccessTokenProvider.swift` and `PKCE.swift` move from `CalendarCore` to `CalendarOAuth`; they gain `import CalendarCore` (for `SourceError`, `HTTPRequest`, `HTTPResponse`, `HTTPTransport`) and `PKCE.swift` drops `import Crypto`. Their tests move to a new `CalendarOAuthTests` target depending on `CalendarOAuth`, `CalendarCore` and `CalendarTestSupport` (for `FakeTransport`). Only `GoogleCalendar` uses these types today. The `swift-crypto` dependency and its pin are removed from the manifest.
 
 `SHA256Hashing` is `Sendable` with `func sha256(_ data: Data) -> Data`. `PKCE.challenge(for:hasher:)` and `OAuthClient` take a hasher parameter defaulting to the built-in `PureSwiftSHA256`. The default is checked against the NIST short-message vectors and the RFC 7636 appendix B example. `CalendarApple` adds a CryptoKit-backed `CryptoKitSHA256` (Apple platforms need no extra dependency); the app injects it. A Linux host can wrap swift-crypto itself. Randomness for verifiers and state stays `SystemRandomNumberGenerator`.
 
@@ -49,17 +49,19 @@ struct TimeTugCalendarEvent { var event: CalendarCore.CalendarEvent; var sourceI
 ```
 
 - Forwarding accessors (get and set where Core mutates them): `title`, `start`, `end`, `isAllDay`, `timeZone`, `location`, `notes`, `url`, `calendarID`.
-- Computed from the library event: `sourceEventID` (`event.eventID`), `conferenceURL` (`event.conference?.url`), `externalUID` (`event.uid`), `attendees` (non-self attendees), `otherAttendeeCount`, `organizerEmail` (organizer's email unless self), `responseStatus`.
+- `conferenceURL` stays a stored, settable field on the wrapper, initialised from `event.conference?.url`. Core writes it after construction (`CalendarStore.makeSnapshot` fills it with `ConferenceLinkDetector` when nil; `DuplicateResolver` sets the best link on merged events), and the detector yields only a URL, not a `ConferenceProvider`. The library event is never modified.
+- Computed from the library event: `sourceEventID` (`event.eventID`), `externalUID` (`event.uid`), `attendees` (non-self attendees), `otherAttendeeCount`, `organizerEmail` (organizer's email unless self), `responseStatus`.
 - `responseStatus` is `event.myResponse ?? self-attendee response`, as an optional library `ResponseStatus`; `nil` replaces Core's `.unknown` and `needsAction` replaces `.pending`.
-- `id`, `contentKey`, `calendarKey`, `allCalendarKeys`, `allContentKeys` and `isSameMeeting` keep their exact current formulas, so the takeover ledger and dedup lessons stay compatible. `start` and `end` for a merged event still follow today's merge rule (`start` is the tug time, `displayStart` the shown range).
-- Core's `Attendee` and `ResponseStatus` are deleted. `SourceError`, `SourceStatus` and Core's `CalendarSource` (wrapped events, `changes() -> AsyncStream<Void>`) stay, as does `CalendarInfo`.
+- `id`, `contentKey`, `calendarKey`, `allCalendarKeys`, `allContentKeys` and `isSameMeeting` keep their exact current formulas, computed from the forwarded `start`/`end`. For timed events the inputs are unchanged, so the takeover ledger and dedup lessons stay compatible (a test pins them). For all-day events the inputs are now the event's own canonical instants instead of the bridge's device-local midnights, so their keys change when the event's zone differs from the device's. This is accepted: all-day events never take over, and dedup never merges them (`DuplicateRules.decide` returns `.separate(.allDay)` for any pair involving one; only an exact `contentKey` match, which needs identical titles and instants, precedes that check). `start` and `end` for a merged event still follow today's merge rule (`start` is the tug time, `displayStart` the shown range).
+- Core's `Attendee` and `ResponseStatus` are deleted. `Attendee.normalizedEmail` (trims, lowercases and strips `mailto:`) survives as a Core free function `normalizedEmail(_:)`, used by `DuplicateRules.emails`; connectors are still expected to hand over plain addresses, and `EventKitSource` strips `mailto:` when it builds library attendees. `SourceError`, `SourceStatus` and Core's `CalendarSource` (wrapped events, `changes() -> AsyncStream<Void>`) stay, as does `CalendarInfo`.
 
 ## Bridge and all-day
 
 - `ConnectedSource` wraps `event` with `sourceID`, drops `.cancelled` events, maps descriptors to `CalendarInfo`, and translates `SourceError` and the change stream exactly as it does now.
 - `EventMapper` loses its interim all-day conversion and its attendee/response mapping; it reduces to the two mappings above.
 - Core gains a small helper on the wrapper: `allDayDates` (first date and exclusive end date in the event's own zone) and `covers(_ date: CalendarDate)`. `DayAgenda.make`, `WidgetSnapshot` (all-day inclusion, computed with the passed-in `calendar`), the popup row model and `DuplicateRules` use it. `TakeoverPolicy` still returns false for all-day events.
-- `DayAgenda` treats an all-day event as on day D by `covers`; timed events keep instant overlap. Time is still passed in; Core never calls `Date()`.
+- `DayAgenda` treats an all-day event as on day D by `covers`; timed events keep instant overlap. An all-day item's `state` also comes from dates: `.past` when its last covered date is before today, otherwise `.current`; it is never `.upcoming` (an all-day event covering tomorrow only is not on today's agenda), and `next` still ignores all-day events. Time is still passed in; Core never calls `Date()`.
+- **Fetch window.** `CalendarStore.fetchWindow` and the raw filter are instant-based over one local day, so an all-day event in a zone more than a day away from the viewer could be missed. Sources are queried with the window widened by 26 hours (the largest zone spread) on each side, and the raw filter keeps timed events by the unchanged instant test and all-day events by `covers` for any date within the local window. `DayAgenda` and the widget still decide what is shown.
 - `WidgetSnapshot` keeps its own DTO. For all-day events it emits local-midnight instants for the day range built once at snapshot time from the covered dates, so the snapshot schema and the widget code do not change.
 - `EventKitSource` stamps floating all-day events with the device zone (`TimeZone.current`) and emits them canonically (start of day in that zone, exclusive end), passing `AllDayConformance`. It is re-read every refresh, so travelling never leaves stale zones.
 - `AllDay.startOfDay(_:in:)` and `AllDay.dates` stay in the library; only the bridge's reverse conversion is deleted.
@@ -69,14 +71,15 @@ struct TimeTugCalendarEvent { var event: CalendarCore.CalendarEvent; var sourceI
 Tests come first, per repo rule (Swift Testing in packages, XCTest in the app).
 
 - `CalendarOAuthTests`: NIST SHA-256 vectors including empty, multi-block and one-million-`a` inputs; the RFC 7636 example verifier and challenge; an injected hasher is the one used; existing OAuth, token-refresh and PKCE tests move unchanged.
-- Wrapper tests: forwarding and setters, computed fields, `id`, `contentKey` and `isSameMeeting` unchanged against fixed expected strings.
-- All-day tests: Tokyo event for a US viewer, multi-day event, spring-forward-gap zone, local date rollover at midnight, in `DayAgenda`, `WidgetSnapshot` and the popup row model; a floating EventKit all-day event passes `AllDayConformance`.
+- Wrapper tests: forwarding and setters, the settable `conferenceURL`, computed fields, `id`, `contentKey` and `isSameMeeting` unchanged for timed events against fixed expected strings.
+- All-day tests: Tokyo event for a US viewer, multi-day event, spring-forward-gap zone, local date rollover at midnight, in `DayAgenda`, `WidgetSnapshot` and the popup row model; an all-day event whose zone is more than 24 hours from the viewer's is fetched and shown on its own date; a Tokyo all-day event viewed in Los Angeles is `.current`, not `.past`, on that date; a floating EventKit all-day event passes `AllDayConformance`.
 - Existing Core, dedup, takeover and app tests get mechanical updates; the bridge tests shrink to wrapping, cancelled filtering and change/error translation.
 - Gate: `swift test` for every package, the app tests, and the persisted-key regression tests pass before the PR.
 
 ## Migration and compatibility
 
 - No persisted format changes. The ledger and lesson keys derive from the unchanged `contentKey`/`id` formulas; a test pins them.
+- Call sites that change with the type move, to list in the plan: `CalendarStore.makeSnapshot` and `DuplicateResolver` (`conferenceURL` writes), `DuplicateRules.emails` (`normalizedEmail`), `EventKitSource` (library attendees), the app's popup row model, coordinator and tests, and the widget target (Core now links `CalendarCore`; check `Apps/macOS/project.yml` for both the app and `TimeTugWidgets` targets).
 - The work is one PR from `claude/calendar-phase2-5-slim-bridge` off up-to-date `master`, in small commits: (1) `CalendarOAuth` split and hasher, dependency removal; (2) Core depends on `CalendarCore`, wrapper and value-type adoption; (3) zone-aware all-day and EventKit stamping; (4) bridge shrink; (5) CI, ADR and docs.
 
 ## CI and docs
