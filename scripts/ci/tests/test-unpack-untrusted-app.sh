@@ -4,33 +4,33 @@ export COPYFILE_DISABLE=1  # no AppleDouble ._ members from macOS tar
 cd "$(dirname "$0")/../../.."
 S="$PWD/scripts/ci/unpack-untrusted-app.sh"
 fail() { echo "FAIL: $*" >&2; exit 1; }
-W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
+W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT; mkdir -p "$W/dl"
 mk() { rm -rf "$W/src"; mkdir -p "$W/src/TimeTug.app/Contents"; echo x > "$W/src/TimeTug.app/Contents/f"; }
-run() { "$S" "$W/t.tar" "$W/scratch" "$W/dist" >/dev/null 2>&1; }
+run() { "$S" "$W/dl/TimeTug.tar" "$W/scratch" "$W/dist" >/dev/null 2>&1; }
 
-mk; tar -cf "$W/t.tar" -C "$W/src" TimeTug.app
+mk; tar -cf "$W/dl/TimeTug.tar" -C "$W/src" TimeTug.app
 run || fail "good tar rejected"; [ -f "$W/dist/TimeTug.app/Contents/f" ] || fail "not moved"
 rm -rf "$W/dist"
 
-mk; ln -s Contents/f "$W/src/TimeTug.app/ok"; tar -cf "$W/t.tar" -C "$W/src" TimeTug.app
+mk; ln -s Contents/f "$W/src/TimeTug.app/ok"; tar -cf "$W/dl/TimeTug.tar" -C "$W/src" TimeTug.app
 run || fail "benign relative symlink rejected"; rm -rf "$W/dist"
 
-mk; ln -s /etc/passwd "$W/src/TimeTug.app/bad"; tar -cf "$W/t.tar" -C "$W/src" TimeTug.app
+mk; ln -s /etc/passwd "$W/src/TimeTug.app/bad"; tar -cf "$W/dl/TimeTug.tar" -C "$W/src" TimeTug.app
 run && fail "absolute symlink accepted"
 
-mk; ln -s ../../x "$W/src/TimeTug.app/bad"; tar -cf "$W/t.tar" -C "$W/src" TimeTug.app
+mk; ln -s ../../x "$W/src/TimeTug.app/bad"; tar -cf "$W/dl/TimeTug.tar" -C "$W/src" TimeTug.app
 run && fail "dotdot symlink accepted"
 
-mk; echo y > "$W/src/Other"; tar -cf "$W/t.tar" -C "$W/src" TimeTug.app Other
+mk; echo y > "$W/src/Other"; tar -cf "$W/dl/TimeTug.tar" -C "$W/src" TimeTug.app Other
 run && fail "extra top-level accepted"
 
 mk
-tar -cPf "$W/t.tar" "$W/src/TimeTug.app/Contents/f" 2>/dev/null
+tar -cPf "$W/dl/TimeTug.tar" "$W/src/TimeTug.app/Contents/f" 2>/dev/null
 run && fail "absolute member accepted"
 [ ! -e "$W/dist/f" ] || fail "leak"
 
 # Hostile archives built with Python tarfile (exact metadata, not text).
-hostile() { python3 - "$W/t.tar" "$1" <<'PY'
+hostile() { python3 - "$W/dl/TimeTug.tar" "$1" <<'PY'
 import tarfile, io, sys
 out, kind = sys.argv[1], sys.argv[2]
 t = tarfile.open(out, "w")
@@ -57,6 +57,14 @@ for k in arrowname hardlink chain chain2 fifo; do
   [ ! -e "$W/dist/TimeTug.app" ] || fail "hostile $k reached dist"
 done
 hostile none; rm -rf "$W/dist"; run || fail "python-built good tar rejected"
+# The download directory must contain exactly one regular file, TimeTug.tar.
+D="$W/dl"; rm -rf "$D" "$W/dist"; mkdir -p "$D"; mk; tar -cf "$D/TimeTug.tar" -C "$W/src" TimeTug.app
+"$S" "$D/TimeTug.tar" "$W/scratch" "$W/dist" >/dev/null 2>&1 || fail "exact TimeTug.tar dir rejected"
+rm -rf "$W/dist"; echo evil > "$D/make-update-zip.sh"
+"$S" "$D/TimeTug.tar" "$W/scratch" "$W/dist" >/dev/null 2>&1 && fail "extra file in download dir accepted"
+[ ! -e "$W/dist/TimeTug.app" ] || fail "extra-file dir reached dist"
+rm -rf "$D"; mkdir -p "$D/sub"; mk; tar -cf "$D/sub/TimeTug.tar" -C "$W/src" TimeTug.app; ln -s sub/TimeTug.tar "$D/TimeTug.tar"
+"$S" "$D/TimeTug.tar" "$W/scratch" "$W/dist" >/dev/null 2>&1 && fail "symlinked tar accepted"
 # Post-extraction tree check, exercised directly.
 V=scripts/ci/validate-tar.py
 mk; python3 "$V" tree "$W/src" >/dev/null 2>&1 || fail "tree: good rejected"

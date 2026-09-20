@@ -1,7 +1,8 @@
 # Signs and publishes the beta built by beta-build.yml. Runs from the DEFAULT branch: it never checks out
 # or executes pull-request code; the downloaded app is treated as untrusted input. Version and build
 # number are computed by the trusted compute-versions.sh from workflow_run fields and stamped into the
-# plists; nothing is taken from the artifact except the app bytes.
+# plists; nothing is taken from the artifact except the app bytes. The artifact is downloaded to
+# $RUNNER_TEMP/artifact (never the workspace) and must contain exactly one file, TimeTug.tar.
 name: Beta publish
 
 on:
@@ -44,8 +45,9 @@ jobs:
           name: beta-app
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/artifact   # never the workspace: the artifact is PR-controlled
       - name: Unpack the untrusted app safely
-        run: scripts/ci/unpack-untrusted-app.sh TimeTug.tar "$RUNNER_TEMP/untrusted" dist
+        run: scripts/ci/unpack-untrusted-app.sh "$RUNNER_TEMP/artifact/TimeTug.tar" "$RUNNER_TEMP/untrusted" dist
       - name: Compute trusted versions and stamp the app
         env:
           PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
@@ -111,7 +113,8 @@ jobs:
           PRUNED="$(scripts/release/publish-appcast.sh "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             --keep-betas 5 -- \
             --title "TimeTug ${VERSION}" --version "$BUILD" --short "$VERSION" --url "$URL" \
-            --length "$LENGTH" --signature "$SIGNATURE" --min-system 14.0 --channel beta)"
+            --length "$LENGTH" --signature "$SIGNATURE" --min-system 14.0 --channel beta \
+            --notes-url "https://github.com/${GITHUB_REPOSITORY}/releases/tag/beta-${BUILD}")"
           for u in $PRUNED; do
             tag="$(sed -n 's#.*/download/\(beta-[0-9]*\)/.*#\1#p' <<<"$u")"
             [ -n "$tag" ] || continue
