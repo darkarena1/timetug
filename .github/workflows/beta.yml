@@ -82,7 +82,7 @@ jobs:
         run: brew install xcodegen
       - name: Compute versions
         if: steps.signing.outputs.go == 'true'
-        run: scripts/ci/compute-versions.sh beta "${{ github.run_number }}" >> "$GITHUB_ENV"
+        run: scripts/ci/compute-versions.sh beta >> "$GITHUB_ENV"
       - name: Build Release app
         if: steps.signing.outputs.go == 'true'
         run: scripts/ci/build-release.sh
