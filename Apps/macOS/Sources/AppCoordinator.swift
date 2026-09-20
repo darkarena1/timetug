@@ -69,7 +69,7 @@ final class AppCoordinator {
         requestEventKitAccess: { [unowned self] in _ = await eventKit.requestAccess() })
     private lazy var aboutWindow = AboutWindowController()
     private lazy var settingsWindow = SettingsWindowController { [unowned self] in
-        SettingsView(settings: settings, model: model, navigation: navigation, updates: updates, onTestTug: { [weak self] in self?.fireTest() },
+        SettingsView(settings: settings, model: model, navigation: navigation, accounts: accounts, updates: updates, onTestTug: { [weak self] in self?.fireTest() },
                      onForgetCorrections: { [weak self] in self?.forgetCorrections() })
     }
 
