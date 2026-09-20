@@ -9,7 +9,8 @@
 #   TAG        release tag such as v1.2.3 (falls back to GITHUB_REF_NAME when it looks like v*)
 #   DIST_DIR   output directory (default: dist)
 #   BUILD_DIR  scratch directory for DerivedData and the archive (default: build)
-#   BUILD_NUMBER  CFBundleVersion to stamp (default: GITHUB_RUN_NUMBER, else the project's value)
+#   BUILD_NUMBER  CFBundleVersion to stamp (default: the project's value; never GITHUB_RUN_NUMBER, run numbers are per workflow)
+#   APP_VERSION   display version; overrides the tag and project.yml
 #
 # Version: from the tag (v1.2.3 -> 1.2.3), else CFBundleShortVersionString in Apps/macOS/project.yml.
 # Outputs: dist/TimeTug.app and dist/version.txt (the resolved version).
@@ -26,7 +27,9 @@ if [ -z "$tag" ] && [[ "${GITHUB_REF_NAME:-}" == v* ]]; then
   tag="$GITHUB_REF_NAME"
 fi
 
-if [ -n "$tag" ]; then
+if [ -n "${APP_VERSION:-}" ]; then
+  VERSION="$APP_VERSION"
+elif [ -n "$tag" ]; then
   VERSION="${tag#v}"
 else
   VERSION="$(sed -n 's/^ *CFBundleShortVersionString: *"\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' "$SPEC" | head -n 1)"
@@ -58,7 +61,7 @@ PLIST="$APP/Contents/Info.plist"
 APPEX="$APP/Contents/PlugIns/TimeTugWidgets.appex"
 [ -d "$APPEX" ] || { echo "error: widget extension missing at $APPEX" >&2; exit 1; }
 APPEX_PLIST="$APPEX/Contents/Info.plist"
-BUILD_NUMBER="${BUILD_NUMBER:-${GITHUB_RUN_NUMBER:-}}"
+BUILD_NUMBER="${BUILD_NUMBER:-}"
 changed=0
 current="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")"
 if [ "$current" != "$VERSION" ]; then
