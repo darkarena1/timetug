@@ -123,6 +123,30 @@ private func bootstrapRoutes(_ h: Harness, meToken: String = "m1", teamToken: St
     await h.transport.route("syncToken=t1", [.json(["items": [], "nextSyncToken": "t2"])])
     await h.transport.route("syncToken=m1", [.json(["items": [["id": "x"]], "nextSyncToken": "m2"])])
     // The first check is the baseline (nil); the second finds the change. The harness monitor never sleeps.
-    var iterator = h.source.changes().makeAsyncIterator()
-    #expect(await iterator.next() == .eventsChanged(calendarIDs: ["me@x.com"]))
+    let stream = h.source.changes()
+    let first = try await nextChange(of: stream, timeout: .seconds(5))
+    #expect(first == .eventsChanged(calendarIDs: ["me@x.com"]))
+}
+
+private struct MonitorTimeout: Error {}
+
+/// Awaits the stream's first element, failing the test instead of hanging if none arrives in time.
+private func nextChange<S: AsyncSequence & Sendable>(of stream: S, timeout: Duration) async throws -> S.Element? where S.Element: Sendable {
+    do {
+        return try await withThrowingTaskGroup(of: S.Element?.self) { group in
+            group.addTask {
+                var iterator = stream.makeAsyncIterator()
+                return try await iterator.next()
+            }
+            group.addTask {
+                try await Task.sleep(for: timeout)
+                throw MonitorTimeout()
+            }
+            defer { group.cancelAll() }
+            return try await group.next()!
+        }
+    } catch is MonitorTimeout {
+        Issue.record("timed out after \(timeout) waiting for the monitor to emit a change")
+        return nil
+    }
 }

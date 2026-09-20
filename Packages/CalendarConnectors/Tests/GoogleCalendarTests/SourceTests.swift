@@ -38,13 +38,21 @@ struct Harness {
         let now = self.now
         let transport = self.transport
         let sleeps = self.sleeps
+        let counter = RefreshCounter()
         let provider = AccessTokenProvider(
             connectionID: "c1", credentials: store,
-            refresh: { _ in OAuthTokens(accessToken: "at", expiresAt: now.date.addingTimeInterval(3600)) }, now: now.provider)
+            refresh: { _ in OAuthTokens(accessToken: "at\(counter.next())", expiresAt: now.date.addingTimeInterval(3600)) }, now: now.provider)
         let api = GoogleAPIClient(transport: transport, tokens: provider, sleep: { await sleeps.record($0) })
         source = GoogleCalendarSource(connection: connection, api: api, syncState: sync, monitor: ChangeMonitor(sleep: { _ in }))
         await transport.route("users/me/calendarList", [.json(calendarList)])
     }
+}
+
+/// Hands out 1, 2, 3... so each token refresh yields a distinct access token ("at1", "at2", ...).
+final class RefreshCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    func next() -> Int { lock.withLock { value += 1; return value } }
 }
 
 actor SleepRecorder {
@@ -58,7 +66,7 @@ actor SleepRecorder {
     #expect(cals.map(\.id) == ["me@x.com", "team@group.calendar.google.com"])
     #expect(cals[0].accountName == "me@x.com" && cals[0].colorHex == "#112233" && cals[0].isPrimary)
     let request = try #require(await h.transport.requests.first)
-    #expect(request.headers["Authorization"] == "Bearer at")
+    #expect(request.headers["Authorization"] == "Bearer at1")
     #expect(request.url.absoluteString.contains("showHidden=false"))
 }
 
@@ -93,11 +101,35 @@ actor SleepRecorder {
 }
 
 @Test func a401RefreshesTheTokenOnceThenSucceeds() async throws {
-    let h = try await Harness()
+    let h = try await Harness(calendarList: listJSON(["me@x.com"]))
     await h.transport.route("calendars/me%40x.com/events", [.json([:], status: 401), .json(["items": []])])
-    await h.transport.route("calendars/team%40group.calendar.google.com/events", [.json(["items": []])])
     _ = try await h.source.events(in: DateInterval(start: .now, duration: 3600))
-    #expect(await h.transport.requests(matching: "calendars/me%40x.com/events").count == 2)
+    let requests = await h.transport.requests(matching: "calendars/me%40x.com/events")
+    #expect(requests.map { $0.headers["Authorization"] } == ["Bearer at1", "Bearer at2"])
+}
+
+@Test func aForbiddenReasonThatAffectsEveryCalendarIsNotSwallowed() async throws {
+    let h = try await Harness(calendarList: listJSON(["me@x.com"]))
+    await h.transport.route("calendars/me%40x.com/events", [.json(["error": ["errors": [["reason": "accessNotConfigured"]]]], status: 403)])
+    await #expect(throws: SourceError.invalidResponse("HTTP 403: accessNotConfigured")) {
+        try await h.source.events(in: DateInterval(start: .now, duration: 3600))
+    }
+}
+
+@Test func insufficientPermissionsNeedsReconsent() async throws {
+    let h = try await Harness(calendarList: listJSON(["me@x.com"]))
+    await h.transport.route("calendars/me%40x.com/events", [.json(["error": ["errors": [["reason": "insufficientPermissions"]]]], status: 403)])
+    await #expect(throws: SourceError.authExpired) {
+        try await h.source.events(in: DateInterval(start: .now, duration: 3600))
+    }
+}
+
+@Test func anUnparseableForbiddenBodyIsInvalidResponseNotSkipped() async throws {
+    let h = try await Harness(calendarList: listJSON(["me@x.com"]))
+    await h.transport.route("calendars/me%40x.com/events", [.text("nope", status: 403)])
+    await #expect(throws: SourceError.invalidResponse("HTTP 403: unknown")) {
+        try await h.source.events(in: DateInterval(start: .now, duration: 3600))
+    }
 }
 
 @Test func aRepeated401IsAuthExpired() async throws {

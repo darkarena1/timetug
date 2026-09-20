@@ -49,7 +49,7 @@ struct GoogleAPIClient: Sendable {
                 throw GoogleAPIError.notFound
             case 403, 429:
                 guard Self.isRateLimit(response) else {
-                    if response.status == 403 { throw GoogleAPIError.forbidden }
+                    if response.status == 403 { throw Self.classifyForbidden(response) }
                     throw SourceError.invalidResponse("HTTP \(response.status)")
                 }
                 let retryAfter = response.header("retry-after").flatMap(TimeInterval.init)
@@ -63,6 +63,22 @@ struct GoogleAPIClient: Sendable {
             default:
                 throw SourceError.invalidResponse("HTTP \(response.status)")
             }
+        }
+    }
+
+    private struct ErrorBody: Decodable {
+        struct Detail: Decodable { let reason: String? }
+        struct Inner: Decodable { let errors: [Detail]? }
+        let error: Inner?
+    }
+
+    /// A non-rate-limit 403. Only reason `forbidden` (one unreadable calendar) is skippable; the rest affect every calendar.
+    private static func classifyForbidden(_ response: HTTPResponse) -> Error {
+        let reason = (try? JSONDecoder().decode(ErrorBody.self, from: response.body))?.error?.errors?.first?.reason
+        switch reason {
+        case "forbidden": return GoogleAPIError.forbidden
+        case "insufficientPermissions": return SourceError.authExpired
+        default: return SourceError.invalidResponse("HTTP 403: \(reason ?? "unknown")")
         }
     }
 
