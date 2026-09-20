@@ -1733,6 +1733,8 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
   - `@MainActor final class SourceReconciler { struct Update { let sources: [any CalendarSource]; let failures: [ConnectionID: String] }; init(buildAccount: @escaping (Connection) throws -> any CalendarSource, buildEventKit: @escaping () -> any CalendarSource, onChange: @escaping @MainActor () async -> Void); func reconcile(connections: [Connection], eventKitEnabled: Bool) -> Update; func rebuild(_ connection: Connection, connections: [Connection], eventKitEnabled: Bool) -> Update; func sourceID(forConnection id: ConnectionID) -> String?; func stop() }`
   - `@MainActor final class AccountsController: ObservableObject` (see Step 6)
 
+- [ ] **Step 0: Keep the app compiling (temporary).** Task 6 changed `EventKitSource` to the library's `CalendarSource`, and Task 5 gave us `ConnectedSource`, so `AppCoordinator` no longer type-checks. Until Task 9 replaces this wiring, add `import CalendarBridge` to `Apps/macOS/Sources/AppCoordinator.swift`, add `private lazy var eventKitCore = ConnectedSource(eventKit)`, and change the three uses: `CalendarStore(sources: [eventKitCore], ...)`, and `for await _ in eventKitCore.changes() { await refresh() }` (keep `eventKit.requestAccess()` as is). Nothing else in the app or its tests references `EventKitSource`. This step needs the `CalendarBridge` package dependency from Step 1 first, so do Step 1 before this one and build after both.
+
 - [ ] **Step 1: Project wiring so app tests can import the packages.** In `Apps/macOS/project.yml` add under `packages:`:
 
 ```yaml
@@ -1755,7 +1757,7 @@ and to both the `TimeTug` and `TimeTugTests` targets' `dependencies:` (tests nee
       - package: CalendarApple
         product: CalendarApple
 ```
-(`TimeTugTests` also gets `TimeTugCore` if it does not have it transitively; keep whatever builds.) Regenerate: `xcodegen generate --spec Apps/macOS/project.yml`, then `xcodebuild -project Apps/macOS/TimeTug.xcodeproj -scheme TimeTug -destination 'platform=macOS' build`. Expect success (nothing uses the packages yet).
+(`TimeTugTests` also gets `TimeTugCore` if it does not have it transitively; keep whatever builds.) Regenerate: `xcodegen generate --spec Apps/macOS/project.yml`, restore the two stale checked-in plists (`git checkout -- Apps/macOS/Sources/Info.plist Apps/macOS/Widgets/Info.plist`), apply Step 0, then `xcodebuild -project Apps/macOS/TimeTug.xcodeproj -scheme TimeTug -destination 'platform=macOS' build`. Expect success.
 
 - [ ] **Step 2: Failing settings test** in `SettingsStoreTests.swift` (follow the file's existing setup for a throwaway `UserDefaults` suite):
 
