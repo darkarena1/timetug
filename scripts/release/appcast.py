@@ -34,7 +34,7 @@ def version_of(item):
 
 def is_beta(item):
     node = item.find(q("channel"))
-    return node is not None and node.text == "beta"
+    return node is not None and (node.text or "").strip() == "beta"
 
 
 def save(tree, path):
@@ -47,7 +47,12 @@ def cmd_add(a):
         sys.exit("error: --version must be numeric")
     tree = load(a.file)
     channel = tree.getroot().find("channel")
-    for old in [i for i in channel.findall("item") if i.findtext(q("version")) == a.version]:
+    same = [i for i in channel.findall("item") if (i.findtext(q("version")) or "").strip() == a.version]
+    for old in same:
+        enc = old.find("enclosure")
+        if enc is None or enc.get("url") != a.url:
+            sys.exit(f"error: sparkle:version {a.version} already exists with a different enclosure url")
+    for old in same:
         channel.remove(old)
     item = ET.Element("item")
     ET.SubElement(item, "title").text = a.title
@@ -81,7 +86,9 @@ def cmd_prune(a):
     betas = [i for i in channel.findall("item") if is_beta(i) and version_of(i) is not None]
     betas = sorted(betas, key=version_of, reverse=True)
     for item in betas[a.keep:]:
-        print(item.find("enclosure").get("url"))
+        enclosure = item.find("enclosure")
+        if enclosure is not None and enclosure.get("url"):
+            print(enclosure.get("url"))
         channel.remove(item)
     save(tree, a.file)
 

@@ -139,5 +139,48 @@ class AppcastTests(unittest.TestCase):
         self.assertIn("202609191431", versions)
         self.assertIn(" 202609191430 ", versions)
 
+    def test_add_rejects_same_version_with_different_url(self):
+        add(self.path, 7, channel="beta")
+        r = run("add", "--file", self.path, "--title", "t", "--version", "7", "--short", "1",
+                "--url", "https://example.com/other.zip", "--length", "1", "--signature", "S==",
+                "--min-system", "14.0")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("error: sparkle:version 7 already exists with a different enclosure url", r.stderr)
+        self.assertEqual([version(i) for i in items(self.path)], ["7"])
+        self.assertEqual(items(self.path)[0].find("enclosure").get("url"), "https://example.com/7.zip")
+
+    def test_add_same_version_same_url_replaces(self):
+        add(self.path, 7, channel="beta", short="a")
+        add(self.path, 7, channel="beta", short="b")
+        it = items(self.path)
+        self.assertEqual(len(it), 1)
+        self.assertEqual(it[0].find("sparkle:shortVersionString", NS).text, "b")
+
+    def _append_raw(self, version_text, channel_text, enclosure=True):
+        tree = ET.parse(self.path)
+        channel = tree.getroot().find("channel")
+        item = ET.SubElement(channel, "item")
+        ET.SubElement(item, "{%s}version" % NS["sparkle"]).text = version_text
+        ET.SubElement(item, "{%s}channel" % NS["sparkle"]).text = channel_text
+        if enclosure:
+            ET.SubElement(item, "enclosure", {"url": "https://example.com/raw.zip"})
+        tree.write(self.path, encoding="utf-8", xml_declaration=True)
+
+    def test_prune_treats_whitespace_padded_beta_as_beta(self):
+        add(self.path, 3, channel="beta")
+        self._append_raw("1", "\n  beta\n ")
+        r = run("prune-betas", "--file", self.path, "--keep", "1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.split(), ["https://example.com/raw.zip"])
+        self.assertEqual([version(i) for i in items(self.path)], ["3"])
+
+    def test_prune_handles_beta_item_without_enclosure(self):
+        add(self.path, 3, channel="beta")
+        self._append_raw("1", "beta", enclosure=False)
+        r = run("prune-betas", "--file", self.path, "--keep", "1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.split(), [])
+        self.assertEqual([version(i) for i in items(self.path)], ["3"])
+
 if __name__ == "__main__":
     unittest.main()

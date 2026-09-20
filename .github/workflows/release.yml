@@ -152,7 +152,8 @@ jobs:
           if [ "$UPDATE_CHANNEL" = beta ]; then CHANNEL_ARGS+=(--channel beta); fi
           scripts/release/publish-appcast.sh "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" -- \
             --title "TimeTug ${VERSION}" --version "$BUILD_NUMBER" --short "$VERSION" --url "$URL" \
-            --length "$UPDATE_LENGTH" --signature "$UPDATE_SIGNATURE" --min-system 14.0 "${CHANNEL_ARGS[@]}"
+            --length "$UPDATE_LENGTH" --signature "$UPDATE_SIGNATURE" --min-system 14.0 "${CHANNEL_ARGS[@]}" \
+            --notes-url "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
       - name: Publish unsigned prerelease
         if: steps.signing.outputs.has_signing != 'true'
         run: |
