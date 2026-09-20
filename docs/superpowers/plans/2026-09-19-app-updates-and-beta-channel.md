@@ -1118,7 +1118,6 @@ jobs:
   publish:
     needs: gate
     runs-on: macos-26
-    environment: release
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -1179,7 +1178,7 @@ jobs:
           done
 ```
 
-`environment: release` reuses the existing approval gate, so you approve each beta publish once. If you want betas fully automatic, remove that line (tell me and I'll change it).
+Betas publish automatically, with no environment approval. Because of that, keep `master` protected and limit who can push branches (see the ADR's accepted risk).
 
 - [ ] **Step 4: Validate YAML and scripts**
 
@@ -1277,7 +1276,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: ADR** `docs/decisions/0011-sparkle-updates-and-beta-channel.md`, in the format of ADR 0005 (Status, Context, Decision, Consequences), recording: Sparkle 2 pinned exactly (same version as `scripts/release/sparkle-version.txt`); one appcast with a `beta` channel on `gh-pages`; timestamp `CFBundleVersion` and why run numbers and hashes fail; Developer-ID-signed, non-notarized betas and why Gatekeeper does not intervene; the two-workflow beta pipeline and why (PR code must not run with keys); accepted risk: a same-repo branch author can cause a signed beta to ship, so protect `master` and restrict who can push branches; rejected: partial (non-bundle) updates, per-PR labels, `generate_appcast`.
 
-- [ ] **Step 2: Rewrite `docs/release.md`.** Keep the DMG, signing-secret and local-test sections. Replace "Cut a release" and add: **Channels and versioning** (the display/build-number scheme from the spec), **How betas work** (what triggers them, the two workflows, the `release` environment approval, retention of 5, users opt in under Settings > General > Software Update > Beta updates), **One-time setup** (below), **Publishing the stable update** (a signed tag release also updates the appcast; an unsigned one does not), **Troubleshooting** (appcast URL, `sign_update` key errors, why a user is not offered a beta).
+- [ ] **Step 2: Rewrite `docs/release.md`.** Keep the DMG, signing-secret and local-test sections. Replace "Cut a release" and add: **Channels and versioning** (the display/build-number scheme from the spec), **How betas work** (what triggers them, the two workflows, retention of 5, users opt in under Settings > General > Software Update > Beta updates), **One-time setup** (below), **Publishing the stable update** (a signed tag release also updates the appcast; an unsigned one does not), **Troubleshooting** (appcast URL, `sign_update` key errors, why a user is not offered a beta).
 
 One-time setup, to be written in the doc verbatim:
 1. Generate keys: `scripts/release/fetch-sparkle-tools.sh /tmp/sparkle-tools && /tmp/sparkle-tools/bin/generate_keys` (public key goes in `project.yml` `SUPublicEDKey`; export the private key with `generate_keys -x sparkle.key`, store its contents as the `SPARKLE_PRIVATE_KEY` Actions secret, then delete the file).
@@ -1310,7 +1309,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 These need credentials only the repo owner has. Each is a checkpoint, not code.
 
 - [ ] **Step 1:** Do the four "One-time setup" items from `docs/release.md`.
-- [ ] **Step 2:** Push the branch, open a PR, and confirm `Beta build` passes, then `Beta publish` (approve the `release` environment) creates a draft prerelease, updates `https://darkarena1.github.io/timetug/appcast.xml`, and publishes it.
+- [ ] **Step 2:** Push the branch, open a PR, and confirm `Beta build` passes, then `Beta publish` creates a draft prerelease, updates `https://darkarena1.github.io/timetug/appcast.xml`, and publishes it.
 - [ ] **Step 3:** In an installed TimeTug (a previous DMG build), turn on Beta updates, Check for Updates, and confirm the beta is offered, downloads and relaunches. Turn Beta updates off on a stable build and confirm nothing beta is offered.
 - [ ] **Step 4:** Merge, tag `v0.x.0`, run the release, and confirm a stable item appears with a `sparkle:version` larger than every earlier beta.
 
