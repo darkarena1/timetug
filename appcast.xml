@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>TimeTug</title>
+    <item>
+      <title>TimeTug 0.0.0-dev-beta.1</title>
+      <pubDate>Sun, 20 Sep 2026 05:06:04 GMT</pubDate>
+      <sparkle:version>20260920050341</sparkle:version>
+      <sparkle:shortVersionString>0.0.0-dev-beta.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:channel>beta</sparkle:channel>
+      <sparkle:releaseNotesLink>https://github.com/darkarena1/timetug/releases/tag/beta-20260920050341</sparkle:releaseNotesLink>
+      <enclosure url="https://github.com/darkarena1/timetug/releases/download/beta-20260920050341/TimeTug-0.0.0-dev-beta.1.zip" length="6289066" type="application/octet-stream" sparkle:edSignature="fikrWCYVgHx5WHeJfRlEfupOK9v0hh9SIwdRRwWsFa2vvwCuOvQ7gDLmB5MQ2sGo7jUCyAxVaGuKfvq0x8FLAg==" />
+    </item>
+  </channel>
+</rss>
