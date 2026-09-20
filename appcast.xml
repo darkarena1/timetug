@@ -3,6 +3,16 @@
   <channel>
     <title>TimeTug</title>
     <item>
+      <title>TimeTug 1.2.1-beta.20260920062342</title>
+      <pubDate>Sun, 20 Sep 2026 06:25:38 GMT</pubDate>
+      <sparkle:version>20260920062342</sparkle:version>
+      <sparkle:shortVersionString>1.2.1-beta.20260920062342</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:channel>beta</sparkle:channel>
+      <sparkle:releaseNotesLink>https://github.com/darkarena1/timetug/releases/tag/beta-20260920062342</sparkle:releaseNotesLink>
+      <enclosure url="https://github.com/darkarena1/timetug/releases/download/beta-20260920062342/TimeTug-1.2.1-beta.20260920062342.zip" length="6288786" type="application/octet-stream" sparkle:edSignature="H9pal3PY4cw/1+KwROp3GXf62exopUdCAaINFDdaQQUuZc7sBN5u+VIDRb/K8RHCaXTuJFFyUYnFrAtELTeIDA==" />
+    </item>
+    <item>
       <title>TimeTug 1.2.1</title>
       <pubDate>Sun, 20 Sep 2026 06:09:35 GMT</pubDate>
       <sparkle:version>20260920060618</sparkle:version>
