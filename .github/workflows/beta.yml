@@ -8,7 +8,8 @@
 # ci.yml (build and tests, no secrets). The only ref built here is the head_sha of a push-to-master CI
 # run from this repository, and it is verified to be an ancestor of origin/master before signing.
 #
-# Without the signing secrets the run succeeds and does nothing (a notice is printed).
+# Without the signing secrets, or when a newer commit is already on master, the run succeeds and does
+# nothing (a notice is printed).
 name: Beta
 
 on:
@@ -38,7 +39,8 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
-      - name: Require the commit to be on master
+      - name: Require the commit to be the tip of master
+        id: master
         env:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
@@ -47,40 +49,52 @@ jobs:
             echo "::error::Betas can only be built from commits on master; $HEAD_SHA is not."
             exit 1
           fi
-      - name: Select newest Xcode
-        run: scripts/ci/select-xcode.sh
-      - name: Install XcodeGen
-        run: brew install xcodegen
+          # Re-running an old run would stamp old code with a fresh (higher) build number.
+          if [ "$HEAD_SHA" = "$(git rev-parse origin/master)" ]; then
+            echo "is_tip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_tip=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::A newer commit is on master; its own beta run will build it."
+          fi
       - name: Check for signing secrets
         id: signing
         env:
+          IS_TIP: ${{ steps.master.outputs.is_tip }}
           MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
-          if [ -n "$MACOS_CERTIFICATE_P12_BASE64" ] && [ -n "$MACOS_CERTIFICATE_PASSWORD" ] \
+          if [ "$IS_TIP" != true ]; then
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          elif [ -n "$MACOS_CERTIFICATE_P12_BASE64" ] && [ -n "$MACOS_CERTIFICATE_PASSWORD" ] \
             && [ -n "$APPLE_TEAM_ID" ] && [ -n "$SPARKLE_PRIVATE_KEY" ]; then
-            echo "has_signing=true" >> "$GITHUB_OUTPUT"
+            echo "go=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has_signing=false" >> "$GITHUB_OUTPUT"
+            echo "go=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Signing secrets are not set; skipping the beta."
           fi
+      - name: Select newest Xcode
+        if: steps.signing.outputs.go == 'true'
+        run: scripts/ci/select-xcode.sh
+      - name: Install XcodeGen
+        if: steps.signing.outputs.go == 'true'
+        run: brew install xcodegen
       - name: Compute versions
-        if: steps.signing.outputs.has_signing == 'true'
+        if: steps.signing.outputs.go == 'true'
         run: scripts/ci/compute-versions.sh beta "${{ github.run_number }}" >> "$GITHUB_ENV"
       - name: Build Release app
-        if: steps.signing.outputs.has_signing == 'true'
+        if: steps.signing.outputs.go == 'true'
         run: scripts/ci/build-release.sh
       - name: Sign with Developer ID (no notarization)
-        if: steps.signing.outputs.has_signing == 'true'
+        if: steps.signing.outputs.go == 'true'
         env:
           MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: scripts/release/sign-app.sh dist/TimeTug.app
       - name: Zip and EdDSA-sign
-        if: steps.signing.outputs.has_signing == 'true'
+        if: steps.signing.outputs.go == 'true'
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
@@ -97,7 +111,7 @@ jobs:
           echo "LENGTH=$(stat -f%z "$ZIP")" >> "$GITHUB_ENV"
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
       - name: Create and publish the prerelease
-        if: steps.signing.outputs.has_signing == 'true'
+        if: steps.signing.outputs.go == 'true'
         env:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
@@ -113,7 +127,7 @@ jobs:
           # Publish BEFORE the appcast so the appcast never references an undownloadable asset.
           gh release edit "beta-${BUILD_NUMBER}" --draft=false --prerelease
       - name: Update appcast and prune old betas
-        if: steps.signing.outputs.has_signing == 'true'
+        if: steps.signing.outputs.go == 'true'
         run: |
           URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/beta-${BUILD_NUMBER}/$(basename "$ZIP")"
           git config --global user.name "github-actions[bot]"
