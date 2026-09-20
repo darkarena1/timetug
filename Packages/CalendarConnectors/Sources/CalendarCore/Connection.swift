@@ -78,6 +78,7 @@ public protocol SyncStateStore: Sendable {
 public actor InMemoryCredentialStore: CredentialStore {
     private var storage: [ConnectionID: [String: String]] = [:]
     public init() {}
+    public var isEmpty: Bool { storage.isEmpty }
     public func secrets(for connectionID: ConnectionID) async throws -> [String: String]? { storage[connectionID] }
     public func setSecrets(_ secrets: [String: String], for connectionID: ConnectionID) async throws {
         storage[connectionID] = secrets
