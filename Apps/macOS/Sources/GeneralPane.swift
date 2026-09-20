@@ -51,15 +51,24 @@ struct GeneralPane: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Section("Menu bar") {
+            Section(SettingsText.appearance) {
                 Picker(SettingsText.menuBarText, selection: $settings.menuBarMode) {
                     Text("Icon only").tag(MenuBarDisplayMode.iconOnly)
                     Text("Next meeting").tag(MenuBarDisplayMode.nextMeeting)
                     Text("Countdown only").tag(MenuBarDisplayMode.countdown)
                 }
                 .settingsHighlight("menu-bar-text", navigation: navigation)
-            }
-            Section(SettingsText.appearance) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Picker(SettingsText.popupCards, selection: $settings.popupCardStyle) {
+                        ForEach(PopupCardStyle.available, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .settingsHighlight("popup-card-style", navigation: navigation)
+                    Text(PopupCardStyle.available.contains(.glass)
+                         ? "Glass uses the system's Liquid Glass. Frosted and Solid work everywhere."
+                         : "Frosted is translucent; Solid is opaque.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
                 VStack(spacing: 8) {
                     HStack(spacing: 20) {
                         ForEach([AppearanceMode.light, .dark, .auto], id: \.self) { mode in
@@ -75,17 +84,6 @@ struct GeneralPane: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 4)
-                VStack(alignment: .leading, spacing: 4) {
-                    Picker(SettingsText.popupCards, selection: $settings.popupCardStyle) {
-                        ForEach(PopupCardStyle.available, id: \.self) { Text($0.title).tag($0) }
-                    }
-                    .settingsHighlight("popup-card-style", navigation: navigation)
-                    Text(PopupCardStyle.available.contains(.glass)
-                         ? "Glass uses the system's Liquid Glass. Frosted and Solid work everywhere."
-                         : "Frosted is translucent; Solid is opaque.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
             }
         }
         .formStyle(.grouped)
