@@ -162,7 +162,10 @@ jobs:
           SIG_VALUE="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<<"$SIG")"
           [ -n "$SIG_VALUE" ] || { echo "::error::could not read edSignature from sign_update output"; exit 1; }
           UPDATE_CHANNEL=""
-          if [[ "$VERSION" == *-* || "$RELEASE_PRERELEASE" == true ]]; then UPDATE_CHANNEL=beta; fi
+          # The release's own prerelease flag (draft or published), read before the upload, routes to beta
+          # like a `-` suffix; the event field is a fallback.
+          FLAG="$(scripts/release/release-state.sh --prerelease "$TAG")"
+          if [[ "$VERSION" == *-* || "$FLAG" == true || "$RELEASE_PRERELEASE" == true ]]; then UPDATE_CHANNEL=beta; fi
           echo "UPDATE_ZIP=$ZIP" >> "$GITHUB_ENV"
           echo "UPDATE_SIGNATURE=$SIG_VALUE" >> "$GITHUB_ENV"
           echo "UPDATE_LENGTH=$(stat -f%z "$ZIP")" >> "$GITHUB_ENV"

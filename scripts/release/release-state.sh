@@ -9,25 +9,33 @@
 #
 # Usage: release-state.sh <tag>            print the state
 #        release-state.sh --id <tag>       print the numeric release id (empty when none)
+#        release-state.sh --prerelease <tag>  print true when the release's own prerelease flag is set
+#                                          (drafts included), else false (also when there is no release)
 # Requires: gh (authenticated), jq, GITHUB_REPOSITORY.
 set -euo pipefail
 
 mode=state
-if [ "${1:-}" = "--id" ]; then mode=id; shift; fi
+case "${1:-}" in
+  --id) mode=id; shift ;;
+  --prerelease) mode=prerelease; shift ;;
+esac
 TAG="${1:?usage: release-state.sh [--id] <tag>}"
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
 
 # --paginate prints one JSON array per page; jq reads the stream.
 row="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" \
-  | jq -r --arg t "$TAG" '.[] | select(.tag_name == $t) | "\(.id) \(.draft) \(.immutable // false)"' | head -n 1)"
+  | jq -r --arg t "$TAG" '.[] | select(.tag_name == $t) | "\(.id) \(.draft) \(.immutable // false) \(.prerelease // false)"' | head -n 1)"
 
 if [ "$mode" = id ]; then
   echo "${row%% *}"
   exit 0
 fi
-case "$row" in
-  "") echo none ;;
-  *" true "*) echo draft ;;
-  *" true") echo published-immutable ;;
-  *) echo published ;;
-esac
+if [ "$mode" = prerelease ]; then
+  case "$row" in *" true") echo true ;; *) echo false ;; esac
+  exit 0
+fi
+read -r _ draft immutable _ <<<"$row"
+if [ -z "$row" ]; then echo none
+elif [ "$draft" = true ]; then echo draft
+elif [ "$immutable" = true ]; then echo published-immutable
+else echo published; fi

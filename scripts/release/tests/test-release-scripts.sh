@@ -30,7 +30,9 @@ cat > "$FAKE_RELEASES" <<'J'
  {"id":45,"tag_name":"v2.0.0-rc1","draft":true,"immutable":false},
  {"id":46,"tag_name":"v0.7.0","draft":false,"immutable":false},
  {"id":47,"tag_name":"v0.7.1-rc1","draft":false,"immutable":false},
- {"id":48,"tag_name":"v0.6.0","draft":false}]
+ {"id":48,"tag_name":"v0.6.0","draft":false},
+ {"id":49,"tag_name":"v1.3.0","draft":true,"immutable":false,"prerelease":true},
+ {"id":50,"tag_name":"v0.5.0","draft":false,"immutable":false,"prerelease":true}]
 J
 S="$ROOT/scripts/release/release-state.sh"; U="$ROOT/scripts/release/upload-release-assets.sh"
 reset() { : > "$FAKE_LOG"; }
@@ -43,6 +45,10 @@ echo "=== release-state ===" >&2
 [ "$($S v0.7.0)" = published ] || fail "published, not immutable"
 [ "$($S v0.6.0)" = published ] || fail "published, immutable field absent"
 [ "$($S --id v1.1.0)" = 42 ] || fail "id"
+[ "$($S --prerelease v1.3.0)" = true ] || fail "draft prerelease flag"
+[ "$($S --prerelease v0.5.0)" = true ] || fail "published prerelease flag"
+[ "$($S --prerelease v1.1.0)" = false ] || fail "draft, flag absent"
+[ "$($S --prerelease v3.0.0)" = false ] || fail "none -> false"
 echo "PASS" >&2
 
 echo "=== published-immutable: fails, no uploads ===" >&2
