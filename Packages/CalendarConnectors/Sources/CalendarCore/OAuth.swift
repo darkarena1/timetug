@@ -73,11 +73,11 @@ public struct OAuthClient: Sendable {
     public func authorizationCode(from redirect: URL, expectedState: String) throws -> String {
         let items = URLComponents(url: redirect, resolvingAgainstBaseURL: false)?.queryItems ?? []
         func value(_ name: String) -> String? { items.first { $0.name == name }?.value }
+        guard value("state") == expectedState else { throw AuthorizationError.stateMismatch }
         if let error = value("error") {
             if error == "access_denied" { throw AuthorizationError.cancelled }
             throw SourceError.invalidResponse("oauth error: \(error)")
         }
-        guard value("state") == expectedState else { throw AuthorizationError.stateMismatch }
         guard let code = value("code"), !code.isEmpty else { throw AuthorizationError.missingCode }
         return code
     }

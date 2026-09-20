@@ -56,6 +56,22 @@ private func form(_ request: HTTPRequest) -> [String: String] {
     }
 }
 
+@Test func authorizationCodeValidatesStateBeforeErrorHandling() throws {
+    let c = client(FakeTransport())
+    // Forged state with access_denied error should throw stateMismatch, not cancelled
+    #expect(throws: AuthorizationError.stateMismatch) {
+        try c.authorizationCode(from: URL(string: "http://127.0.0.1:5000/?error=access_denied&state=forged")!, expectedState: "st")
+    }
+}
+
+@Test func authorizationCodeValidatesStateBeforeMissingState() throws {
+    let c = client(FakeTransport())
+    // Missing state with access_denied error should throw stateMismatch, not cancelled
+    #expect(throws: AuthorizationError.stateMismatch) {
+        try c.authorizationCode(from: URL(string: "http://127.0.0.1:5000/?error=access_denied")!, expectedState: "st")
+    }
+}
+
 @Test func exchangePostsFormAndParsesTokens() async throws {
     let transport = FakeTransport()
     await transport.route("oauth.example.com/token", [.json(["access_token": "at", "expires_in": 3600, "refresh_token": "rt"])])
@@ -75,6 +91,10 @@ private func form(_ request: HTTPRequest) -> [String: String] {
     #expect(f["client_id"] == "client-1")
     #expect(f["client_secret"] == "shh")
     #expect(f["redirect_uri"] == "http://127.0.0.1:5000")
+    // Verify raw body contains properly percent-encoded values
+    let rawBody = String(decoding: request.body ?? Data(), as: UTF8.self)
+    #expect(rawBody.contains("code=the%2Bcode%2F1"))
+    #expect(rawBody.contains("redirect_uri=http%3A%2F%2F127.0.0.1%3A5000"))
 }
 
 @Test func refreshMapsInvalidGrantToAuthExpired() async throws {
