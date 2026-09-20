@@ -2314,7 +2314,7 @@ enum AppSupportFiles {
 ```
 
 - [ ] **Step 3: OAuth client plumbing.**
-  1. `Apps/macOS/project.yml`, `TimeTug` target `info.properties`: add `TimeTugGoogleClientID: $(GOOGLE_OAUTH_CLIENT_ID)` and `TimeTugGoogleClientSecret: $(GOOGLE_OAUTH_CLIENT_SECRET)`. Mirror both keys in `Apps/macOS/Sources/Info.plist` (`<key>..</key><string>$(GOOGLE_OAUTH_CLIENT_ID)</string>`) because that file is checked in beside the generated one.
+  1. `Apps/macOS/project.yml`, `TimeTug` target `info.properties`: add `TimeTugGoogleClientID: $(GOOGLE_OAUTH_CLIENT_ID)` and `TimeTugGoogleClientSecret: $(GOOGLE_OAUTH_CLIENT_SECRET)`.  Do NOT hand-edit `Apps/macOS/Sources/Info.plist`: xcodegen regenerates it (and `Widgets/Info.plist`) from `project.yml` on every `xcodegen generate`. Those two checked-in plists are stale (they say `CFBundleVersion` 1, `project.yml` says 2), so after every `xcodegen generate` run `git checkout -- Apps/macOS/Sources/Info.plist Apps/macOS/Widgets/Info.plist` before staging, unless a step is meant to change them.
   2. `Apps/macOS/Config/Signing.xcconfig`: after `#include? "Local.xcconfig"` add a comment and `#include? "GoogleOAuth.xcconfig"` (git-ignored; defines `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET`; a missing file leaves them empty).
   3. `.gitignore`: add `Apps/macOS/Config/GoogleOAuth.xcconfig` under the signing entry.
   4. `scripts/dev/link-signing.sh`: view the whole file, then refactor it into a function so a second file can be linked without the early `exit 0` skipping it:
