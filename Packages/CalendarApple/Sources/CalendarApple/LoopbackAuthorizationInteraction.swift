@@ -85,7 +85,10 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
     private var received: Result<URL, Error>?
     /// Set (under `lock`) while a presenter's sheet may hit the listener; the redirect is then answered with a 302.
     private var completionRedirect: URL?
-    private var presenterDismissed = false
+    /// True while this flow's own presentation may still be showing. The presenter is shared, so `dismiss()` would cancel
+    /// whichever sheet is active; only call it when this flow still owns one.
+    private var presentationLive = false
+    private var presentationEnded = false
 
     private init(listener: NWListener, openURL: @escaping LoopbackAuthorizationInteraction.OpenURL,
                  presenter: (any AuthorizationPresenting)?, completionScheme: String, timeout: Duration) {
@@ -139,9 +142,12 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
             // Armed before `present`, so a request the sheet makes immediately already gets the 302.
             setCompletionRedirect(URL(string: "\(completionScheme)://done"))
             presented = await presenter.present(authorizationURL, completionScheme: completionScheme) { [weak self] error in
+                // The presenter has already cleared its own state, so the active sheet may now be another flow's.
+                self?.presentationDidEnd()
                 // nil: the sheet reached the completion URL, so the redirect was (or is being) delivered.
                 if error != nil { self?.deliver(.failure(LoopbackError.cancelled)) }
             }
+            if presented { presentationDidStart() }
             if !presented { setCompletionRedirect(nil) }
         }
         if !presented, !(await openURL(authorizationURL)) { throw LoopbackError.couldNotOpenBrowser }
@@ -159,10 +165,22 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
         completionRedirect = url
     }
 
+    private func presentationDidEnd() {
+        lock.lock(); defer { lock.unlock() }
+        presentationEnded = true
+        presentationLive = false
+    }
+
+    /// `onEnded` may already have fired before `present` returned; then nothing is live.
+    private func presentationDidStart() {
+        lock.lock(); defer { lock.unlock() }
+        presentationLive = !presentationEnded
+    }
+
     private func claimDismissal() -> Bool {
         lock.lock(); defer { lock.unlock() }
-        defer { presenterDismissed = true }
-        return !presenterDismissed
+        defer { presentationLive = false }
+        return presentationLive
     }
 
     func close() async {

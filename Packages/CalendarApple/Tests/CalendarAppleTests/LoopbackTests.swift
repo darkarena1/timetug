@@ -247,3 +247,39 @@ private struct ProxyPresenter: AuthorizationPresenting {
     #expect(received.query?.contains("code=abc") == true)
     await session.close()
 }
+
+// A shared presenter's dismiss() cancels whatever sheet is active, so a flow may only dismiss a presentation it still owns.
+
+@Test func closeDoesNotDismissAfterThePresenterEndedWithCancellation() async throws {
+    let (session, presenter) = try await presenterSession({ _ in .endWith(CancellationError()) }, timeout: .seconds(3))
+    await #expect(throws: LoopbackError.cancelled) { try await session.authorize(at: authURL) }
+    await session.close()
+    #expect(presenter.dismissals == 0)
+}
+
+@Test func closeDoesNotDismissWhenThePresenterCouldNotStart() async throws {
+    let opened = Recorder()
+    let (session, presenter) = try await presenterSession({ _ in .refuse }, opened: opened)
+    let waiting = Task { try await session.authorize(at: authURL) }
+    #expect(await eventually { opened.count == 1 })
+    _ = try await rawGET(session.redirectURI, path: "/?code=abc&state=xyz")
+    _ = try await waiting.value
+    await session.close()
+    #expect(presenter.dismissals == 0)
+}
+
+@Test func closeTwiceDismissesALivePresentationExactlyOnce() async throws {
+    let (session, presenter) = try await presenterSession { .hitListener($0) }
+    _ = try await session.authorize(at: authURL)
+    await session.close()
+    await session.close()
+    #expect(presenter.dismissals == 1)
+}
+
+@Test func closeDoesNotDismissAfterThePresenterEndedWithNil() async throws {
+    let (session, presenter) = try await presenterSession { .hitListener($0) }
+    _ = try await session.authorize(at: authURL)
+    presenter.onEnded?(nil)
+    await session.close()
+    #expect(presenter.dismissals == 0)
+}
