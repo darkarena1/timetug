@@ -1,4 +1,5 @@
 import AppKit
+import CalendarCore
 import Foundation
 import SwiftUI
 import TimeTugCore
@@ -17,9 +18,13 @@ final class PopupLogicTests: XCTestCase {
 
     private func event(_ id: String, _ title: String, _ start: Date, _ end: Date, allDay: Bool = false,
                        calendarID: String = "work", conference: String? = nil) -> TimeTugCalendarEvent {
-        TimeTugCalendarEvent(sourceEventID: id, sourceID: "src", calendarID: calendarID, title: title,
-                      start: start, end: end, isAllDay: allDay,
-                      conferenceURL: conference.flatMap(URL.init(string:)))
+        var event = TimeTugCalendarEvent(
+            event: CalendarCore.CalendarEvent(
+                eventID: id, calendarID: calendarID, title: title, start: start, end: end,
+                timeZone: allDay ? utc : nil, isAllDay: allDay),
+            sourceID: "src")
+        event.conferenceURL = conference.flatMap(URL.init(string:))
+        return event
     }
 
     private let calendars = [

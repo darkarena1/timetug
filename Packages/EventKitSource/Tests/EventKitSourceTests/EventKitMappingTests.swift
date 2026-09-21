@@ -1,4 +1,5 @@
 import CalendarCore
+import CalendarTestSupport
 import EventKit
 import Foundation
 import Testing
@@ -49,4 +50,15 @@ private func iso(_ s: String) -> Date { ISO8601DateFormatter().date(from: s)! }
     #expect(EventKitMapping.email(fromMailto: "mailto:Bo@X.test?subject=hi") == "bo@x.test")
     #expect(EventKitMapping.email(fromMailto: "https://x.test") == nil)
     #expect(EventKitMapping.hex(from: CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1)) == "#FF0000")
+}
+
+@Test func canonicalAllDayPassesTheConformanceCheck() {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+    let (start, end) = EventKitMapping.canonicalAllDay(
+        start: calendar.date(from: DateComponents(year: 2026, month: 9, day: 21))!,
+        end: calendar.date(from: DateComponents(year: 2026, month: 9, day: 22))!, calendar: calendar)
+    let event = CalendarEvent(eventID: "a", calendarID: "c", title: "Holiday", start: start, end: end,
+                              timeZone: calendar.timeZone, isAllDay: true)
+    #expect(AllDayConformance.violations(event).isEmpty)
 }

@@ -32,10 +32,19 @@ Build `Packages/CalendarConnectors` in this repository, extract it to its own re
 
 TimeTug now uses the library. Decisions made while plugging it in:
 
-- **Bridge package:** `Packages/CalendarBridge` maps library events to `TimeTugCalendarEvent` and adapts library sources to Core's source protocol. `TimeTugCore` does not depend on the library: the library needs swift-crypto, which needs a newer toolchain than the `swift:6.0` image that proves Core's portability. Core gains only generic pieces (`CalendarStore.setSources`, `TakeoverSettings.removeCalendars`).
+- **Bridge package:** `Packages/CalendarBridge` maps library events to `TimeTugCalendarEvent` and adapts library sources to Core's source protocol. (Superseded by Phase 2.5: Core now depends on `CalendarCore`.) At the time `TimeTugCore` did not depend on the library: the library needs swift-crypto, which needs a newer toolchain than the `swift:6.0` image that proves Core's portability. Core gains only generic pieces (`CalendarStore.setSources`, `TakeoverSettings.removeCalendars`).
 - **Layering:** anything generic (stores, all-day handling, conformance check) lives in `CalendarCore`; OS-specific code lives in `Packages/CalendarApple` (Keychain, loopback OAuth) and the `EventKitSource` adapter. The app composes them and owns UI and account state.
 - **All-day rule:** a connector emits all-day events in the library's canonical form (`AllDay`); the bridge converts them to TimeTug's native all-day form so the same calendar date shows regardless of time zone. The bridge conversion is interim; Phase 2.5 removes it.
 - **EventKit source id:** EventKit reports one constant source id for the Mac. Selections and status are keyed by `source.id`, never by the calendar's own source identifier.
 - **Removal order** (`AccountsController.removeAccount`): the stored connection first (if that fails nothing else changes), then the source is dropped by reconciling, then the account's calendar selections, then its sync state, then its secrets, the last two best effort with an error message if the secret cannot be deleted. On launch an orphan sweep drops selections of account-based sources that no stored account owns, covering an interrupted removal.
 - **Phase 2.5 goal:** a minimal bridge and a dependency-free `CalendarCore`, by moving OAuth into a separate `CalendarOAuth` product.
 
+## Phase 2.5
+
+Slims the bridge and removes the library's only dependency.
+
+- **Core depends on `CalendarCore`.** This supersedes the Phase 2 note. `CalendarCore` has no dependencies and builds on `swift:6.0`, so Core stays portable. Core keeps its own `CalendarSource`, `SourceError` and `SourceStatus` and uses the library's `Attendee` and `ResponseStatus`.
+- **No external dependencies in the library.** OAuth (PKCE, refresh provider) moved to a `CalendarOAuth` product. SHA-256 sits behind the `SHA256Hashing` seam with a pure-Swift default (`PureSwiftSHA256`); `CalendarApple` provides `CryptoKitSHA256`, injected in `AppConnectors.swift`. swift-crypto and the `Package.resolved` files that pinned only it are gone, so the Linux job runs on `swift:6.0` with Core.
+- **Wrapper event.** `TimeTugCalendarEvent` wraps the library `CalendarEvent` instead of converting it, and stores the TimeTug-only fields (conference link, other attendee count, response status, merge and display state). The bridge is now `EventMapper` (wrap, drop cancelled, add calendar info) plus `ConnectedSource` (error and change translation).
+- **All-day by calendar date.** An all-day event belongs to a day by its calendar date in the event's own zone (`allDayDates`, `covers`), never adjusted to the viewer's zone. A same-date range counts as one day. Because an event's date can differ from the viewer's day near midnight, `CalendarStore` widens the fetch window by 26 hours on each side for sources (`sourceQueryMargin`).
+- **Accepted change.** The `id` and `contentKey` inputs of all-day events are now canonical instants. This changes keys only for all-day events in another zone; those never take over or merge, so nothing persisted is affected. Persisted formats of timed events are unchanged.

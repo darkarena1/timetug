@@ -1,3 +1,4 @@
+import CalendarCore
 import Foundation
 import TimeTugCore
 import XCTest
@@ -18,8 +19,11 @@ final class TimeFormattingTests: XCTestCase {
     }
 
     private func event(startingIn seconds: TimeInterval, from now: Date, title: String = "Design Review") -> TimeTugCalendarEvent {
-        TimeTugCalendarEvent(sourceEventID: "1", sourceID: "s", calendarID: "c", title: title,
-                      start: now.addingTimeInterval(seconds), end: now.addingTimeInterval(seconds + 1800))
+        TimeTugCalendarEvent(
+            event: CalendarCore.CalendarEvent(
+                eventID: "1", calendarID: "c", title: title,
+                start: now.addingTimeInterval(seconds), end: now.addingTimeInterval(seconds + 1800)),
+            sourceID: "s")
     }
 
     func testStatusTitleIconOnlyIsNil() {

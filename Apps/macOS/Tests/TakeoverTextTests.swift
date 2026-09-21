@@ -1,3 +1,4 @@
+import CalendarCore
 import Foundation
 import TimeTugCore
 import XCTest
@@ -75,8 +76,9 @@ final class TakeoverTextTests: XCTestCase {
     }
 
     func testDetailsShowTheMergedEventsLongerRange() {
-        var merged = TimeTugCalendarEvent(sourceEventID: "m", sourceID: "s", calendarID: "c", title: "Sync",
-                                   start: at(10, 30), end: at(11))
+        var merged = TimeTugCalendarEvent(
+            event: CalendarCore.CalendarEvent(eventID: "m", calendarID: "c", title: "Sync", start: at(10, 30), end: at(11)),
+            sourceID: "s")
         merged.displayStart = at(10)
         let text = TakeoverText.details(start: merged.shownStart, end: merged.end, calendarTitle: nil,
                                         otherAttendees: 0, locale: posix, timeZone: utc)

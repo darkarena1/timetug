@@ -11,6 +11,8 @@
 #   BUILD_DIR  scratch directory for DerivedData and the archive (default: build)
 #   BUILD_NUMBER  CFBundleVersion to stamp (default: the project's value; never GITHUB_RUN_NUMBER, run numbers are per workflow)
 #   APP_VERSION   display version; overrides the tag and project.yml
+#   GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET  Google Desktop OAuth client baked into the app (both or
+#              neither; without them Google is not offered). Never printed; see scripts/ci/google-oauth-config.sh.
 #
 # Version: from the tag (v1.2.3 -> 1.2.3), else CFBundleShortVersionString in Apps/macOS/project.yml.
 # Outputs: dist/TimeTug.app and dist/version.txt (the resolved version).
@@ -40,6 +42,9 @@ if [[ ! "$VERSION" =~ ^[0-9]+(\.[0-9]+)*([-+][0-9A-Za-z.-]+)?$ ]]; then
 fi
 echo "Building TimeTug $VERSION"
 
+# shellcheck source=scripts/ci/google-oauth-config.sh
+source "$ROOT/scripts/ci/google-oauth-config.sh"
+prepare_google_oauth_xcconfig "${RUNNER_TEMP:-$BUILD_DIR}"
 xcodegen generate --spec "$SPEC"
 
 rm -rf "$DIST_DIR" "$BUILD_DIR/TimeTug.xcarchive"
@@ -83,6 +88,18 @@ if [ "$changed" = 1 ]; then
     --entitlements Apps/macOS/Widgets/TimeTugWidgets.entitlements "$APPEX"
   codesign --force --sign - --options runtime \
     --entitlements Apps/macOS/Sources/TimeTug.entitlements "$APP"
+fi
+
+# Verify the Google client landed in the app without printing it.
+google_id="$(/usr/libexec/PlistBuddy -c 'Print :TimeTugGoogleClientID' "$PLIST" 2>/dev/null || true)"
+if [ -n "${TIMETUG_GOOGLE_XCCONFIG:-}" ]; then
+  if [ -z "$google_id" ] || [[ "$google_id" == *'$('* ]]; then
+    echo "error: Google OAuth client was provided but is missing from the built Info.plist" >&2
+    exit 1
+  fi
+  echo "Google OAuth client: configured"
+else
+  echo "Google OAuth client: absent"
 fi
 
 codesign --verify --strict --deep "$APP"

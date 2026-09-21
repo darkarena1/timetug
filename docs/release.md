@@ -140,6 +140,8 @@ Add these under Settings > Secrets and variables > Actions. Signing and notarizi
 | `NOTARY_API_ISSUER_ID` | The Issuer ID shown on that same page |
 | `NOTARY_API_KEY_P8_BASE64` | The downloaded `AuthKey_XXXX.p8`, encoded with `base64 -i AuthKey_XXXX.p8 \| pbcopy` |
 
+Two optional secrets, `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET`, hold the Google "Desktop app" OAuth client that `beta.yml` and `release.yml` bake into the app (only their `Build Release app` step reads them; `ci.yml` never does). Without them the build still succeeds but Google is not offered in Settings > Accounts. Set both or neither: one alone fails the build. Google treats a Desktop-app client secret as non-confidential because it ships inside the app, but keep both values out of git and out of logs.
+
 `SPARKLE_PRIVATE_KEY` (see "One-time setup") is separate: it is needed to publish updates, not to sign the app.
 
 Create the certificate at developer.apple.com > Certificates > "Developer ID Application" (needs a certificate signing request from Keychain Access).
