@@ -1,4 +1,5 @@
 import AppKit
+import CalendarCore
 import TimeTugCore
 import XCTest
 @testable import TimeTug
@@ -15,10 +16,16 @@ final class MenuBarIconStateTests: XCTestCase {
 
     private func event(startingIn offset: TimeInterval, duration: TimeInterval = 1800,
                        calendarID: String = "cal", isAllDay: Bool = false,
-                       response: ResponseStatus = .unknown) -> TimeTugCalendarEvent {
-        TimeTugCalendarEvent(sourceEventID: "e1", sourceID: "src", calendarID: calendarID, title: "Sync",
-                      start: now.addingTimeInterval(offset), end: now.addingTimeInterval(offset + duration),
-                      isAllDay: isAllDay, otherAttendeeCount: 1, responseStatus: response)
+                       response: CalendarCore.ResponseStatus? = nil) -> TimeTugCalendarEvent {
+        var event = TimeTugCalendarEvent(
+            event: CalendarCore.CalendarEvent(
+                eventID: "e1", calendarID: calendarID, title: "Sync",
+                start: now.addingTimeInterval(offset), end: now.addingTimeInterval(offset + duration),
+                timeZone: isAllDay ? TimeZone(identifier: "UTC") : nil, isAllDay: isAllDay),
+            sourceID: "src")
+        event.otherAttendeeCount = 1
+        event.responseStatus = response
+        return event
     }
 
     private func resolve(_ events: [TimeTugCalendarEvent], ledger: TakeoverLedger = TakeoverLedger()) -> MenuBarIconState {

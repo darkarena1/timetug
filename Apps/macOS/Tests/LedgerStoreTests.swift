@@ -1,3 +1,4 @@
+import CalendarCore
 import TimeTugCore
 import XCTest
 @testable import TimeTug
@@ -11,8 +12,10 @@ final class LedgerStoreTests: XCTestCase {
 
     private func event(_ id: String = "e1") -> TimeTugCalendarEvent {
         let start = Date(timeIntervalSince1970: 1_800_000_000)
-        return TimeTugCalendarEvent(sourceEventID: id, sourceID: "s", calendarID: "c", title: "Standup",
-                             start: start, end: start.addingTimeInterval(1800))
+        return TimeTugCalendarEvent(
+            event: CalendarCore.CalendarEvent(
+                eventID: id, calendarID: "c", title: "Standup", start: start, end: start.addingTimeInterval(1800)),
+            sourceID: "s")
     }
 
     func testDefaultLocationIsApplicationSupportTimeTug() {

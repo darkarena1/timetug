@@ -349,11 +349,14 @@ final class AppCoordinator {
     /// Settings' "Test tug" button: a sample event that never touches the ledger.
     func fireTest() {
         let now = Date()
-        let sample = TimeTugCalendarEvent(
-            sourceEventID: "test", sourceID: "test", calendarID: "test", title: "Sample meeting",
-            start: now.addingTimeInterval(settings.takeover.leadTime),
-            end: now.addingTimeInterval(settings.takeover.leadTime + 1800),
-            otherAttendeeCount: 1, conferenceURL: URL(string: "https://meet.google.com/aaa-bbbb-ccc"))
+        var sample = TimeTugCalendarEvent(
+            event: CalendarCore.CalendarEvent(
+                eventID: "test", calendarID: "test", title: "Sample meeting",
+                start: now.addingTimeInterval(settings.takeover.leadTime),
+                end: now.addingTimeInterval(settings.takeover.leadTime + 1800)),
+            sourceID: "test")
+        sample.otherAttendeeCount = 1
+        sample.conferenceURL = URL(string: "https://meet.google.com/aaa-bbbb-ccc")
         overlay.show(TakeoverRequest.make(for: sample, now: now), calendarTitle: "Sample calendar", actions: .init(
             join: { [weak self] in self?.overlay.hide() },
             snooze: { [weak self] _ in self?.overlay.hide() },
