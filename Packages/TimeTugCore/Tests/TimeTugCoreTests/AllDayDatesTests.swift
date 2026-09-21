@@ -30,3 +30,12 @@ import Testing
     #expect(e.allDayDates == nil)
     #expect(!e.covers(day(2026, 9, 18)))
 }
+
+@Test func allDayRangeWithinOneDateIsTreatedAsThatDay() {
+    // Non-canonical input (start and end on the same date in the event's zone): must not vanish.
+    let e = makeEvent("x", start: "2026-09-18T10:00:00Z", minutes: 30, isAllDay: true)
+    #expect(e.allDayDates?.first == day(2026, 9, 18))
+    #expect(e.allDayDates?.endExclusive == day(2026, 9, 19))
+    #expect(e.covers(day(2026, 9, 18)))
+    #expect(!e.covers(day(2026, 9, 19)))
+}
