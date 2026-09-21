@@ -85,6 +85,9 @@ jobs:
         run: scripts/ci/compute-versions.sh beta >> "$GITHUB_ENV"
       - name: Build Release app
         if: steps.signing.outputs.go == 'true'
+        env:
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
         run: scripts/ci/build-release.sh
       - name: Sign with Developer ID (no notarization)
         if: steps.signing.outputs.go == 'true'

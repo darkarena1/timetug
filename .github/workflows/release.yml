@@ -125,6 +125,9 @@ jobs:
       - name: Compute build number
         run: scripts/ci/compute-versions.sh stable "$TAG" >> "$GITHUB_ENV"
       - name: Build Release app
+        env:
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
         run: scripts/ci/build-release.sh
       - name: Sign and notarize app
         if: steps.signing.outputs.has_signing == 'true'

@@ -37,4 +37,11 @@ printf 'jobs:\n  j:\n    steps:\n      - run: |\n          if then fi (\n' > "$T
 printf 'jobs: [unclosed\n' > "$TMP/bad-yaml.yml"
 python3 "$CHECK" "$TMP/bad-run.yml" >/dev/null && { echo "FAIL: broken run block accepted" >&2; exit 1; }
 python3 "$CHECK" "$TMP/bad-yaml.yml" >/dev/null && { echo "FAIL: broken yaml accepted" >&2; exit 1; }
+# The Google OAuth secrets belong to the privileged build workflows only, never to PR CI.
+for w in beta release; do
+  for s in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET; do
+    grep -q "secrets\.$s" ".github/workflows/$w.yml" || { echo "FAIL: $w.yml does not reference secrets.$s" >&2; exit 1; }
+  done
+done
+if grep -q "GOOGLE_OAUTH" .github/workflows/ci.yml; then echo "FAIL: ci.yml must not reference the Google OAuth secrets" >&2; exit 1; fi
 echo "PASS"
