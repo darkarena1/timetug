@@ -1,4 +1,5 @@
 import CalendarCore
+import CalendarOAuth
 import Foundation
 
 /// The host app's Google Cloud OAuth client (type Desktop). Supplied from git-ignored configuration; never embedded here.
