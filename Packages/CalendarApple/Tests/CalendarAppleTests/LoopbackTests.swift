@@ -162,6 +162,16 @@ private final class Recorder: @unchecked Sendable {
     func hit() { lock.lock(); _count += 1; lock.unlock() }
 }
 
+/// Polls `condition` every 10 ms until it holds or `timeout` elapses; returns whether it held.
+private func eventually(timeout: Duration = .seconds(5), _ condition: () -> Bool) async -> Bool {
+    let deadline = ContinuousClock.now + timeout
+    while ContinuousClock.now < deadline {
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return condition()
+}
+
 private let authURL = URL(string: "https://accounts.example/auth")!
 
 /// Starts a session, then hands the fake presenter the real redirect URI (the presenter is created first, so it is
@@ -194,7 +204,7 @@ private struct ProxyPresenter: AuthorizationPresenting {
     let received = try await session.authorize(at: authURL)
     #expect(received.query?.contains("code=abc") == true)
     #expect(presenter.completionScheme == "timetug-oauth")
-    try await Task.sleep(for: .milliseconds(300))
+    #expect(await eventually { presenter.response != nil })
     let response = try #require(presenter.response)
     #expect(response.hasPrefix("HTTP/1.1 302"))
     #expect(response.contains("Location: timetug-oauth://done"))
@@ -211,8 +221,7 @@ private struct ProxyPresenter: AuthorizationPresenting {
     let opened = Recorder()
     let (session, presenter) = try await presenterSession({ _ in .refuse }, opened: opened)
     let waiting = Task { try await session.authorize(at: authURL) }
-    try await Task.sleep(for: .milliseconds(100))
-    #expect(opened.count == 1)
+    #expect(await eventually { opened.count == 1 })
     let response = try await rawGET(session.redirectURI, path: "/?code=abc&state=xyz")
     #expect(response.hasPrefix("HTTP/1.1 200"))
     #expect(!response.contains("Location:"))
@@ -224,6 +233,8 @@ private struct ProxyPresenter: AuthorizationPresenting {
 @Test func closeDismissesThePresenterOncePerCloseEvenAfterCompletion() async throws {
     let (session, presenter) = try await presenterSession { .hitListener($0) }
     _ = try await session.authorize(at: authURL)
+    await session.close()
+    await session.close()
     await session.close()
     #expect(presenter.dismissals == 1)
 }
