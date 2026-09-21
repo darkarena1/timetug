@@ -14,7 +14,11 @@ let package = Package(
         ),
         .testTarget(
             name: "EventKitSourceTests",
-            dependencies: ["EventKitSource", .product(name: "CalendarCore", package: "CalendarConnectors")],
+            dependencies: [
+                "EventKitSource",
+                .product(name: "CalendarCore", package: "CalendarConnectors"),
+                .product(name: "CalendarTestSupport", package: "CalendarConnectors"),
+            ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]
