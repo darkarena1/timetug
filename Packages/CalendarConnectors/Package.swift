@@ -10,12 +10,9 @@ let package = Package(
         .library(name: "GoogleCalendar", targets: ["GoogleCalendar"]),
         .library(name: "CalendarTestSupport", targets: ["CalendarTestSupport"]),
     ],
-    dependencies: [
-        .package(url: "https://github.com/apple/swift-crypto.git", exact: "5.0.0"),
-    ],
     targets: [
         .target(name: "CalendarCore"),
-        .target(name: "CalendarOAuth", dependencies: ["CalendarCore", .product(name: "Crypto", package: "swift-crypto")]),
+        .target(name: "CalendarOAuth", dependencies: ["CalendarCore"]),
         .target(name: "GoogleCalendar", dependencies: ["CalendarCore", "CalendarOAuth"]),
         .target(name: "CalendarTestSupport", dependencies: ["CalendarCore"]),
         .testTarget(name: "CalendarCoreTests", dependencies: ["CalendarCore", "CalendarTestSupport"]),

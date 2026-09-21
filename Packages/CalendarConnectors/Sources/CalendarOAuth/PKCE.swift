@@ -1,5 +1,4 @@
 import CalendarCore
-import Crypto
 import Foundation
 
 public enum PKCE {
@@ -15,9 +14,8 @@ public enum PKCE {
     }
 
     /// base64url(SHA-256(verifier)) without padding (RFC 7636, method S256).
-    public static func challenge(for verifier: String) -> String {
-        let digest = SHA256.hash(data: Data(verifier.utf8))
-        return Data(digest).base64EncodedString()
+    public static func challenge(for verifier: String, hasher: any SHA256Hashing = PureSwiftSHA256()) -> String {
+        hasher.sha256(Data(verifier.utf8)).base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
