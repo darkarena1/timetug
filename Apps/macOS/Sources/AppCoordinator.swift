@@ -57,10 +57,12 @@ final class AppCoordinator {
         },
         buildEventKit: { [unowned self] in ConnectedSource(eventKit) },
         onChange: { [weak self] in await self?.refresh() })
-    lazy var accounts = AccountsController(
+    lazy var accounts: AccountsController = AccountsController(
         registry: registry, connectionStore: FileConnectionStore(url: AppSupportFiles.url("accounts.json")),
         credentials: credentials, syncState: syncState,
-        interaction: LoopbackAuthorizationInteraction(openURL: { url in await MainActor.run { NSWorkspace.shared.open(url) } }),
+        interaction: LoopbackAuthorizationInteraction(
+            openURL: { url in await MainActor.run { NSWorkspace.shared.open(url) } },
+            presenter: WebAuthenticationSessionPresenter(anchor: { [weak self] in self?.settingsWindow.currentWindow ?? NSApp.keyWindow })),
         settings: settings, reconciler: reconciler,
         applySources: { [weak self] sources in
             await self?.store.setSources(sources)

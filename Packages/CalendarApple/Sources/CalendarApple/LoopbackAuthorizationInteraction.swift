@@ -8,6 +8,17 @@ public enum LoopbackError: Error, Equatable {
     case alreadyWaiting
 }
 
+/// Shows the authorization page to the user in a window the host controls.
+public protocol AuthorizationPresenting: Sendable {
+    /// Presents `url`. Returns false when it could not start (the caller then falls back to the browser).
+    /// `onEnded` is called at most once when the presentation ends without the host having seen the
+    /// redirect: `nil` when the completion URL (scheme `completionScheme`) was reached, an error when the
+    /// user cancelled or it failed.
+    func present(_ url: URL, completionScheme: String, onEnded: @escaping @Sendable (Error?) -> Void) async -> Bool
+    /// Dismisses the presentation if it is still showing.
+    func dismiss() async
+}
+
 /// OAuth via a loopback redirect: listens on 127.0.0.1 (ephemeral port), hands the authorization URL to the
 /// host's `openURL` (TimeTug passes NSWorkspace) and returns the redirect it receives. Swap it for your own
 /// `AuthorizationInteraction` on other hosts.
@@ -17,16 +28,22 @@ public struct LoopbackAuthorizationInteraction: AuthorizationInteraction {
 
     private let openURL: OpenURL
     private let prompt: PromptCredentials?
+    private let presenter: (any AuthorizationPresenting)?
+    private let completionScheme: String
     private let timeout: Duration
 
-    public init(openURL: @escaping OpenURL, promptCredentials: PromptCredentials? = nil, timeout: Duration = .seconds(300)) {
+    public init(openURL: @escaping OpenURL, promptCredentials: PromptCredentials? = nil,
+                presenter: (any AuthorizationPresenting)? = nil, completionScheme: String = "timetug-oauth",
+                timeout: Duration = .seconds(300)) {
         self.openURL = openURL
         self.prompt = promptCredentials
+        self.presenter = presenter
+        self.completionScheme = completionScheme
         self.timeout = timeout
     }
 
     public func beginOAuthRedirect() async throws -> any OAuthRedirectSession {
-        try await LoopbackSession.start(openURL: openURL, timeout: timeout)
+        try await LoopbackSession.start(openURL: openURL, presenter: presenter, completionScheme: completionScheme, timeout: timeout)
     }
 
     public func promptCredentials(_ fields: [CredentialField]) async throws -> [String: String] {
@@ -59,24 +76,36 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
     }
     private let listener: NWListener
     private let openURL: LoopbackAuthorizationInteraction.OpenURL
+    private let presenter: (any AuthorizationPresenting)?
+    private let completionScheme: String
     private let timeout: Duration
     private let queue = DispatchQueue(label: "com.timetug.calendarapple.loopback")
     private let lock = NSLock()
     private var pending: CheckedContinuation<URL, Error>?
     private var received: Result<URL, Error>?
+    /// Set (under `lock`) while a presenter's sheet may hit the listener; the redirect is then answered with a 302.
+    private var completionRedirect: URL?
+    /// True while this flow's own presentation may still be showing. The presenter is shared, so `dismiss()` would cancel
+    /// whichever sheet is active; only call it when this flow still owns one.
+    private var presentationLive = false
+    private var presentationEnded = false
 
-    private init(listener: NWListener, openURL: @escaping LoopbackAuthorizationInteraction.OpenURL, timeout: Duration) {
+    private init(listener: NWListener, openURL: @escaping LoopbackAuthorizationInteraction.OpenURL,
+                 presenter: (any AuthorizationPresenting)?, completionScheme: String, timeout: Duration) {
         self.listener = listener
         self.openURL = openURL
+        self.presenter = presenter
+        self.completionScheme = completionScheme
         self.timeout = timeout
     }
 
-    static func start(openURL: @escaping LoopbackAuthorizationInteraction.OpenURL, timeout: Duration) async throws -> LoopbackSession {
+    static func start(openURL: @escaping LoopbackAuthorizationInteraction.OpenURL, presenter: (any AuthorizationPresenting)? = nil,
+                      completionScheme: String = "timetug-oauth", timeout: Duration) async throws -> LoopbackSession {
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = NWEndpoint.hostPort(host: .ipv4(.loopback), port: .any)
         let listener: NWListener
         do { listener = try NWListener(using: parameters) } catch { throw LoopbackError.listenerFailed(String(describing: error)) }
-        let session = LoopbackSession(listener: listener, openURL: openURL, timeout: timeout)
+        let session = LoopbackSession(listener: listener, openURL: openURL, presenter: presenter, completionScheme: completionScheme, timeout: timeout)
         listener.newConnectionHandler = { [weak session] connection in session?.accept(connection) }
         let port: UInt16 = try await withCheckedThrowingContinuation { continuation in
             let once = Once()
@@ -108,7 +137,20 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
     }
 
     func authorize(at authorizationURL: URL) async throws -> URL {
-        guard await openURL(authorizationURL) else { throw LoopbackError.couldNotOpenBrowser }
+        var presented = false
+        if let presenter {
+            // Armed before `present`, so a request the sheet makes immediately already gets the 302.
+            setCompletionRedirect(URL(string: "\(completionScheme)://done"))
+            presented = await presenter.present(authorizationURL, completionScheme: completionScheme) { [weak self] error in
+                // The presenter has already cleared its own state, so the active sheet may now be another flow's.
+                self?.presentationDidEnd()
+                // nil: the sheet reached the completion URL, so the redirect was (or is being) delivered.
+                if error != nil { self?.deliver(.failure(LoopbackError.cancelled)) }
+            }
+            if presented { presentationDidStart() }
+            if !presented { setCompletionRedirect(nil) }
+        }
+        if !presented, !(await openURL(authorizationURL)) { throw LoopbackError.couldNotOpenBrowser }
         let timeout = timeout
         return try await withThrowingTaskGroup(of: URL.self) { group in
             group.addTask { try await self.waitForRedirect() }
@@ -118,7 +160,31 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
         }
     }
 
+    private func setCompletionRedirect(_ url: URL?) {
+        lock.lock(); defer { lock.unlock() }
+        completionRedirect = url
+    }
+
+    private func presentationDidEnd() {
+        lock.lock(); defer { lock.unlock() }
+        presentationEnded = true
+        presentationLive = false
+    }
+
+    /// `onEnded` may already have fired before `present` returned; then nothing is live.
+    private func presentationDidStart() {
+        lock.lock(); defer { lock.unlock() }
+        presentationLive = !presentationEnded
+    }
+
+    private func claimDismissal() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        defer { presentationLive = false }
+        return presentationLive
+    }
+
     func close() async {
+        if claimDismissal() { await presenter?.dismiss() }
         listener.cancel()
         deliver(.failure(LoopbackError.cancelled))
     }
@@ -189,6 +255,13 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
     }
 
     private func respond(on connection: NWConnection, redirect: URL?) {
+        lock.lock(); let completion = completionRedirect; lock.unlock()
+        if redirect != nil, let completion {
+            let head = "HTTP/1.1 302 Found\r\nLocation: \(completion.absoluteString)\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            connection.send(content: Data(head.utf8), contentContext: .finalMessage, isComplete: true,
+                            completion: .contentProcessed { _ in connection.cancel() })
+            return
+        }
         let status = redirect == nil ? "404 Not Found" : "200 OK"
         let body = redirect == nil ? "" : Self.page
         let head = "HTTP/1.1 \(status)\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n"

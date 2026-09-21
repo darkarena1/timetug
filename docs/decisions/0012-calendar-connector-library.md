@@ -48,3 +48,11 @@ Slims the bridge and removes the library's only dependency.
 - **Wrapper event.** `TimeTugCalendarEvent` wraps the library `CalendarEvent` instead of converting it, and stores the TimeTug-only fields (conference link, other attendee count, response status, merge and display state). The bridge is now `EventMapper` (wrap, drop cancelled, add calendar info) plus `ConnectedSource` (error and change translation).
 - **All-day by calendar date.** An all-day event belongs to a day by its calendar date in the event's own zone (`allDayDates`, `covers`), never adjusted to the viewer's zone. A same-date range counts as one day. Because an event's date can differ from the viewer's day near midnight, `CalendarStore` widens the fetch window by 26 hours on each side for sources (`sourceQueryMargin`).
 - **Accepted change.** The `id` and `contentKey` inputs of all-day events are now canonical instants. This changes keys only for all-day events in another zone; those never take over or merge, so nothing persisted is affected. Persisted formats of timed events are unchanged.
+
+## OAuth in a system sheet
+
+Sign-in runs in the system web-authentication sheet (`ASWebAuthenticationSession`, presented by `WebAuthenticationSessionPresenter` in `CalendarApple`) instead of the default browser, so it shares Safari sessions, passkeys and autofill and can close itself.
+
+- **Loopback plus a 302, not a custom-scheme redirect.** Google's Desktop clients require a loopback redirect, so the OAuth redirect still hits the local listener. The listener answers it with a 302 to `timetug-oauth://done`; the sheet catches that scheme and dismisses. The scheme is only a completion signal and carries no authorization data.
+- **Not a web view.** An embedded `WKWebView` is out: Google blocks embedded user agents, and it would lose Safari sessions and passkeys.
+- **Fallback and cancel.** If the sheet cannot start, the flow opens the default browser and shows the plain "You're signed in" page. Cancelling the sheet ends the flow at once.
