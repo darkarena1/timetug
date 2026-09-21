@@ -1,3 +1,4 @@
+import CalendarCore
 import Foundation
 
 public struct DuplicateResolution: Sendable {
@@ -229,7 +230,7 @@ public enum DuplicateResolver {
         result.displayStart = longer.start == result.start ? nil : longer.start
         // Takeover qualification reads these two, so the merged event must not be weaker than any copy.
         result.otherAttendeeCount = group.map(\.otherAttendeeCount).max() ?? result.otherAttendeeCount
-        result.responseStatus = group.map(\.responseStatus).max { attendance($0) < attendance($1) } ?? result.responseStatus
+        if let best = group.map(\.responseStatus).max(by: { attendance($0) < attendance($1) }) { result.responseStatus = best }
         result.mergedMembers = group.map { MergedMember($0) }
         result.mergeProvenance = strongest(provenance)
         return result
@@ -248,13 +249,13 @@ public enum DuplicateResolver {
         member.conferenceURL ?? ConferenceLinkDetector.detect(location: member.location, url: member.url, notes: member.notes)
     }
 
-    /// accepted > tentative > pending > unknown > declined.
-    private static func attendance(_ status: ResponseStatus) -> Int {
+    /// accepted > tentative > needsAction > unknown (nil) > declined.
+    private static func attendance(_ status: CalendarCore.ResponseStatus?) -> Int {
         switch status {
         case .accepted: 4
         case .tentative: 3
-        case .pending: 2
-        case .unknown: 1
+        case .needsAction: 2
+        case nil: 1
         case .declined: 0
         }
     }

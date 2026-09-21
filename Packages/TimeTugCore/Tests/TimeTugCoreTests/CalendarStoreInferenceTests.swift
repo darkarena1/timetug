@@ -1,3 +1,4 @@
+import CalendarCore
 import Foundation
 import Testing
 @testable import TimeTugCore
@@ -226,8 +227,11 @@ private func unmergeExactDuplicates(_ a: TimeTugCalendarEvent, _ b: TimeTugCalen
     for k in 0..<25 {
         let start = base.addingTimeInterval(TimeInterval(k * 55 * 60))
         for (calendarID, title) in [("personal", "Errand \(k)"), ("work", "Visit \(k)")] {
-            events.append(TimeTugCalendarEvent(sourceEventID: "\(calendarID)\(k)", sourceID: "fake", calendarID: calendarID,
-                                        title: title, start: start, end: start.addingTimeInterval(20 * 60)))
+            events.append(TimeTugCalendarEvent(
+                event: CalendarCore.CalendarEvent(
+                    eventID: "\(calendarID)\(k)", calendarID: calendarID, title: title,
+                    start: start, end: start.addingTimeInterval(20 * 60)),
+                sourceID: "fake"))
         }
     }
     let engine = FakeAdjudicator()
