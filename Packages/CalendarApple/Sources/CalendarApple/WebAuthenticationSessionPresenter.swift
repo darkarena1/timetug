@@ -7,8 +7,16 @@ import Foundation
 /// session runs on the main actor.
 public final class WebAuthenticationSessionPresenter: NSObject, AuthorizationPresenting, ASWebAuthenticationPresentationContextProviding, @unchecked Sendable {
     private let anchor: @Sendable @MainActor () -> NSWindow?
+    private struct Presentation {
+        let id: UInt64
+        let session: ASWebAuthenticationSession
+        let onEnded: @Sendable (Error?) -> Void
+    }
+
     /// Main-actor only.
-    private var session: ASWebAuthenticationSession?
+    private var active: Presentation?
+    /// Main-actor only.
+    private var nextID: UInt64 = 0
 
     public init(anchor: @escaping @Sendable @MainActor () -> NSWindow?) {
         self.anchor = anchor
@@ -22,31 +30,35 @@ public final class WebAuthenticationSessionPresenter: NSObject, AuthorizationPre
         await MainActor.run {
             // Drop the reference first: `cancel()` reports `canceledLogin` to the handler, which must
             // not reach `onEnded` once the flow is already over.
-            let ending = session
-            session = nil
-            ending?.cancel()
+            let ending = active
+            active = nil
+            ending?.session.cancel()
         }
     }
 
     @MainActor
     private func start(_ url: URL, completionScheme: String, onEnded: @escaping @Sendable (Error?) -> Void) -> Bool {
-        session?.cancel()
-        session = nil
-        var created: ASWebAuthenticationSession?
-        created = ASWebAuthenticationSession(url: url, callbackURLScheme: completionScheme) { [weak self] callbackURL, error in
-            // The handler may arrive off the main actor; only the session this handler belongs to may end the flow.
+        // A superseded flow must still end, or it waits for its own timeout.
+        if let superseded = active {
+            active = nil
+            superseded.session.cancel()
+            superseded.onEnded(CancellationError())
+        }
+        nextID += 1
+        let id = nextID
+        let session = ASWebAuthenticationSession(url: url, callbackURLScheme: completionScheme) { [weak self] callbackURL, error in
+            // The handler may arrive off the main actor; only the presentation this handler belongs to may end the flow.
             Task { @MainActor in
-                guard let self, let created, self.session === created else { return }
-                self.session = nil
-                onEnded(callbackURL != nil ? nil : (error ?? CancellationError()))
+                guard let self, let current = self.active, current.id == id else { return }
+                self.active = nil
+                current.onEnded(callbackURL != nil ? nil : (error ?? CancellationError()))
             }
         }
-        guard let created else { return false }
-        created.presentationContextProvider = self
-        created.prefersEphemeralWebBrowserSession = false
-        session = created
-        if created.start() { return true }
-        session = nil
+        session.presentationContextProvider = self
+        session.prefersEphemeralWebBrowserSession = false
+        active = Presentation(id: id, session: session, onEnded: onEnded)
+        if session.start() { return true }
+        active = nil
         return false
     }
 
