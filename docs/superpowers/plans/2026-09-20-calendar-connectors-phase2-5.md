@@ -53,6 +53,7 @@ git mv Tests/CalendarCoreTests/OAuthTests.swift Tests/CalendarCoreTests/PKCETest
         .library(name: "CalendarCore", targets: ["CalendarCore"]),
         .library(name: "CalendarOAuth", targets: ["CalendarOAuth"]),
         .library(name: "GoogleCalendar", targets: ["GoogleCalendar"]),
+        .library(name: "CalendarTestSupport", targets: ["CalendarTestSupport"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-crypto.git", exact: "5.0.0"),
@@ -406,6 +407,19 @@ private func library(
     #expect(e.event.conference?.url == url)
 }
 
+@Test func isSameMeetingMatchesByIdOrByAnyMergedContentKey() {
+    let a = TimeTugCalendarEvent(event: library("e1"), sourceID: "src")
+    let sameOccurrence = TimeTugCalendarEvent(event: library("e1"), sourceID: "src")
+    let sameContentOtherID = TimeTugCalendarEvent(event: library("e9"), sourceID: "other")
+    var merged = TimeTugCalendarEvent(event: library("m", start: "2026-09-18T12:00:00Z"), sourceID: "src")
+    merged.mergedMembers = [MergedMember(title: "Standup", calendarKey: "src/cal", contentKey: a.contentKey,
+                                         details: "bare", start: a.start, end: a.end)]
+    #expect(a.isSameMeeting(as: sameOccurrence))
+    #expect(a.isSameMeeting(as: sameContentOtherID))   // same title, start and end
+    #expect(merged.isSameMeeting(as: a))                // a merged copy's content matches
+    #expect(!a.isSameMeeting(as: TimeTugCalendarEvent(event: library("e2", start: "2026-09-18T15:00:00Z"), sourceID: "src")))
+}
+
 @Test func idAndContentKeyKeepTheirFormulas() {
     let e = TimeTugCalendarEvent(event: library(), sourceID: "src")
     let start = Int(date("2026-09-18T10:00:00Z").timeIntervalSince1970)
@@ -579,6 +593,14 @@ import Testing
     #expect(!e.covers(day(2026, 9, 24)))
 }
 
+@Test func allDayDatesSurviveAMissingMidnight() {
+    // Sao Paulo skipped local midnight on 2018-11-04 (DST began at 00:00); the noon-based start of day still works.
+    let e = makeAllDay(zone: "America/Sao_Paulo", first: day(2018, 11, 4), endExclusive: day(2018, 11, 5))
+    #expect(e.allDayDates?.first == day(2018, 11, 4))
+    #expect(e.allDayDates?.endExclusive == day(2018, 11, 5))
+    #expect(e.covers(day(2018, 11, 4)))
+}
+
 @Test func timedEventsHaveNoAllDayDates() {
     let e = makeEvent()
     #expect(e.allDayDates == nil)
@@ -591,16 +613,20 @@ Add to `DayAgendaTests.swift` (uses that file's private `agenda(...)`-style call
 ```swift
 private let la = calendar(in: "America/Los_Angeles")
 
+// The first test below fails against the old instant-based rule; the second and third are regression guards that
+// pin behaviour that must not change (exclusive end date, skipAllDayEvents).
+
 private func laAgenda(_ events: [TimeTugCalendarEvent], at time: String) -> DayAgenda {
     DayAgenda.make(events: events, settings: optedIn { $0.skipAllDayEvents = false }, now: date(time), calendar: la)
 }
 
 @Test func allDayEventStaysOnItsOwnDateForAViewerInAnotherZone() {
     let tokyoSep21 = makeAllDay(zone: "Asia/Tokyo", first: day(2026, 9, 21), endExclusive: day(2026, 9, 22))
-    // 10:00Z on Sep 21 is 03:00 in Los Angeles: still Sep 21 there, and after the event's Tokyo instants began.
+    // 10:00Z on Sep 21 is 03:00 in Los Angeles: still Sep 21 there.
     let onTheDay = laAgenda([tokyoSep21], at: "2026-09-21T10:00:00Z")
     #expect(onTheDay.items.map(\.state) == [.current])
-    // 10:00Z on Sep 20 is Sep 20 in Los Angeles: not shown, even though the Tokyo event has begun in real time.
+    // 10:00Z on Sep 20 is Sep 20 in Los Angeles: not shown (the Tokyo event's instants begin at 15:00Z on Sep 20,
+    // which the old instant rule would have shown as today's).
     #expect(laAgenda([tokyoSep21], at: "2026-09-20T10:00:00Z").items.isEmpty)
 }
 
@@ -662,6 +688,8 @@ Add to `CalendarStoreTests.swift` and update the existing `refreshAsksSourcesFor
     #expect(snapshot.events.map(\.sourceEventID) == ["d"])
 }
 ```
+
+Add `import CalendarCore` to `WidgetSnapshotTests.swift` (it names `AllDay`); `DayAgendaTests.swift` and `CalendarStoreTests.swift` use only the helpers and need no import.
 
 - [ ] **Step 2: Run.** `swift test --package-path Packages/TimeTugCore --filter "AllDayDates|DayAgenda|WidgetSnapshot|CalendarStore"`. Expected: FAIL (missing `allDayDates`/`covers`, wrong results).
 - [ ] **Step 3: Implement the helper** (`TimeTugCalendarEvent+AllDay.swift`):
@@ -807,9 +835,25 @@ public struct EventMapper: Sendable {
 ```
 
   Update `ConnectedSourceTests.swift` for the new event shape (compile fixes only). Search the app for `EventMapper(calendar:` (`grep -rn "EventMapper(" Apps Packages`): none is expected outside tests.
-- [ ] **Step 4: Inference tests.** `PromptBuilderTests.swift` builds `TimeTugCalendarEvent`s and uses `Attendee`: change the construction to `TimeTugCalendarEvent(event: CalendarCore.CalendarEvent(...), sourceID: ...)`. If the test target needs `CalendarCore`, add `.product(name: "CalendarCore", package: "CalendarConnectors")` and `.package(path: "../CalendarConnectors")` to `Packages/AppleIntelligenceInference/Package.swift` (test target only).
-- [ ] **Step 5: Verify.** `swift test --package-path Packages/CalendarBridge` and `swift test --package-path Packages/AppleIntelligenceInference` and `swift test --package-path Packages/EventKitSource`. Expected: PASS.
-- [ ] **Step 6: Commit** (`refactor(bridge): wrap library events without converting; minimal EventMapper`).
+- [ ] **Step 4: Inference tests.** `PromptBuilderTests.swift` builds `TimeTugCalendarEvent`s and uses `Attendee`: add `import CalendarCore`, then change the construction to `TimeTugCalendarEvent(event: CalendarCore.CalendarEvent(...), sourceID: ...)`. If the test target needs `CalendarCore`, add `.product(name: "CalendarCore", package: "CalendarConnectors")` and `.package(path: "../CalendarConnectors")` to `Packages/AppleIntelligenceInference/Package.swift` (test target only).
+- [ ] **Step 5: EventKit conformance test.** In `Packages/EventKitSource/Package.swift` add `.product(name: "CalendarTestSupport", package: "CalendarConnectors")` to the test target's dependencies, then add to `Tests/EventKitSourceTests/EventKitMappingTests.swift` (adapt the call to `EventKitMapping.canonicalAllDay(start:end:calendar:)` as that file's existing tests do):
+
+```swift
+@Test func canonicalAllDayPassesTheConformanceCheck() {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+    let (start, end) = EventKitMapping.canonicalAllDay(
+        start: calendar.date(from: DateComponents(year: 2026, month: 9, day: 21))!,
+        end: calendar.date(from: DateComponents(year: 2026, month: 9, day: 22))!, calendar: calendar)
+    let event = CalendarEvent(eventID: "a", calendarID: "c", title: "Holiday", start: start, end: end,
+                              timeZone: calendar.timeZone, isAllDay: true)
+    #expect(AllDayConformance.violations(event).isEmpty)
+}
+```
+
+  with `import CalendarTestSupport` and `import CalendarCore` at the top of the file. Expected: PASS (EventKit already emits the canonical form).
+- [ ] **Step 6: Verify.** `swift test --package-path Packages/CalendarBridge` and `swift test --package-path Packages/AppleIntelligenceInference` and `swift test --package-path Packages/EventKitSource`. Expected: PASS.
+- [ ] **Step 7: Commit** (`refactor(bridge): wrap library events without converting; minimal EventMapper`).
 
 ---
 

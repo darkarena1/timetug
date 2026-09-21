@@ -71,7 +71,7 @@ Tests come first, per repo rule (Swift Testing in packages, XCTest in the app).
 
 - `CalendarOAuthTests`: NIST SHA-256 vectors including empty, multi-block and one-million-`a` inputs; the RFC 7636 example verifier and challenge; an injected hasher is the one used; existing OAuth, token-refresh and PKCE tests move unchanged.
 - Wrapper tests: forwarding and setters, the settable `conferenceURL`, computed fields, `id`, `contentKey` and `isSameMeeting` unchanged for timed events against fixed expected strings.
-- All-day tests: Tokyo event for a US viewer, multi-day event, spring-forward-gap zone, local date rollover at midnight, in `DayAgenda`, `WidgetSnapshot` and the popup row model; an all-day event whose zone is more than 24 hours from the viewer's is fetched and shown on its own date; a Tokyo all-day event viewed in Los Angeles is `.current`, not `.past`, on that date; a floating EventKit all-day event passes `AllDayConformance`.
+- All-day tests: Tokyo event for a US viewer, multi-day event, spring-forward-gap zone, local date rollover at midnight, in `DayAgenda` and `WidgetSnapshot` (the popup row model has no date logic of its own); an all-day event whose zone is more than 24 hours from the viewer's is fetched and shown on its own date; a Tokyo all-day event viewed in Los Angeles is `.current`, not `.past`, on that date; a floating EventKit all-day event passes `AllDayConformance`.
 - Existing Core, dedup, takeover and app tests get mechanical updates; the bridge tests shrink to wrapping, cancelled filtering and change/error translation.
 - Gate: `swift test` for every package, the app tests, and the persisted-key regression tests pass before the PR.
 
