@@ -6,6 +6,9 @@ final class SettingsWindowController {
     private var window: NSWindow?
     private let content: () -> SettingsView
 
+    /// The Settings window once it has been created (used as the sign-in sheet's anchor).
+    var currentWindow: NSWindow? { window }
+
     init(content: @escaping () -> SettingsView) { self.content = content }
 
     func show(on screen: NSScreen? = nil) {
