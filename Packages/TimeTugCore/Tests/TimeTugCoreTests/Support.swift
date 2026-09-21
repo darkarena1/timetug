@@ -51,3 +51,21 @@ func optedIn(_ configure: (inout TakeoverSettings) -> Void = { _ in }) -> Takeov
 
 /// A "now" at which test ledger entries are recorded (before the default test events).
 let recordedAt = date("2026-09-18T09:00:00Z")
+
+func calendar(in zone: String) -> Calendar {
+    var c = Calendar(identifier: .gregorian)
+    c.timeZone = TimeZone(identifier: zone)!
+    return c
+}
+
+/// A canonical all-day event: `first` to `endExclusive` (calendar dates) in `zone`.
+func makeAllDay(_ id: String = "d", zone: String, first: CalendarDate, endExclusive: CalendarDate,
+                title: String = "Holiday", calendarID: String = "cal") -> TimeTugCalendarEvent {
+    let tz = TimeZone(identifier: zone)!
+    let range = AllDay.canonical(first: first, endExclusive: endExclusive, in: tz)!
+    let base = CalendarCore.CalendarEvent(
+        eventID: id, calendarID: calendarID, title: title, start: range.start, end: range.end, timeZone: tz, isAllDay: true)
+    return TimeTugCalendarEvent(event: base, sourceID: "fake")
+}
+
+func day(_ y: Int, _ m: Int, _ d: Int) -> CalendarDate { CalendarDate(year: y, month: m, day: d) }

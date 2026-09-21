@@ -197,8 +197,8 @@ private func unmergeExactDuplicates(_ a: TimeTugCalendarEvent, _ b: TimeTugCalen
 
 @Test func unmergingAllDayDuplicatesOnTwoCalendarsSticks() async {
     await unmergeExactDuplicates(
-        makeEvent("1", title: "Holiday", calendarID: "personal", isAllDay: true),
-        makeEvent("2", title: "Holiday", calendarID: "work", isAllDay: true))
+        makeAllDay("1", zone: "UTC", first: day(2026, 9, 18), endExclusive: day(2026, 9, 19), calendarID: "personal"),
+        makeAllDay("2", zone: "UTC", first: day(2026, 9, 18), endExclusive: day(2026, 9, 19), calendarID: "work"))
 }
 
 @Test func unmergingSameCalendarExactDuplicatesSticks() async {
