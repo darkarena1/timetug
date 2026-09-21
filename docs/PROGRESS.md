@@ -92,3 +92,8 @@ Branch: claude/time-tug-widgets-controls-bbca3d. Ledger: `.superpowers/sdd/progr
 - Final whole-branch review fix pass: complete (Today empty-state after a busy day, unavailable intelligence control, deterministic snapshot order, missed-signal self-heal, wording, docs).
 - PENDING the user (needs a team-signed build): the on-desktop visual check of the widgets and the Control Center manual checks (section "Widgets and controls" in `docs/manual-tests/macos-checklist.md`).
 - To resume: read ADR 0010 and the plan, check the ledger, then run the signed-build checks above.
+
+## Calendar connectors Phase 2.5 (spec: docs/superpowers/specs/2026-09-20-calendar-connectors-phase2-5-design.md; ADR 0012)
+Branch: claude/calendar-phase2-5-slim-bridge.
+- Done: `CalendarConnectors` has no external dependencies (`CalendarOAuth` product, `SHA256Hashing` seam, `CryptoKitSHA256` in `CalendarApple`); swift-crypto and its `Package.resolved` files removed; `TimeTugCore` depends on `CalendarCore`; `TimeTugCalendarEvent` wraps the library event; all-day events by calendar date in their own zone with a 26 hour source margin; bridge reduced to `EventMapper` plus `ConnectedSource`; CI `core-linux` (swift:6.0) tests Core and the connector library, `connectors-linux` removed; ADR 0012 Phase 2.5 section.
+- Needs manual checks: an all-day event from another time zone on the right day in the popup and widgets; Google and Apple Calendar accounts still sign in and refresh (PKCE now hashed by CryptoKit in the app); the first CI run of `core-linux` on a runner.
