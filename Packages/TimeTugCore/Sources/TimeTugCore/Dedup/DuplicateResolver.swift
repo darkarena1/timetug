@@ -237,7 +237,8 @@ public enum DuplicateResolver {
     }
 
     /// The best join link across the whole group: a recognised provider beats a generic link; ties keep the
-    /// primary's, then group order. Sources leave `conferenceURL` nil, so links are detected per member.
+    /// primary's, then group order. A member's own `conferenceURL` (the provider's link, when it has one) comes first;
+    /// otherwise a link is detected in its location, url or notes.
     private static func bestConferenceLink(primary: TimeTugCalendarEvent, group: [TimeTugCalendarEvent]) -> URL? {
         let ordered = [primary] + group.filter { $0.id != primary.id }
         let links = ordered.compactMap(joinLink(of:))
