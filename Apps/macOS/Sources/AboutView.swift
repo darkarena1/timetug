@@ -56,7 +56,7 @@ struct AboutView: View {
             }
             Text(Self.creditText)
                 .font(.callout.weight(.medium)).foregroundStyle(palette.primary)
-            Text("Released under the MIT License.")
+            Text("Source available under MIT with the Commons Clause.")
                 .font(.footnote).foregroundStyle(palette.secondary)
             Button("Done") { onDone() }
                 .keyboardShortcut(.defaultAction)
