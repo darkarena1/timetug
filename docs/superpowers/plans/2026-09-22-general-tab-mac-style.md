@@ -967,7 +967,6 @@ import ServiceManagement
 import SwiftUI
 
 struct GeneralPane: View {
-    @ObservedObject var settings: SettingsStore
     @ObservedObject var navigation: SettingsNavigation
     @ObservedObject var updates: UpdateController
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
