@@ -132,14 +132,19 @@ jobs:
       - name: Update appcast and prune old betas
         if: steps.signing.outputs.go == 'true'
         run: |
-          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/beta-${BUILD_NUMBER}/$(basename "$ZIP")"
+          TAG="beta-${BUILD_NUMBER}"
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/$(basename "$ZIP")"
+          BODY="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .body)"
+          NOTES_FILE="$RUNNER_TEMP/notes.html"
+          jq -n --arg text "$BODY" --arg repo "$GITHUB_REPOSITORY" '{text:$text,mode:"gfm",context:$repo}' \
+            | gh api /markdown --input - | python3 scripts/release/wrap-notes-html.py > "$NOTES_FILE"
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           PRUNED="$(scripts/release/publish-appcast.sh "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             --keep-betas 5 -- \
             --title "TimeTug ${APP_VERSION}" --version "$BUILD_NUMBER" --short "$APP_VERSION" --url "$URL" \
             --length "$LENGTH" --signature "$SIGNATURE" --min-system 14.0 --channel beta \
-            --notes-url "https://github.com/${GITHUB_REPOSITORY}/releases/tag/beta-${BUILD_NUMBER}")"
+            --notes-html-file "$NOTES_FILE")"
           for u in $PRUNED; do
             tag="$(sed -n 's#.*/download/\(beta-[0-9]*\)/.*#\1#p' <<<"$u")"
             [ -n "$tag" ] || continue

@@ -203,6 +203,10 @@ jobs:
         run: |
           VERSION="$(cat dist/version.txt)"
           URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/$(basename "$UPDATE_ZIP")"
+          BODY="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .body)"
+          NOTES_FILE="$RUNNER_TEMP/notes.html"
+          jq -n --arg text "$BODY" --arg repo "$GITHUB_REPOSITORY" '{text:$text,mode:"gfm",context:$repo}' \
+            | gh api /markdown --input - | python3 scripts/release/wrap-notes-html.py > "$NOTES_FILE"
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           CHANNEL_ARGS=()
@@ -210,7 +214,7 @@ jobs:
           scripts/release/publish-appcast.sh "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" -- \
             --title "TimeTug ${VERSION}" --version "$BUILD_NUMBER" --short "$VERSION" --url "$URL" \
             --length "$UPDATE_LENGTH" --signature "$UPDATE_SIGNATURE" --min-system 14.0 "${CHANNEL_ARGS[@]}" \
-            --notes-url "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+            --notes-html-file "$NOTES_FILE"
       - name: Publish unsigned prerelease
         if: steps.signing.outputs.has_signing != 'true'
         env:

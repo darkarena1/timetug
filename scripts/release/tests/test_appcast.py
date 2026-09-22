@@ -224,5 +224,22 @@ class AppcastTests(unittest.TestCase):
         self.assertEqual(r.stdout.split(), [])
         self.assertEqual([version(i) for i in items(self.path)], ["3"])
 
+    def test_notes_html_file_becomes_description(self):
+        notes_path = os.path.join(self.dir, "notes.html")
+        with open(notes_path, "w") as f:
+            f.write("<p>Hello & welcome</p>")
+        r = run("add", "--file", self.path, "--title", "t", "--version", "2", "--short", "0.2.0-2",
+                "--url", "https://example.com/2.zip", "--length", "1", "--signature", "s",
+                "--min-system", "14.0", "--notes-html-file", notes_path)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        it = items(self.path)[0]
+        self.assertEqual(it.find("description").text, "<p>Hello & welcome</p>")
+        self.assertIsNone(it.find("sparkle:releaseNotesLink", NS))
+
+    def test_item_without_notes_has_no_description(self):
+        add(self.path, 1)
+        it = items(self.path)[0]
+        self.assertIsNone(it.find("description"))
+
 if __name__ == "__main__":
     unittest.main()
