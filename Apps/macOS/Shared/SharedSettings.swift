@@ -5,7 +5,8 @@ struct SharedSettings {
     enum Key: String {
         case skipAllDay = "shared.skipAllDay"
         case useIntelligence = "shared.useIntelligence"
-        case disableTug = "shared.disableTug"
+        /// Inverse of the retired `shared.disableTug`; a new key so a stale value from an older build cannot flip the meaning.
+        case enableTug = "shared.enableTug"
         /// Written by the app: false when on-device intelligence cannot run on this Mac.
         case inferenceAvailable = "shared.inferenceAvailable"
     }

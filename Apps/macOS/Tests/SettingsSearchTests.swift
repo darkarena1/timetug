@@ -55,8 +55,8 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertEqual(ids("start", calendars: [cal]), ["calendar:s/9", "lead-time", "launch-at-login"])
     }
 
-    func testCatalogOrderAmongTitleMatches() {
-        XCTAssertEqual(ids("skip"), ["skip-solo", "skip-declined", "skip-all-day"])
+    func testSkipFindsTheAllDayToggleThenTheRenamedAttendeesToggle() {
+        XCTAssertEqual(ids("skip"), ["skip-all-day", "require-attendees"])
     }
 
     func testAppearanceFoundByDarkAndTheme() {
@@ -165,10 +165,17 @@ final class SettingsSearchTests: XCTestCase {
         }
     }
 
-    func testDisableTugIsSearchable() {
-        XCTAssertEqual(ids("disable tug").first, "disable-tug")
-        XCTAssertTrue(ids("pause").contains("disable-tug"))
-        XCTAssertEqual(SettingsSearch.catalog.first { $0.id == "disable-tug" }?.pane, .tugRules)
+    func testEnableTugIsSearchableByItsOldNameAndPause() {
+        XCTAssertEqual(ids("enable tug").first, "enable-tug")
+        XCTAssertTrue(ids("disable").contains("enable-tug"))
+        XCTAssertTrue(ids("pause").contains("enable-tug"))
+        XCTAssertEqual(SettingsSearch.catalog.first { $0.id == "enable-tug" }?.pane, .tugRules)
+    }
+
+    func testRequireAttendeesIsSearchableAndDeclinedIsGone() {
+        XCTAssertEqual(ids("require other").first, "require-attendees")
+        XCTAssertEqual(SettingsSearch.catalog.first { $0.id == "require-attendees" }?.pane, .tugRules)
+        XCTAssertNil(SettingsSearch.catalog.first { $0.id == "skip-declined" })
     }
 
     func testUpdateSettingsAreFoundInGeneral() {

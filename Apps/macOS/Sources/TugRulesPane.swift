@@ -8,9 +8,9 @@ struct TugRulesPane: View {
     var body: some View {
         Form {
             VStack(alignment: .leading, spacing: 4) {
-                Toggle(SettingsText.disableTug, isOn: $settings.takeover.disabled)
-                    .settingsHighlight("disable-tug", navigation: navigation)
-                Text("Pauses takeovers. Your agenda, menu bar and widgets keep working.")
+                Toggle(SettingsText.enableTug, isOn: $settings.takeover.enabled)
+                    .settingsHighlight("enable-tug", navigation: navigation)
+                Text("Turn off to pause takeovers. Your agenda, menu bar and widgets keep working.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -32,24 +32,31 @@ struct TugRulesPane: View {
                 Toggle(SettingsText.videoLink, isOn: $settings.takeover.requireConferenceLink)
                     .settingsHighlight("video-link", navigation: navigation)
                 if settings.takeover.requireConferenceLink {
-                    Label {
-                        Text("Meetings without a link won't tug you.")
-                            .foregroundStyle(.secondary)
-                    } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange.opacity(0.85))
-                    }
-                    .font(.footnote)
+                    warning("Meetings without a link won't tug you.")
                 }
             }
-            Toggle(SettingsText.skipSolo, isOn: $settings.takeover.skipSoloEvents)
-                .settingsHighlight("skip-solo", navigation: navigation)
-            Toggle(SettingsText.skipDeclined, isOn: $settings.takeover.skipDeclinedEvents)
-                .settingsHighlight("skip-declined", navigation: navigation)
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle(SettingsText.requireAttendees, isOn: $settings.takeover.requireOtherAttendees)
+                    .settingsHighlight("require-attendees", navigation: navigation)
+                if settings.takeover.requireOtherAttendees {
+                    warning("Meetings without other attendees won't tug you.")
+                }
+            }
             Button(SettingsText.testTug, action: onTestTug)
                 .settingsHighlight("test-takeover", navigation: navigation)
         }
         .formStyle(.grouped)
+    }
+
+    private func warning(_ text: String) -> some View {
+        Label {
+            Text(text)
+                .foregroundStyle(.secondary)
+        } icon: {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange.opacity(0.85))
+        }
+        .font(.footnote)
     }
 
     private var leadMinutes: Binding<Int> {

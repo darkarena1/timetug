@@ -16,7 +16,7 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Sleep the Mac through a meeting start; on wake with the meeting in progress the overlay appears with "Started N ago".
 - [ ] Changing the system clock/timezone recomputes the schedule.
 - [ ] A meeting at 12:05 AM with a 10 min lead fires at 11:55 PM and does not repeat after midnight.
-- [ ] Declined, solo, all-day and non-opted-in events never take over.
+- [ ] Declined, all-day and non-opted-in events never take over. Solo events (no other attendees) take over unless "Require other attendees" is on.
 - [ ] Menu bar modes: icon only, next meeting (long titles truncated), countdown only.
 - [ ] Launch at login toggle works.
 - [ ] Settings sidebar order is General, Accounts, Calendars, Tug Rules; General has "Software Update" (first), "App", "Shortcut", "Menu bar" and "Appearance" (last) sections.
@@ -78,7 +78,7 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Today dims meetings that have already ended (visible on the large widget, or on the medium widget when the day has at most 2 meetings; medium shows 2 rows).
 - [ ] Deleting `agenda-snapshot.json` from `~/Library/Group Containers/YYA6ZKMD36.com.timetug.shared/` makes the widgets show the placeholder; it recovers when the app next publishes.
 - [ ] Clicking a widget with a meeting that has a Join link opens the link; without one it just activates the app.
-- [ ] Each of the three controls (Skip All Day Events, Use Intelligence, Disable Tug) flips the matching Settings toggle and behaves as expected (Disable Tug: no takeover fires while on).
+- [ ] Each of the three controls (Skip All Day Events, Use Intelligence, Enable Tug) flips the matching Settings toggle and behaves as expected (Enable Tug: no takeover fires while off; it starts on).
 - [ ] Toggling each setting in Settings updates the matching control in Control Center.
 - [ ] An ad-hoc build runs normally, with no widgets loading and no crash.
 - [ ] Settings > Accounts lists "Apple Calendar (this Mac)" with an enable checkbox and a `+ −` bar. Turning the checkbox off removes the Apple calendars from Calendars and the popup; turning it back on restores them with their Tug/Show choices intact.

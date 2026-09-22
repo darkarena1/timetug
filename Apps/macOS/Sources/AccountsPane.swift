@@ -15,6 +15,8 @@ struct AccountsPane: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Choose where TimeTug reads your calendars from.")
                 .font(.callout).foregroundStyle(.secondary)
+            appleCalendarCard
+            Text("Internet accounts").font(.headline).padding(.top, 4)
             list
             controls
             if accounts.isWorking { waitingRow }
@@ -45,16 +47,21 @@ struct AccountsPane: View {
 
     private var list: some View {
         List(selection: $selection) {
-            appleCalendarRow
             ForEach(accounts.accounts) { connection in
                 accountRow(connection).tag(connection.connectionID)
             }
         }
         .listStyle(.bordered)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay {
+            if accounts.accounts.isEmpty {
+                Text("No internet accounts. Use + to add one.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+        }
     }
 
-    private var appleCalendarRow: some View {
+    private var appleCalendarCard: some View {
         HStack(spacing: 10) {
             Image(systemName: "calendar").frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
@@ -70,17 +77,21 @@ struct AccountsPane: View {
                 get: { settings.eventKitEnabled },
                 set: { enabled in Task { await accounts.setEventKitEnabled(enabled) } }))
                 .labelsHidden()
-                .toggleStyle(ContrastCheckboxStyle())
+                .toggleStyle(.switch)
+                .controlSize(.small)
                 .accessibilityLabel("Use \(SettingsText.appleCalendar)")
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(nsColor: .separatorColor)))
     }
 
     private func accountRow(_ connection: Connection) -> some View {
         let status = model.statuses[accounts.statusKey(for: connection)]
         let failure = accounts.buildFailures[connection.connectionID]
         return HStack(spacing: 10) {
-            Image(systemName: "person.crop.circle").frame(width: 22)
+            ProviderIcon(kindID: connection.kindID)
             VStack(alignment: .leading, spacing: 2) {
                 Text(connection.displayName)
                 Text(failure == nil ? AccountStatusText.make(status) : "Can't start this account")

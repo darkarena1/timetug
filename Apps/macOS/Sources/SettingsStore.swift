@@ -27,8 +27,8 @@ final class SettingsStore: ObservableObject {
             if takeover.skipAllDayEvents != oldValue.skipAllDayEvents {
                 shared.set(takeover.skipAllDayEvents, for: .skipAllDay)
             }
-            if takeover.disabled != oldValue.disabled {
-                shared.set(takeover.disabled, for: .disableTug)
+            if takeover.enabled != oldValue.enabled {
+                shared.set(takeover.enabled, for: .enableTug)
             }
         }
     }
@@ -60,7 +60,7 @@ final class SettingsStore: ObservableObject {
         var loaded = defaults.data(forKey: Self.takeoverKey)
             .flatMap { try? JSONDecoder().decode(TakeoverSettings.self, from: $0) } ?? TakeoverSettings()
         if let skip = shared.bool(.skipAllDay) { loaded.skipAllDayEvents = skip }
-        if let disabled = shared.bool(.disableTug) { loaded.disabled = disabled }
+        if let enabled = shared.bool(.enableTug) { loaded.enabled = enabled }
         self.takeover = loaded
         self.menuBarMode = defaults.string(forKey: Self.modeKey)
             .flatMap(MenuBarDisplayMode.init(rawValue:)) ?? .iconOnly
@@ -80,20 +80,20 @@ final class SettingsStore: ObservableObject {
     func reloadFromShared() {
         // Read everything first: assigning `takeover` mirrors back into the suite and would clobber unread keys.
         let skip = shared.bool(.skipAllDay)
-        let disabled = shared.bool(.disableTug)
+        let enabled = shared.bool(.enableTug)
         let intelligence = shared.bool(.useIntelligence)
         isApplyingSharedValues = true
         defer { isApplyingSharedValues = false }
         var updated = takeover
         if let skip { updated.skipAllDayEvents = skip }
-        if let disabled { updated.disabled = disabled }
+        if let enabled { updated.enabled = enabled }
         if updated != takeover { takeover = updated }
         if let intelligence, intelligence != inferenceEnabled { inferenceEnabled = intelligence }
     }
 
     private func mirrorToShared() {
         shared.set(takeover.skipAllDayEvents, for: .skipAllDay)
-        shared.set(takeover.disabled, for: .disableTug)
+        shared.set(takeover.enabled, for: .enableTug)
     }
 
     private func save() {

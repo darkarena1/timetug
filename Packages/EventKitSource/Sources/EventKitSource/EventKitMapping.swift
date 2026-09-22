@@ -5,6 +5,15 @@ import Foundation
 
 /// Pure conversions used by `EventKitSource`, kept free of `EKEventStore` so they are unit-testable.
 enum EventKitMapping {
+    static func kind(_ type: EKCalendarType) -> CalendarKind {
+        switch type {
+        case .birthday: .birthdays
+        case .subscription: .subscribed
+        default: .standard
+        }
+    }
+
+
     /// EventKit reports all-day events as floating device-local dates whose `endDate` is normally the end of the
     /// last day (23:59:59). Returns the library's canonical form: start-of-day of the first day and the start of
     /// the day after the last, in `calendar`'s zone. `end <= start` covers one day; an `end` already at a

@@ -26,7 +26,7 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
             return CalendarDescriptor(
                 id: $0.calendarIdentifier, title: $0.title, colorHex: EventKitMapping.hex(from: $0.cgColor),
                 accessRole: $0.allowsContentModifications ? .writer : .reader,
-                accountName: (account?.isEmpty ?? true) ? nil : account)
+                accountName: (account?.isEmpty ?? true) ? nil : account, kind: EventKitMapping.kind($0.type))
         }
     }
 
