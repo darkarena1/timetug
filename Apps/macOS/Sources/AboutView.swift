@@ -42,8 +42,6 @@ struct AboutContent: View {
             Text("Source available under MIT with the Commons Clause.")
                 .font(.footnote).foregroundStyle(palette.secondary)
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("About TimeTug")
     }
 
     /// Author credit shown in the About window (also in the README).
@@ -94,6 +92,8 @@ struct AboutView: View {
         .padding(24)
         .frame(width: 460)
         .background(palette.background)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("About TimeTug")
     }
 }
 
@@ -104,5 +104,7 @@ struct AboutPaneContent: View {
         AboutContent()
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("About TimeTug")
     }
 }
