@@ -48,6 +48,14 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Installer DMG (from a CI artifact or a release): opening it shows a cream window with the TimeTug icon on the left, the Applications shortcut on the right, a blue arrow between them and "Drag TimeTug to Applications"; no toolbar, sidebar or status bar.
 - [ ] Dragging TimeTug onto Applications copies the app (it then launches from /Applications); Eject works afterwards and the mounted volume shows the TimeTug icon.
 
+## General tab and Appearance
+- [ ] Settings sidebar shows General, Appearance, Accounts, Calendars, Tug Rules in that order.
+- [ ] Settings > General > About pushes the About sub-page with a working back button; content matches the standalone About window (right-click menu bar icon → About TimeTug).
+- [ ] Settings > General > Software Update pushes the Software Update sub-page with a working back button; Check for Updates, Automatic updates and Beta updates all work as before.
+- [ ] Settings > Appearance: Menu Bar Text tiles change the real menu bar, Popup Cards tiles change the real popup's card style, and Light/Dark/Auto tiles change the app's appearance; verify all three groups in both light and dark system appearance.
+- [ ] Sidebar search reveals controls correctly: a Software-Update-related query lands inside the Software Update sub-page (not just the General hub); an Appearance-related query lands on the Appearance pane.
+- [ ] With VoiceOver on, the Menu Bar Text and Popup Cards tiles read sensible labels, including selected state.
+
 ## Updates
 - [ ] Settings > General shows Software Update with the current version, Check for Updates, Automatic updates and Beta updates.
 - [ ] Right-click the menu bar icon: the menu has "Check for Updates…".
