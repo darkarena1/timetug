@@ -62,7 +62,7 @@ final class SettingsSearchTests: XCTestCase {
     func testAppearanceFoundByDarkAndTheme() {
         for query in ["dark", "theme"] {
             let hit = SettingsSearch.results(for: query, calendars: []).first { $0.id == "appearance" }
-            XCTAssertEqual(hit?.pane, .general, query)
+            XCTAssertEqual(hit?.pane, .appearance, query)
         }
     }
 
@@ -84,8 +84,9 @@ final class SettingsSearchTests: XCTestCase {
     }
 
     func testPaneOrderAndTitles() {
-        XCTAssertEqual(SettingsPane.allCases, [.general, .accounts, .calendars, .tugRules])
-        XCTAssertEqual(SettingsPane.allCases.map(\.title), ["General", "Accounts", "Calendars", "Tug Rules"])
+        XCTAssertEqual(SettingsPane.allCases, [.general, .appearance, .accounts, .calendars, .tugRules])
+        XCTAssertEqual(SettingsPane.allCases.map(\.title),
+                       ["General", "Appearance", "Accounts", "Calendars", "Tug Rules"])
     }
 
     @MainActor func testDefaultPaneIsGeneral() {
@@ -115,8 +116,12 @@ final class SettingsSearchTests: XCTestCase {
     }
 
     func testGeneralItemsLiveInGeneral() {
-        for id in ["menu-bar-text", "launch-at-login"] {
-            XCTAssertEqual(SettingsSearch.catalog.first { $0.id == id }?.pane, .general, id)
+        XCTAssertEqual(SettingsSearch.catalog.first { $0.id == "launch-at-login" }?.pane, .general)
+    }
+
+    func testAppearanceItemsLiveInAppearance() {
+        for id in ["appearance", "popup-card-style", "menu-bar-text"] {
+            XCTAssertEqual(SettingsSearch.catalog.first { $0.id == id }?.pane, .appearance, id)
         }
     }
 
@@ -141,7 +146,7 @@ final class SettingsSearchTests: XCTestCase {
     func testPopupCardStyleFoundByGlassAndFrosted() {
         for query in ["glass", "frosted", "popup cards"] {
             let hit = SettingsSearch.results(for: query, calendars: []).first { $0.id == "popup-card-style" }
-            XCTAssertEqual(hit?.pane, .general, query)
+            XCTAssertEqual(hit?.pane, .appearance, query)
             XCTAssertEqual(hit?.title, "Popup cards")
         }
     }

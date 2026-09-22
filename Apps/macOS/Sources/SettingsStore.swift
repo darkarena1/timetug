@@ -3,6 +3,14 @@ import TimeTugCore
 
 enum MenuBarDisplayMode: String, CaseIterable, Codable {
     case iconOnly, nextMeeting, countdown
+
+    var title: String {
+        switch self {
+        case .iconOnly: "Icon only"
+        case .nextMeeting: "Next meeting"
+        case .countdown: "Countdown only"
+        }
+    }
 }
 
 /// Persists settings in UserDefaults. Core defines the shape; storage is the app's concern.

@@ -61,6 +61,8 @@ struct SettingsView: View {
         switch navigation.pane {
         case .general:
             GeneralPane(settings: settings, navigation: navigation, updates: updates)
+        case .appearance:
+            AppearancePane(settings: settings, navigation: navigation)
         case .accounts:
             AccountsPane(accounts: accounts, settings: settings, model: model, navigation: navigation)
         case .calendars:
