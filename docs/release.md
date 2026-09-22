@@ -92,13 +92,17 @@ No SSH or deploy keys are needed: the workflows use `GITHUB_TOKEN` with `content
 With all six Apple secrets and `SPARKLE_PRIVATE_KEY` set, the `Release` workflow also zips the notarized app (`make-update-zip.sh`), EdDSA-signs it and uploads the zip to the release with the DMG. After publishing it adds the item to the appcast (the stable feed; the beta channel for a pre-release tag). Publish first, then appcast, for the same reason as betas. If `SPARKLE_PRIVATE_KEY` is missing while the Apple secrets exist, the workflow fails before building. An unsigned release (no Apple secrets) has no zip and never enters the update feed.
 
 If the run fails before the publish step of the draft flow, the draft is intact and the workflow can simply be re-run. A re-run for an already published (non-immutable) release re-attaches the assets with `--clobber` (new bytes, new build number) and replaces the tag's appcast item (`appcast.py add` replaces an item with the same download URL; a same `sparkle:version` with a different URL is still an error). If immutable releases are on and the release is published, the re-run fails early and a failure at the appcast step is recovered by hand:
-- If only the appcast step failed, add the item by hand from a checkout of `master`, using the release's zip URL, its length in bytes and the `edSignature` (from the failed job's log, or re-sign the downloaded zip with `sign_update`):
+- If only the appcast step failed, add the item by hand from a checkout of `master`, using the release's zip URL, its length in bytes and the `edSignature` (from the failed job's log, or re-sign the downloaded zip with `sign_update`). Release notes are rendered HTML embedded in the appcast item, not a link to the GitHub page (see `docs/superpowers/specs/2026-09-22-sparkle-release-notes-design.md`), so render them into a file first:
   ```bash
+  gh api "repos/<owner>/<repo>/releases/tags/v1.2.3" --jq .body \
+    | jq -Rs '{text: ., mode: "gfm", context: "<owner>/<repo>"}' \
+    | gh api /markdown --input - \
+    | python3 scripts/release/wrap-notes-html.py > /tmp/notes.html
   scripts/release/publish-appcast.sh "https://github.com/<owner>/<repo>.git" -- \
     --title "TimeTug 1.2.3" --version <BUILD_NUMBER> --short 1.2.3 \
     --url "https://github.com/<owner>/<repo>/releases/download/v1.2.3/TimeTug-1.2.3.zip" \
     --length <bytes> --signature <edSignature> --min-system 14.0 \
-    --notes-url "https://github.com/<owner>/<repo>/releases/tag/v1.2.3"
+    --notes-html-file /tmp/notes.html
   ```
   Add `--channel beta` for a pre-release. `<BUILD_NUMBER>` must be the value stamped into the shipped app (read `CFBundleVersion` from the app inside the uploaded zip), not a new one.
 - Otherwise fix the cause and re-run (`workflow_dispatch` with the existing tag) while immutable releases are off; if they are on, the release cannot be fixed in place: cut a new version.

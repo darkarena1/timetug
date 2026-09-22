@@ -64,8 +64,9 @@ def cmd_add(a):
     ET.SubElement(item, q("minimumSystemVersion")).text = a.min_system
     if a.channel:
         ET.SubElement(item, q("channel")).text = a.channel
-    if a.notes_url:
-        ET.SubElement(item, q("releaseNotesLink")).text = a.notes_url
+    if a.notes_html_file:
+        with open(a.notes_html_file, encoding="utf-8") as f:
+            ET.SubElement(item, "description").text = f.read()
     ET.SubElement(item, "enclosure", {
         "url": a.url, "length": a.length, "type": "application/octet-stream",
         q("edSignature"): a.signature,
@@ -102,7 +103,7 @@ def main():
     for name in ("file", "title", "version", "short", "url", "length", "signature", "min-system"):
         add.add_argument("--" + name, required=True, dest=name.replace("-", "_"))
     add.add_argument("--channel")
-    add.add_argument("--notes-url", dest="notes_url")
+    add.add_argument("--notes-html-file", dest="notes_html_file")
     add.set_defaults(fn=cmd_add)
     prune = sub.add_parser("prune-betas")
     prune.add_argument("--file", required=True)
