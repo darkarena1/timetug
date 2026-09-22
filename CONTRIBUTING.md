@@ -46,7 +46,9 @@ Agent-assisted contributions are welcome. Agents and humans alike should read `A
 
 ## Licensing
 Source code is source-available under MIT with the Commons Clause (`LICENSE`), which blocks selling the
-software or offering it as a paid product or service; contributions are accepted under the same license. The
-brand artwork (`artwork/` and the artwork-derived images in the app's asset catalog) is all rights reserved
-and not source-available; see `artwork/LICENSE.md`. Do not submit third-party artwork you do not have the
-right to license.
+software or offering it as a paid product or service; contributions are accepted under the same license. By
+submitting a contribution, you also agree the maintainer may relicense your contribution, alone or as part of
+the project, under different terms in the future (for example, moving a component to a different license or
+repository). The brand artwork (`artwork/` and the artwork-derived images in the app's asset catalog) is all
+rights reserved and not source-available; see `artwork/LICENSE.md`. Do not submit third-party artwork you do
+not have the right to license.
