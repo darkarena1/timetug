@@ -60,7 +60,9 @@ struct SettingsView: View {
     @ViewBuilder private var detail: some View {
         switch navigation.pane {
         case .general:
-            GeneralPane(settings: settings, navigation: navigation, updates: updates)
+            GeneralPane(navigation: navigation, updates: updates)
+        case .appearance:
+            AppearancePane(settings: settings, navigation: navigation)
         case .accounts:
             AccountsPane(accounts: accounts, settings: settings, model: model, navigation: navigation)
         case .calendars:

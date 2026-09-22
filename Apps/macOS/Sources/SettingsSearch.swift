@@ -2,6 +2,8 @@ import Foundation
 import TimeTugCore
 
 /// Visible label strings, shared by the views and the search catalog so they cannot drift.
+/// `appearance` is a deliberate exception: it labels the search result, not the section it reveals
+/// (that section is named more specifically to avoid redundant naming).
 enum SettingsText {
     static let accounts = "Accounts"
     static let appleCalendar = "Apple Calendar"
@@ -13,8 +15,8 @@ enum SettingsText {
     static let skipAllDay = "Skip all-day events"
     static let dedupInference = "Find duplicates with on-device intelligence"
     static let appearance = "Appearance"
-    static let popupCards = "Popup cards"
-    static let menuBarText = "Menu bar text"
+    static let popupCards = "Popup Cards"
+    static let menuBarText = "Menu Bar Text"
     static let launchAtLogin = "Launch at login"
     static let tugCheckbox = "Tug"
     static let checkForUpdates = "Check for Updates"
@@ -57,11 +59,11 @@ enum SettingsSearch {
         .init(id: "dedup-inference", title: SettingsText.dedupInference,
               keywords: ["duplicate", "duplicates", "merge", "merged", "same meeting", "ai", "apple intelligence", "on-device", "beta", "inference"], pane: .calendars),
         .init(id: "appearance", title: SettingsText.appearance,
-              keywords: ["theme", "light", "dark", "auto", "automatic", "mode", "dark mode", "color scheme"], pane: .general),
+              keywords: ["theme", "light", "dark", "auto", "automatic", "mode", "dark mode", "color scheme"], pane: .appearance),
         .init(id: "popup-card-style", title: SettingsText.popupCards,
-              keywords: ["glass", "frosted", "translucent", "solid", "bubbles", "cards", "style", "popup"], pane: .general),
+              keywords: ["glass", "frosted", "translucent", "solid", "bubbles", "cards", "style", "popup"], pane: .appearance),
         .init(id: "menu-bar-text", title: SettingsText.menuBarText,
-              keywords: ["menu bar", "text", "next meeting", "countdown", "title", "next to the icon"], pane: .general),
+              keywords: ["menu bar", "text", "next meeting", "countdown", "title", "next to the icon"], pane: .appearance),
         .init(id: "launch-at-login", title: SettingsText.launchAtLogin,
               keywords: ["startup", "open at login", "boot"], pane: .general),
         .init(id: "popup-shortcut", title: SettingsText.popupShortcut,
