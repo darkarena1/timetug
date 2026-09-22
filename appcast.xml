@@ -3,6 +3,41 @@
   <channel>
     <title>TimeTug</title>
     <item>
+      <title>TimeTug 1.2.2-beta.20260922200911</title>
+      <pubDate>Tue, 22 Sep 2026 20:11:47 GMT</pubDate>
+      <sparkle:version>20260922200911</sparkle:version>
+      <sparkle:shortVersionString>1.2.2-beta.20260922200911</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:channel>beta</sparkle:channel>
+      <description>&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+&lt;meta charset="utf-8"&gt;
+&lt;style&gt;
+body {
+  font: 13px -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  color: #1d1d1f;
+  margin: 12px 16px;
+  word-wrap: break-word;
+}
+a { color: #0068da; }
+h1, h2, h3 { font-size: 1.05em; }
+pre, code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.95em; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (prefers-color-scheme: dark) {
+  body { color: #f5f5f7; }
+  a { color: #4da3ff; }
+}
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;p dir="auto"&gt;Beta build from &lt;a class="commit-link" data-hovercard-type="commit" data-hovercard-url="https://github.com/darkarena1/timetug/commit/48ffe8a8f27ce5495adca2528bb08a7db4ec3947/hovercard" href="https://github.com/darkarena1/timetug/commit/48ffe8a8f27ce5495adca2528bb08a7db4ec3947"&gt;&lt;tt&gt;48ffe8a&lt;/tt&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</description>
+      <enclosure url="https://github.com/darkarena1/timetug/releases/download/beta-20260922200911/TimeTug-1.2.2-beta.20260922200911.zip" length="7012865" type="application/octet-stream" sparkle:edSignature="EgDE/gQgWMkqBqlOxKk/H/GGUDUfUHPwjJxY9ISUOJ8hH/LZ1mryCZeSNKCdzXSZi/vfBH0iA1vO8ueAtKjGBw==" />
+    </item>
+    <item>
       <title>TimeTug 1.2.2-beta.20260922180020</title>
       <pubDate>Tue, 22 Sep 2026 18:03:20 GMT</pubDate>
       <sparkle:version>20260922180020</sparkle:version>
@@ -91,16 +126,6 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
       <sparkle:channel>beta</sparkle:channel>
       <sparkle:releaseNotesLink>https://github.com/darkarena1/timetug/releases/tag/beta-20260922003337</sparkle:releaseNotesLink>
       <enclosure url="https://github.com/darkarena1/timetug/releases/download/beta-20260922003337/TimeTug-1.2.2-beta.20260922003337.zip" length="7011147" type="application/octet-stream" sparkle:edSignature="O+OQrykp2ZLZnB43vRLM4rqVS2PfrjQQoBeFJ5s6Uie2Nej3ixtRRkgn7fzUD/5FSzr2s+No2F9hnXImDZrJCQ==" />
-    </item>
-    <item>
-      <title>TimeTug 1.2.2-beta.20260921160201</title>
-      <pubDate>Mon, 21 Sep 2026 16:04:30 GMT</pubDate>
-      <sparkle:version>20260921160201</sparkle:version>
-      <sparkle:shortVersionString>1.2.2-beta.20260921160201</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <sparkle:channel>beta</sparkle:channel>
-      <sparkle:releaseNotesLink>https://github.com/darkarena1/timetug/releases/tag/beta-20260921160201</sparkle:releaseNotesLink>
-      <enclosure url="https://github.com/darkarena1/timetug/releases/download/beta-20260921160201/TimeTug-1.2.2-beta.20260921160201.zip" length="6944278" type="application/octet-stream" sparkle:edSignature="Ex+X/Rrlt1aNyeWqhppvrGvqNhK4AMRXO8B3DPJV4AQGvXVLMhbLWuXGWxyw956+I58B3Fq1dmW4zG2gxAm9CA==" />
     </item>
     <item>
       <title>TimeTug 1.2.2</title>
