@@ -64,7 +64,7 @@ struct SettingsView: View {
         case .accounts:
             AccountsPane(accounts: accounts, settings: settings, model: model, navigation: navigation)
         case .calendars:
-            CalendarsPane(settings: settings, model: model, navigation: navigation, onForgetCorrections: onForgetCorrections)
+            CalendarsPane(settings: settings, model: model, accounts: accounts, navigation: navigation, onForgetCorrections: onForgetCorrections)
         case .tugRules:
             TugRulesPane(settings: settings, navigation: navigation, onTestTug: onTestTug)
         }

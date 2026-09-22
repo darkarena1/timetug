@@ -17,13 +17,13 @@ Created by [Scott O'Bryan](https://github.com/darkarena1).
 - Merges the same meeting across calendars and accounts, so it shows (and tugs) once; see [Event merging](#event-merging)
 - Full-screen takeover on every display at a configurable lead time (0 = "starting now"), with Join, Snooze and Dismiss
 - Detects Zoom, Meet, Teams, Webex and similar links for a one-click Join
-- Per-calendar Tug opt-in; never takes over for all-day events; skips declined and solo events by default
+- Per-calendar Tug opt-in; never takes over for all-day events; always skips declined events; optional rules to require a video link or other attendees (both off by default)
 - Menu bar icon turns color when a meeting is about to tug you
 - Menu bar: icon only (default), next meeting, or countdown
 - Light, Dark or Auto appearance
 - Widgets: Next Up (small, medium) and Today (medium, large)
-- Control Center controls on macOS 26: Skip All Day Events, Use Intelligence, Disable Tug (widgets and controls need a team-signed build)
-- Disable Tug: one setting (Tug Rules) that stops all takeovers
+- Control Center controls on macOS 26: Skip All Day Events, Use Intelligence, Enable Tug (widgets and controls need a team-signed build)
+- Enable Tug: one setting (Tug Rules, on by default) that, when turned off, stops all takeovers
 - Optional global shortcut to show today's meetings
 
 ## Event merging

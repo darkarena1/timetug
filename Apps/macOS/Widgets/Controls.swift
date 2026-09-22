@@ -29,12 +29,12 @@ struct SetUseIntelligenceIntent: SetValueIntent {
 }
 
 @available(macOS 26.0, *)
-struct SetDisableTugIntent: SetValueIntent {
-    static let title: LocalizedStringResource = "Disable Tug"
-    @Parameter(title: "Disable Tug") var value: Bool
+struct SetEnableTugIntent: SetValueIntent {
+    static let title: LocalizedStringResource = "Enable Tug"
+    @Parameter(title: "Enable Tug") var value: Bool
 
     func perform() async throws -> some IntentResult {
-        SharedSettings.appGroup.set(value, for: .disableTug)
+        SharedSettings.appGroup.set(value, for: .enableTug)
         SettingsChangeSignal.post()
         return .result()
     }
@@ -99,16 +99,16 @@ struct UseIntelligenceControl: ControlWidget {
 }
 
 @available(macOS 26.0, *)
-struct DisableTugControl: ControlWidget {
+struct EnableTugControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(
-            kind: "com.timetug.control.disableTug", provider: BoolValueProvider(key: .disableTug, defaultValue: false)
+            kind: "com.timetug.control.enableTug", provider: BoolValueProvider(key: .enableTug, defaultValue: true)
         ) { isOn in
-            ControlWidgetToggle("Disable Tug", isOn: isOn, action: SetDisableTugIntent()) { on in
-                Label(on ? "Tug off" : "Tug on", systemImage: on ? "bell.slash.fill" : "bell.fill")
+            ControlWidgetToggle("Enable Tug", isOn: isOn, action: SetEnableTugIntent()) { on in
+                Label(on ? "Tug on" : "Tug off", systemImage: on ? "bell.fill" : "bell.slash.fill")
             }
         }
-        .displayName("Disable Tug")
-        .description("Pause takeovers and pre-meeting popups.")
+        .displayName("Enable Tug")
+        .description("Turn off to pause takeovers and pre-meeting popups.")
     }
 }

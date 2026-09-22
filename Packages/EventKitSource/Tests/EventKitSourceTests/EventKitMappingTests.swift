@@ -62,3 +62,11 @@ private func iso(_ s: String) -> Date { ISO8601DateFormatter().date(from: s)! }
                               timeZone: calendar.timeZone, isAllDay: true)
     #expect(AllDayConformance.violations(event).isEmpty)
 }
+
+@Test func birthdayAndSubscriptionCalendarsAreNotStandard() {
+    #expect(EventKitMapping.kind(.birthday) == .birthdays)
+    #expect(EventKitMapping.kind(.subscription) == .subscribed)
+    for type in [EKCalendarType.local, .calDAV, .exchange] {
+        #expect(EventKitMapping.kind(type) == .standard)
+    }
+}

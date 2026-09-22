@@ -5,11 +5,10 @@ import TimeTugCore
 enum SettingsText {
     static let accounts = "Accounts"
     static let appleCalendar = "Apple Calendar"
-    static let disableTug = "Disable Tug"
+    static let enableTug = "Enable Tug"
     static let leadTime = "Lead time"
     static let videoLink = "Require a video link"
-    static let skipSolo = "Skip events with no other attendees"
-    static let skipDeclined = "Skip declined events"
+    static let requireAttendees = "Require other attendees"
     static let testTug = "Test tug"
     static let skipAllDay = "Skip all-day events"
     static let dedupInference = "Find duplicates with on-device intelligence"
@@ -43,16 +42,14 @@ enum SettingsSearch {
               keywords: ["update", "updates", "automatic", "download", "install", "software update"], pane: .general),
         .init(id: "beta-updates", title: SettingsText.betaUpdates,
               keywords: ["update", "updates", "beta", "prerelease", "pre-release", "preview", "early access", "software update"], pane: .general),
-        .init(id: "disable-tug", title: SettingsText.disableTug,
-              keywords: ["pause", "off", "mute", "stop", "do not disturb", "focus", "takeover", "take over", "tug"], pane: .tugRules),
+        .init(id: "enable-tug", title: SettingsText.enableTug,
+              keywords: ["disable", "pause", "off", "mute", "stop", "do not disturb", "focus", "takeover", "take over", "tug"], pane: .tugRules),
         .init(id: "lead-time", title: SettingsText.leadTime,
               keywords: ["tug", "takeover", "take over", "before", "start", "minutes", "at start", "warning"], pane: .tugRules),
         .init(id: "video-link", title: SettingsText.videoLink,
               keywords: ["tug", "takeover", "take over", "zoom", "meet", "teams", "conference", "only events", "only events with a video link", "video link required"], pane: .tugRules),
-        .init(id: "skip-solo", title: SettingsText.skipSolo,
-              keywords: ["tug", "takeover", "take over", "solo", "alone", "attendees"], pane: .tugRules),
-        .init(id: "skip-declined", title: SettingsText.skipDeclined,
-              keywords: ["tug", "takeover", "take over", "declined", "rejected"], pane: .tugRules),
+        .init(id: "require-attendees", title: SettingsText.requireAttendees,
+              keywords: ["tug", "takeover", "take over", "solo", "alone", "attendees", "guests", "skip", "only events"], pane: .tugRules),
         .init(id: "test-takeover", title: SettingsText.testTug,
               keywords: ["tug", "takeover", "take over", "preview", "overlay", "try"], pane: .tugRules),
         .init(id: "skip-all-day", title: SettingsText.skipAllDay,

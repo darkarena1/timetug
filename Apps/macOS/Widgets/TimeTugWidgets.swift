@@ -9,7 +9,7 @@ struct TimeTugWidgetBundle: WidgetBundle {
         if #available(macOS 26.0, *) {
             SkipAllDayControl()
             UseIntelligenceControl()
-            DisableTugControl()
+            EnableTugControl()
         }
     }
 }

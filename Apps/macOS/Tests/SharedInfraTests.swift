@@ -17,14 +17,14 @@ final class SharedInfraTests: XCTestCase {
         return dir
     }
 
-    func testUnsetKeyIsNil() { XCTAssertNil(freshSettings().bool(.disableTug)) }
+    func testUnsetKeyIsNil() { XCTAssertNil(freshSettings().bool(.enableTug)) }
 
     func testSetAndReadBoolIncludingFalse() {
         let settings = freshSettings()
         settings.set(false, for: .skipAllDay)
-        settings.set(true, for: .disableTug)
+        settings.set(true, for: .enableTug)
         XCTAssertEqual(settings.bool(.skipAllDay), false)
-        XCTAssertEqual(settings.bool(.disableTug), true)
+        XCTAssertEqual(settings.bool(.enableTug), true)
     }
 
     func testSnapshotRoundTrip() throws {

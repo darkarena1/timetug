@@ -5,7 +5,7 @@ Read `docs/superpowers/specs/2026-09-18-timetug-core-design.md` for the full des
 ## Modules
 - `Packages/TimeTugCore`: pure Swift; depends only on `CalendarCore`. `TimeTugCalendarEvent` model (wraps the library `CalendarEvent`, adds merge and display state), `CalendarSource` protocol, `CalendarStore`
   (merge/dedupe/last-good), duplicate rules, resolver, lessons and the adjudicator interface (ADR 0009), `TakeoverPolicy`, `TakeoverLedger` + `Scheduler`, `ConferenceLinkDetector`,
-  `DayAgenda`, `TakeoverRequest`, `TakeoverSettings` (including `disabled`), `WidgetSnapshot` and `WidgetTimeline` (widget data and entry dates, ADR 0010). Note: `additionalCalendarKeys` tracks when a meeting
+  `DayAgenda`, `TakeoverRequest`, `TakeoverSettings` (including `enabled`), `WidgetSnapshot` and `WidgetTimeline` (widget data and entry dates, ADR 0010). Note: `additionalCalendarKeys` tracks when a meeting
   appears on multiple opted-in calendars so takeover opt-in on any calendar counts.
 - `Packages/EventKitSource`: Apple Calendar adapter. Only place EventKit is imported.
 - `Packages/CalendarConnectors`: portable calendar connector library (ADR 0012), no external dependencies. Products: `CalendarCore` (model, `AllDay`, file-backed connection and sync-state stores), `CalendarOAuth` (PKCE, refresh provider, `SHA256Hashing` seam), `GoogleCalendar`, `CalendarTestSupport`. Google needs an OAuth client from a git-ignored xcconfig (see `AGENTS.md`).
