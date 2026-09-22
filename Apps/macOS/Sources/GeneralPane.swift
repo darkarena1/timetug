@@ -1,3 +1,4 @@
+import AppKit
 import KeyboardShortcuts
 import ServiceManagement
 import SwiftUI
@@ -12,8 +13,49 @@ struct GeneralPane: View {
     @State private var isReverting = false
 
     var body: some View {
+        NavigationStack(path: $navigation.generalPath) {
+            hub
+                .navigationDestination(for: GeneralDestination.self) { destination in
+                    switch destination {
+                    case .about:
+                        Form { AboutPaneContent() }
+                            .formStyle(.grouped)
+                            .navigationTitle("About")
+                    case .softwareUpdate:
+                        Form { UpdatesSection(updates: updates, navigation: navigation) }
+                            .formStyle(.grouped)
+                            .navigationTitle("Software Update")
+                    }
+                }
+        }
+    }
+
+    private var hub: some View {
         Form {
-            UpdatesSection(updates: updates, navigation: navigation)
+            Section {
+                NavigationLink(value: GeneralDestination.about) {
+                    Label {
+                        Text("About")
+                    } icon: {
+                        Image(nsImage: NSImage(named: NSImage.applicationIconName) ?? NSImage())
+                            .resizable()
+                            .frame(width: 22, height: 22)
+                            .clipShape(RoundedRectangle(cornerRadius: 5.5, style: .continuous))
+                    }
+                }
+                NavigationLink(value: GeneralDestination.softwareUpdate) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Software Update")
+                            Text("TimeTug \(updates.currentVersion)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        SettingsRowIcon(systemImage: "arrow.triangle.2.circlepath", color: .blue)
+                    }
+                }
+            }
             Section("App") {
                 Toggle(SettingsText.launchAtLogin, isOn: $launchAtLogin)
                     .settingsHighlight("launch-at-login", navigation: navigation)
