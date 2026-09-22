@@ -103,6 +103,7 @@ struct AboutPaneContent: View {
     var body: some View {
         AboutContent()
             .padding(.vertical, 12)
+            .frame(maxWidth: 460)
             .frame(maxWidth: .infinity)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("About TimeTug")

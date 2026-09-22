@@ -6,7 +6,7 @@ struct AppearancePane: View {
 
     var body: some View {
         Form {
-            Section("Menu Bar Text") {
+            Section(SettingsText.menuBarText) {
                 VStack(spacing: 8) {
                     HStack(spacing: 20) {
                         ForEach(MenuBarDisplayMode.allCases, id: \.self) { mode in
@@ -20,7 +20,7 @@ struct AppearancePane: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 4)
             }
-            Section("Popup Cards") {
+            Section(SettingsText.popupCards) {
                 VStack(spacing: 8) {
                     HStack(spacing: 20) {
                         ForEach(PopupCardStyle.available, id: \.self) { style in
@@ -86,7 +86,7 @@ private struct MenuBarModeTile: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(mode.title)
+        .accessibilityLabel("\(mode.title) menu bar text")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
@@ -144,7 +144,7 @@ private struct PopupCardStyleTile: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(style.title)
+        .accessibilityLabel("\(style.title) popup cards")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 

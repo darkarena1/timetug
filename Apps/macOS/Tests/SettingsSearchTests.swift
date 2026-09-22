@@ -94,11 +94,13 @@ final class SettingsSearchTests: XCTestCase {
     }
 
     @MainActor func testRevealingASoftwareUpdateItemDrillsIntoItsSubPage() {
-        let navigation = SettingsNavigation()
-        let item = SettingsSearch.catalog.first { $0.id == "beta-updates" }!
-        navigation.reveal(item)
-        XCTAssertEqual(navigation.pane, .general)
-        XCTAssertEqual(navigation.generalPath, [.softwareUpdate])
+        for id in ["software-update", "automatic-updates", "beta-updates"] {
+            let navigation = SettingsNavigation()
+            let item = SettingsSearch.catalog.first { $0.id == id }!
+            navigation.reveal(item)
+            XCTAssertEqual(navigation.pane, .general, id)
+            XCTAssertEqual(navigation.generalPath, [.softwareUpdate], id)
+        }
     }
 
     @MainActor func testRevealingANonSoftwareUpdateItemPopsToTheGeneralHub() {
@@ -159,7 +161,7 @@ final class SettingsSearchTests: XCTestCase {
 
     func testOldMenuBarPhraseStillFindsMenuBarText() {
         XCTAssertTrue(ids("next to the icon").contains("menu-bar-text"))
-        XCTAssertEqual(SettingsSearch.catalog.first { $0.id == "menu-bar-text" }?.title, "Menu bar text")
+        XCTAssertEqual(SettingsSearch.catalog.first { $0.id == "menu-bar-text" }?.title, "Menu Bar Text")
     }
 
     func testOldVideoLinkPhraseStillFindsVideoLink() {
@@ -172,7 +174,7 @@ final class SettingsSearchTests: XCTestCase {
         for query in ["glass", "frosted", "popup cards"] {
             let hit = SettingsSearch.results(for: query, calendars: []).first { $0.id == "popup-card-style" }
             XCTAssertEqual(hit?.pane, .appearance, query)
-            XCTAssertEqual(hit?.title, "Popup cards")
+            XCTAssertEqual(hit?.title, "Popup Cards")
         }
     }
 
