@@ -57,7 +57,7 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] With VoiceOver on, the Menu Bar Text and Popup Cards tiles read sensible labels, including selected state.
 
 ## Updates
-- [ ] Settings > General shows Software Update with the current version, Check for Updates, Automatic updates and Beta updates.
+- [ ] Settings > General > Software Update shows the current version, Check for Updates, Automatic updates and Beta updates.
 - [ ] Right-click the menu bar icon: the menu has "Check for Updates…".
 - [ ] Against a test appcast (`defaults write com.timetug.app SUFeedURL <url>`; the feed needs a validly EdDSA-signed item): a newer stable item is offered; a beta item is offered only with Beta updates on; turning it off and checking again offers only stable. Afterwards `defaults delete com.timetug.app SUFeedURL`.
 - [ ] Installing an update relaunches the app and widgets still load (team-signed build).
