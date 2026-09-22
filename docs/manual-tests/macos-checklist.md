@@ -19,7 +19,7 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Declined, all-day and non-opted-in events never take over. Solo events (no other attendees) take over unless "Require other attendees" is on.
 - [ ] Menu bar modes: icon only, next meeting (long titles truncated), countdown only.
 - [ ] Launch at login toggle works.
-- [ ] Settings sidebar order is General, Accounts, Calendars, Tug Rules; General has "Software Update" (first), "App", "Shortcut", "Menu bar" and "Appearance" (last) sections.
+- [ ] Settings sidebar order is General, Appearance, Accounts, Calendars, Tug Rules; General's hub has "About" and "Software Update" drill-down rows plus "App" and "Shortcut" sections; Appearance has its own pane with Menu Bar Text, Popup Cards, and Light/Dark/Auto tile groups.
 - [ ] Left-click popup: it is only as tall as its content (one event = short popup; many events scroll the list under a fixed header, max about 520 pt); light and dark both look right.
 - [ ] Popup header shows the weekday, the date and "N meetings left" ("No meetings today" when empty, with the puppy empty state); the gear button opens Settings.
 - [ ] Event cards use the real calendar colors; the current meeting shows a "Now" pill and a progress bar; the next meeting has the blue border and an orange "in 3h 40m" countdown; finished meetings stay readable.
@@ -27,7 +27,7 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Popup footer shows the lead time ("Tugs you 1 min before", "Tugs you at start").
 - [ ] Right-click the menu bar icon: About TimeTug (own window, follows Light/Dark), Check for Updates…, separator, Settings…, separator, Quit TimeTug. The About window shows logo, version and Done.
 - [ ] Appearance Auto/Light/Dark changes Settings, the popover and the About window; Auto follows the OS setting (the takeover overlay stays dark).
-- [ ] Settings > General > Appearance > Popup cards: switch Glass / Frosted / Solid and open the popup: cards change live; with Reduce Transparency on the cards are solid.
+- [ ] Settings > Appearance > Popup Cards: switch Glass / Frosted / Solid and open the popup: cards change live; with Reduce Transparency on the cards are solid.
 - [ ] About window is readable in both Light and Dark appearance (logo lockup, tagline pill, version, Done).
 - [ ] Calendars pane lists calendars grouped by account (section header per account, "Other" when unknown) under pinned "Calendar / Tug / Show in list" column headers; checkboxes line up under the headers, also after scrolling.
 - [ ] With VoiceOver on, each calendar checkbox is announced with the calendar name ("Tug for <name>", "Show <name> in list") and Space toggles it; checkboxes are reachable with Tab/keyboard navigation.
