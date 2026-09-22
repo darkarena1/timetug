@@ -93,6 +93,31 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertEqual(SettingsNavigation().pane, .general)
     }
 
+    @MainActor func testRevealingASoftwareUpdateItemDrillsIntoItsSubPage() {
+        let navigation = SettingsNavigation()
+        let item = SettingsSearch.catalog.first { $0.id == "beta-updates" }!
+        navigation.reveal(item)
+        XCTAssertEqual(navigation.pane, .general)
+        XCTAssertEqual(navigation.generalPath, [.softwareUpdate])
+    }
+
+    @MainActor func testRevealingANonSoftwareUpdateItemPopsToTheGeneralHub() {
+        let navigation = SettingsNavigation()
+        navigation.generalPath = [.softwareUpdate]
+        let item = SettingsSearch.catalog.first { $0.id == "launch-at-login" }!
+        navigation.reveal(item)
+        XCTAssertEqual(navigation.generalPath, [])
+    }
+
+    @MainActor func testRevealingAnAppearanceItemAlsoPopsGeneralToItsHub() {
+        let navigation = SettingsNavigation()
+        navigation.generalPath = [.softwareUpdate]
+        let item = SettingsSearch.catalog.first { $0.id == "appearance" }!
+        navigation.reveal(item)
+        XCTAssertEqual(navigation.pane, .appearance)
+        XCTAssertEqual(navigation.generalPath, [])
+    }
+
     func testOldTakeoverTermStillFindsItems() {
         let found = ids("takeover")
         XCTAssertTrue(found.contains("lead-time"))

@@ -36,23 +36,40 @@ enum SettingsPane: String, CaseIterable, Hashable, Identifiable {
     }
 }
 
+/// A drill-down destination reachable from the General settings hub.
+enum GeneralDestination: Hashable {
+    case about
+    case softwareUpdate
+}
+
 @MainActor
 final class SettingsNavigation: ObservableObject {
     static let highlightDuration: Duration = .milliseconds(1500)
 
     @Published var pane: SettingsPane = .general
+    @Published var generalPath: [GeneralDestination] = []
     @Published var highlightedID: String?
     private var clearTask: Task<Void, Never>?
 
-    /// Switches to the item's pane and briefly highlights its control.
+    /// Switches to the item's pane and briefly highlights its control. If the item lives inside a
+    /// General sub-page, also drills into it; otherwise pops General back to its hub so the highlighted
+    /// control on the hub is actually visible.
     func reveal(_ item: SettingsSearchItem) {
         pane = item.pane
+        generalPath = Self.generalDestination(for: item.id).map { [$0] } ?? []
         highlightedID = item.id
         clearTask?.cancel()
         clearTask = Task { [weak self] in
             try? await Task.sleep(for: Self.highlightDuration)
             guard !Task.isCancelled else { return }
             self?.highlightedID = nil
+        }
+    }
+
+    private static func generalDestination(for id: String) -> GeneralDestination? {
+        switch id {
+        case "software-update", "automatic-updates", "beta-updates": .softwareUpdate
+        default: nil
         }
     }
 }
