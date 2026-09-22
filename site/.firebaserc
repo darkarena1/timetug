@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "timetug"
-  }
+  },
+  "targets": {
+    "timetug": {
+      "hosting": {
+        "timetug": [
+          "timetug"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

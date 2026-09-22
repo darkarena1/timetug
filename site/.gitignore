@@ -1,0 +1,3 @@
+# Firebase CLI local state and logs, never committed
+.firebase/
+firebase-debug.log*
