@@ -45,6 +45,8 @@ app. See "Adding a calendar source" in `docs/architecture.md`.
 Agent-assisted contributions are welcome. Agents and humans alike should read `AGENTS.md` first; it has the rules and commands.
 
 ## Licensing
-Source code is MIT (`LICENSE`); contributions are accepted under the same license. The brand artwork
-(`artwork/` and the artwork-derived images in the app's asset catalog) is all rights reserved and not open
-source; see `artwork/LICENSE.md`. Do not submit third-party artwork you do not have the right to license.
+Source code is source-available under MIT with the Commons Clause (`LICENSE`), which blocks selling the
+software or offering it as a paid product or service; contributions are accepted under the same license. The
+brand artwork (`artwork/` and the artwork-derived images in the app's asset catalog) is all rights reserved
+and not source-available; see `artwork/LICENSE.md`. Do not submit third-party artwork you do not have the
+right to license.
