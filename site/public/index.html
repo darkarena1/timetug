@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TimeTug — a tug when time needs your attention</title>
+  <meta name="description" content="TimeTug lives in your Mac's menu bar, lists today's meetings, and takes over every screen shortly before one starts.">
+  <meta property="og:title" content="TimeTug">
+  <meta property="og:description" content="A tug when time needs your attention.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://timetug.obryan.cloud/">
+  <link rel="icon" href="/img/favicon-32.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/img/app-icon-256.png">
+  <link rel="canonical" href="https://timetug.obryan.cloud/">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body data-page="home">
+<div class="container">
+  <nav class="nav">
+    <a class="brand" href="/">
+      <img src="/img/app-icon-120.png" alt="" width="28" height="28">
+      <span>TimeTug</span>
+    </a>
+    <div class="links">
+      <a href="https://github.com/darkarena1/timetug">GitHub</a>
+      <a href="/privacy.html">Privacy</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <span class="statusbar-mock"><span class="dot"></span> <strong>10:56</strong> · Standup in 4 min</span>
+    <h1>A tug when time needs your attention.</h1>
+    <p class="tagline">TimeTug lives in your Mac's menu bar, lists today's meetings, and takes over every
+      screen shortly before one starts — so you don't hyperfocus straight through it.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/darkarena1/timetug/releases">Download for macOS</a>
+      <a class="btn btn-secondary" href="https://github.com/darkarena1/timetug">View on GitHub</a>
+    </div>
+  </header>
+
+  <section class="section">
+    <span class="eyebrow">What it does</span>
+    <h2>Built to interrupt you on purpose</h2>
+    <div class="grid">
+      <div class="card"><div class="bar" style="background:var(--orange)"></div>
+        <h3>Full-screen takeover</h3>
+        <p>Every display, at a lead time you choose — 0 minutes means "starting now." Join, Snooze, or Dismiss,
+          no digging through tabs.</p></div>
+      <div class="card"><div class="bar" style="background:var(--blue)"></div>
+        <h3>One-click Join</h3>
+        <p>Detects Zoom, Meet, Teams, Webex and similar links automatically and puts the button right in front
+          of you.</p></div>
+      <div class="card"><div class="bar" style="background:var(--red-orange)"></div>
+        <h3>No duplicate tugs</h3>
+        <p>The same meeting on two calendars — a personal invite and a team calendar copy, say — is merged, so
+          you're only interrupted once.</p></div>
+      <div class="card"><div class="bar" style="background:var(--orange)"></div>
+        <h3>Per-calendar control</h3>
+        <p>Choose which calendars can tug you at all. All-day events never take over; declined and solo events
+          are skipped by default.</p></div>
+      <div class="card"><div class="bar" style="background:var(--blue)"></div>
+        <h3>Widgets &amp; Control Center</h3>
+        <p>Next Up and Today widgets, plus macOS 26 Control Center controls for Disable Tug and skipping
+          all-day events.</p></div>
+      <div class="card"><div class="bar" style="background:var(--red-orange)"></div>
+        <h3>One switch to go quiet</h3>
+        <p>Disable Tug is a single setting that stops every takeover, instantly, when you need the day to
+          leave you alone.</p></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <span class="eyebrow">Calendars</span>
+    <h2>Connect the calendars you already use</h2>
+    <p>TimeTug reads events; it never edits or deletes anything on your calendars.</p>
+    <div class="pane">
+      <div class="pane-row">
+        <div class="icon a">⌘</div>
+        <div class="stack" style="gap:2px">
+          <h3>Apple Calendar</h3>
+          <p>iCloud, Google, and Exchange accounts already added to macOS, read locally through Apple's
+            EventKit — nothing leaves your Mac.</p>
+        </div>
+        <span class="badge">Built in</span>
+      </div>
+      <div class="pane-row">
+        <div class="icon g">G</div>
+        <div class="stack" style="gap:2px">
+          <h3>Google Calendar</h3>
+          <p>Sign in with Google to read events directly from the Calendar API — your Mac talks to Google,
+            not to us. See <a href="/privacy.html#google">how this works</a>.</p>
+        </div>
+        <span class="badge">Beta</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <span class="eyebrow">Privacy</span>
+    <h2>There is no TimeTug server</h2>
+    <p>TimeTug is a local macOS app. Your calendar data is read on your Mac, shown on your Mac, and stored on
+      your Mac — it is never sent to us, because we don't operate a server it could be sent to.</p>
+    <div class="callout">
+      Full detail on what's read, where it's stored, and how to disconnect at any time is in the
+      <a href="/privacy.html">Privacy Policy</a>.
+    </div>
+  </section>
+
+  <footer>
+    <span>© 2026 Scott O'Bryan. TimeTug is open source under the MIT License.</span>
+    <div class="links">
+      <a href="/privacy.html">Privacy</a>
+      <a href="https://github.com/darkarena1/timetug">GitHub</a>
+      <a href="mailto:darkarena@gmail.com">Contact</a>
+    </div>
+  </footer>
+</div>
+</body>
+</html>
