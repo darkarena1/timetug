@@ -3,7 +3,7 @@ import XCTest
 
 final class AboutViewTests: XCTestCase {
     func testCreditNamesTheAuthor() {
-        XCTAssertTrue(AboutView.creditText.contains("Scott O"))
-        XCTAssertTrue(AboutView.creditText.hasPrefix("Created by"))
+        XCTAssertTrue(AboutContent.creditText.contains("Scott O"))
+        XCTAssertTrue(AboutContent.creditText.hasPrefix("Created by"))
     }
 }
