@@ -47,7 +47,10 @@ final class AppCoordinator {
     private var settingsSignal: SettingsChangeSignal.Observer?
     private static let widgetLog = Logger(subsystem: "com.timetug.app", category: "widgets")
     private let overlay = OverlayController()
-    private lazy var registry = AppConnectors.makeRegistry(google: GoogleOAuthSettings.config(), eventKit: eventKit)
+    private lazy var googleOAuthConfig = GoogleOAuthSettings.config()
+    private lazy var registry = AppConnectors.makeRegistry(google: googleOAuthConfig, eventKit: eventKit)
+    /// Kinds TimeTug supports in code but this build couldn't register — see `AccountsController.unconfiguredKindIDs`.
+    private lazy var unconfiguredKindIDs: [String] = googleOAuthConfig == nil ? ["google"] : []
     private let credentials = KeychainCredentialStore(service: "com.timetug.app.credentials")
     private let syncState = FileSyncStateStore(url: AppSupportFiles.url("sync-state.json"))
     private lazy var reconciler = SourceReconciler(
@@ -68,7 +71,8 @@ final class AppCoordinator {
             await self?.store.setSources(sources)
             await self?.refresh()
         },
-        requestEventKitAccess: { [unowned self] in _ = await eventKit.requestAccess() })
+        requestEventKitAccess: { [unowned self] in _ = await eventKit.requestAccess() },
+        unconfiguredKindIDs: unconfiguredKindIDs)
     private lazy var aboutWindow = AboutWindowController()
     private lazy var settingsWindow = SettingsWindowController { [unowned self] in
         SettingsView(settings: settings, model: model, navigation: navigation, accounts: accounts, updates: updates, onTestTug: { [weak self] in self?.fireTest() },

@@ -8,30 +8,47 @@ struct AccountsPane: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var model: AppModel
     @ObservedObject var navigation: SettingsNavigation
-    @State private var selection: ConnectionID?
     @State private var pendingRemoval: Connection?
 
+    /// Providers on the roadmap but not yet wired to a real `ConnectorKind`. Shown greyed out so people
+    /// know they're coming rather than assuming TimeTug only ever talks to Google.
+    private static let placeholderProviders: [PlaceholderProvider] = [
+        .init(name: "iCloud", systemImage: "icloud"),
+        .init(name: "Microsoft", systemImage: "envelope"),
+        .init(name: "Fastmail", systemImage: "at"),
+        .init(name: "Meetup", systemImage: "person.3"),
+        .init(name: "Todoist", systemImage: "checklist"),
+        .init(name: "Zoom", systemImage: "video"),
+        .init(name: "Webex", systemImage: "video.fill"),
+        .init(name: "Other CalDAV", systemImage: "link"),
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Choose where TimeTug reads your calendars from.")
-                .font(.callout).foregroundStyle(.secondary)
-            appleCalendarCard
-            Text("Internet accounts").font(.headline).padding(.top, 4)
-            list
-            controls
-            if accounts.isWorking { waitingRow }
-            if let message = accounts.errorMessage {
-                Text(message).font(.footnote).foregroundStyle(.orange)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Choose where TimeTug reads your calendars from.")
+                    .font(.callout).foregroundStyle(.secondary)
+                appleCalendarCard
+
+                Text("Connected Accounts").font(.headline).padding(.top, 4)
+                connectedCard
+                if accounts.isWorking { waitingRow }
+                if let message = accounts.errorMessage {
+                    Text(message).font(.footnote).foregroundStyle(.orange)
+                }
+
+                Text("Add an Account").font(.headline).padding(.top, 4)
+                providerGrid
+                if !accounts.unconfiguredKindIDs.isEmpty { configurationWarning }
             }
+            .padding(16)
         }
-        .padding(16)
         .settingsHighlight("accounts", navigation: navigation)
         .confirmationDialog(
             "Remove \(pendingRemoval?.displayName ?? "this account")?", isPresented: removalBinding, titleVisibility: .visible
         ) {
             Button("Remove", role: .destructive) {
                 if let connection = pendingRemoval {
-                    selection = nil
                     Task { await accounts.removeAccount(connectionID: connection.connectionID) }
                 }
                 pendingRemoval = nil
@@ -45,20 +62,22 @@ struct AccountsPane: View {
         Binding(get: { pendingRemoval != nil }, set: { if !$0 { pendingRemoval = nil } })
     }
 
-    private var list: some View {
-        List(selection: $selection) {
-            ForEach(accounts.accounts) { connection in
-                accountRow(connection).tag(connection.connectionID)
-            }
-        }
-        .listStyle(.bordered)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay {
+    private var connectedCard: some View {
+        VStack(spacing: 0) {
             if accounts.accounts.isEmpty {
-                Text("No internet accounts. Use + to add one.")
+                Text("No internet accounts yet. Add one below.")
                     .font(.callout).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12).padding(.vertical, 10)
+            } else {
+                ForEach(Array(accounts.accounts.enumerated()), id: \.element.connectionID) { index, connection in
+                    if index > 0 { Divider() }
+                    accountRow(connection)
+                }
             }
         }
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(nsColor: .separatorColor)))
     }
 
     private var appleCalendarCard: some View {
@@ -102,37 +121,60 @@ struct AccountsPane: View {
                 Button("Sign in again") { accounts.beginReauthorize(connectionID: connection.connectionID) }
                     .disabled(accounts.isWorking)
             }
+            Menu {
+                Button("Remove Account", role: .destructive) { pendingRemoval = connection }
+                    .disabled(accounts.isWorking)
+            } label: {
+                Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .accessibilityLabel("\(connection.displayName) actions")
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 12).padding(.vertical, 8)
     }
 
-    private var controls: some View {
-        HStack(spacing: 0) {
-            Menu {
-                if accounts.availableKinds.isEmpty {
-                    Button("No account types are available in this build") {}.disabled(true)
+    private var providerGrid: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+            ForEach(accounts.availableKinds, id: \.id) { kind in
+                Button {
+                    accounts.beginAddAccount(kindID: kind.id)
+                } label: {
+                    ProviderTile(name: kind.displayName) { ProviderIcon(kindID: kind.id, size: 36) }
                 }
-                ForEach(accounts.availableKinds, id: \.id) { kind in
-                    Button(kind.displayName) { accounts.beginAddAccount(kindID: kind.id) }
+                .buttonStyle(.plain)
+                .disabled(accounts.isWorking)
+                .accessibilityLabel("Add \(kind.displayName) account")
+            }
+            ForEach(accounts.unconfiguredKindIDs, id: \.self) { kindID in
+                ProviderTile(name: ProviderIcon.displayName(forKindID: kindID), badge: "Unavailable") {
+                    ProviderIcon(kindID: kindID, size: 36)
                 }
-            } label: {
-                Image(systemName: "plus").frame(width: 24, height: 20)
+                .opacity(0.5)
+                .accessibilityLabel("\(ProviderIcon.displayName(forKindID: kindID)), unavailable in this build")
             }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden)
-            .fixedSize()
-            .disabled(accounts.isWorking)
-            .accessibilityLabel("Add account")
-            Divider().frame(height: 16).padding(.horizontal, 4)
-            Button {
-                pendingRemoval = accounts.accounts.first { $0.connectionID == selection }
-            } label: {
-                Image(systemName: "minus").frame(width: 24, height: 20)
+            ForEach(Self.placeholderProviders) { provider in
+                ProviderTile(name: provider.name, badge: "Soon") {
+                    Image(systemName: provider.systemImage)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 36, height: 36)
+                        .background(Color(nsColor: .quaternarySystemFill), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                }
+                .opacity(0.55)
+                .accessibilityLabel("\(provider.name), coming soon")
             }
-            .buttonStyle(.borderless)
-            .disabled(selection == nil || accounts.isWorking || !accounts.accounts.contains { $0.connectionID == selection })
-            .accessibilityLabel("Remove account")
-            Spacer()
         }
+    }
+
+    private var configurationWarning: some View {
+        Label {
+            Text("This build is missing configuration for some account types, so they can't be added right now.")
+        } icon: {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 2)
     }
 
     private var waitingRow: some View {
@@ -147,5 +189,34 @@ struct AccountsPane: View {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
             NSWorkspace.shared.open(url)
         }
+    }
+}
+
+/// A provider not yet wired to a real connector — shown for the roadmap, never tappable.
+private struct PlaceholderProvider: Identifiable {
+    let name: String
+    let systemImage: String
+    var id: String { name }
+}
+
+/// One tile in the "Add an Account" grid: an icon, a name, and an optional status badge.
+private struct ProviderTile<Icon: View>: View {
+    let name: String
+    var badge: String?
+    @ViewBuilder let icon: () -> Icon
+
+    var body: some View {
+        VStack(spacing: 8) {
+            icon()
+            Text(name).font(.caption).lineLimit(1)
+            if let badge {
+                Text(badge).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).stroke(Color(nsColor: .separatorColor)))
+        .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
     }
 }

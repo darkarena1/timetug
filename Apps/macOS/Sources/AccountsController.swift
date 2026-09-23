@@ -11,6 +11,11 @@ final class AccountsController: ObservableObject {
     @Published private(set) var buildFailures: [ConnectionID: String] = [:]
     @Published var errorMessage: String?
 
+    /// Kind ids TimeTug supports in code but couldn't register this build — e.g. Google without an OAuth
+    /// client configured. Distinct from a kind that's simply not built yet: the Accounts pane shows these
+    /// with their real icon, dimmed, plus a warning, instead of silently leaving them out.
+    let unconfiguredKindIDs: [String]
+
     private let registry: ConnectorRegistry
     private let connectionStore: FileConnectionStore
     private let credentials: any CredentialStore
@@ -26,7 +31,7 @@ final class AccountsController: ObservableObject {
         registry: ConnectorRegistry, connectionStore: FileConnectionStore, credentials: any CredentialStore,
         syncState: any SyncStateStore, interaction: any AuthorizationInteraction, settings: SettingsStore,
         reconciler: SourceReconciler, applySources: @escaping ([any TimeTugCore.CalendarSource]) async -> Void,
-        requestEventKitAccess: @escaping () async -> Void
+        requestEventKitAccess: @escaping () async -> Void, unconfiguredKindIDs: [String] = []
     ) {
         self.registry = registry
         self.connectionStore = connectionStore
@@ -37,6 +42,7 @@ final class AccountsController: ObservableObject {
         self.reconciler = reconciler
         self.applySources = applySources
         self.requestEventKitAccess = requestEventKitAccess
+        self.unconfiguredKindIDs = unconfiguredKindIDs
     }
 
     /// Account kinds offered by `+` (system-permission kinds such as Apple Calendar are a switch, not an account).

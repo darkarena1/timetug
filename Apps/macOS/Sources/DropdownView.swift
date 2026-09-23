@@ -419,8 +419,9 @@ private struct JoinButton: View {
 // MARK: - Card surface
 
 /// The card's chrome for each style. `glass` is native Liquid Glass; `frosted` is a thin material with a
-/// hairline; `solid` is the opaque brand fill.
-private struct CardSurface: ViewModifier {
+/// hairline; `solid` is the opaque brand fill. Internal (not private) so Appearance settings' style
+/// previews can render with the exact same materials as the real popup, not an approximation.
+struct CardSurface: ViewModifier {
     let style: PopupCardStyle
     let isNext: Bool
     let palette: PopupPalette

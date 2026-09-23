@@ -4,13 +4,14 @@ import SwiftUI
 struct SettingsRowIcon: View {
     let systemImage: String
     let color: Color
+    var size: CGFloat = 22
 
     var body: some View {
         Image(systemName: systemImage)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.system(size: size * 0.545, weight: .semibold))
             .foregroundStyle(.white)
-            .frame(width: 22, height: 22)
-            .background(color, in: RoundedRectangle(cornerRadius: 5.5, style: .continuous))
+            .frame(width: size, height: size)
+            .background(color, in: RoundedRectangle(cornerRadius: size * 0.25, style: .continuous))
     }
 }
 

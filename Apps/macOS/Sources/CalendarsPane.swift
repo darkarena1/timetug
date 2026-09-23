@@ -32,7 +32,6 @@ struct CalendarsPane: View {
 
     // MARK: Layout
 
-    private static let eyeWidth: CGFloat = 30
     private static let switchWidth: CGFloat = 44
 
     private var layout: CalendarLayout {
@@ -70,7 +69,6 @@ struct CalendarsPane: View {
         HStack(spacing: 10) {
             Text("Tug calendars").font(.subheadline.weight(.medium))
             Spacer()
-            Text("Show").frame(width: Self.eyeWidth)
             Text(SettingsText.tugCheckbox).frame(width: Self.switchWidth)
         }
         .font(.caption)
@@ -135,22 +133,29 @@ struct CalendarsPane: View {
     private func calendarRow(_ calendar: CalendarInfo) -> some View {
         let tug = takeover(calendar.key)
         let isShown = shown(calendar.key)
+        let color = Color(hex: calendar.colorHex) ?? .secondary
         return VStack(spacing: 0) {
             Divider()
             HStack(spacing: 10) {
-                Circle().fill(Color(hex: calendar.colorHex) ?? .secondary).frame(width: 10, height: 10)
-                Text(calendar.title).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
-                Button { isShown.wrappedValue.toggle() } label: {
-                    Image(systemName: isShown.wrappedValue ? "eye" : "eye.slash").frame(width: Self.eyeWidth)
+                Button {
+                    let wasShown = isShown.wrappedValue
+                    isShown.wrappedValue.toggle()
+                    // Hiding a non-standard calendar (subscribed/system) that was tugging moves it
+                    // into the collapsed disclosure below; expand it so the row doesn't just vanish.
+                    if wasShown, calendar.kind != .standard { systemExpanded = true }
+                } label: {
+                    CalendarCheckbox(isOn: isShown.wrappedValue, color: color)
                 }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .disabled(tug.wrappedValue)
-                .help(tug.wrappedValue ? "Shown while Tug is on" : (isShown.wrappedValue ? "Hide from the list" : "Show in the list"))
+                .buttonStyle(.plain)
+                .help(isShown.wrappedValue ? "Hide from the list" : "Show in the list")
                 .accessibilityLabel("Show \(calendar.title) in list")
                 .accessibilityValue(isShown.wrappedValue ? "On" : "Off")
+                Text(calendar.title).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                 Toggle("", isOn: tug)
                     .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                    .disabled(!isShown.wrappedValue)
+                    .opacity(isShown.wrappedValue ? 1 : 0.35)
+                    .help(isShown.wrappedValue ? "" : "Show this calendar to turn on Tug for it")
                     .accessibilityLabel("Tug for \(calendar.title)")
                     .frame(width: Self.switchWidth)
             }
@@ -257,5 +262,26 @@ struct CalendarsPane: View {
             get: { settings.takeover.isShownInList(key) },
             set: { settings.takeover.setShownInList($0, forCalendar: key) }
         )
+    }
+}
+
+/// A calendar's visibility control: filled with its color and checked when shown, a hollow outline in
+/// that color when hidden — matching Apple Calendar's own sidebar checkboxes.
+private struct CalendarCheckbox: View {
+    let isOn: Bool
+    let color: Color
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 4.5, style: .continuous)
+            .fill(isOn ? color : Color.clear)
+            .overlay(RoundedRectangle(cornerRadius: 4.5, style: .continuous).strokeBorder(color, lineWidth: 1.6))
+            .overlay {
+                if isOn {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .frame(width: 16, height: 16)
     }
 }
