@@ -16,6 +16,10 @@ extension GoogleCalendarSource: WritableCalendarSource {
         }
     }
 
+    /// Callers read expanded instances, so a `timing` in `patch` is the instance's absolute date. Sent to the series
+    /// master (`.allInSeries`) it would move the whole series, so a series-wide time change is accepted only when `ref`
+    /// is the series' first occurrence (its `originalStart` equals the master's start, within a second); otherwise it
+    /// throws `WriteError.unsupported(fields: [.timing])` before any PATCH. Other fields are unaffected.
     public func update(_ ref: EventRef, _ patch: EventPatch, scope: RecurrenceScope, notify: NotifyPolicy) async throws -> CalendarEvent {
         try await translated {
             try WriteValidation.requireWritable(patch.touchedFields, capabilities)
@@ -34,6 +38,9 @@ extension GoogleCalendarSource: WritableCalendarSource {
                 return event
             }
             let (targetID, useVersion) = target(ref, scope: scope)
+            if scope == .allInSeries, patch.timing != nil, targetID != ref.eventID {
+                try await requireFirstOccurrence(ref, seriesID: targetID, calendar: calendar)
+            }
             return try await PatchMerge.apply(
                 patch: patch, version: useVersion ? ref.version : nil,
                 fetchCurrent: { try self.mapped(try await self.fetchRaw(ref.calendarID, targetID).data, calendar: calendar) },
@@ -115,7 +122,8 @@ extension GoogleCalendarSource: WritableCalendarSource {
             case .gone, .notFound: throw WriteError.notFound
             case .forbidden: throw WriteError.forbidden(nil)
             case .badRequest(let message): throw WriteError.invalid(message)
-            case .preconditionFailed: throw WriteError.conflict(fields: [])
+            // Unreachable: only writes that carry `If-Match` can get a 412, and each of them handles it itself.
+            case .preconditionFailed: throw SourceError.invalidResponse("google: unexpected 412")
             }
         }
     }
@@ -171,6 +179,18 @@ extension GoogleCalendarSource: WritableCalendarSource {
     private func target(_ ref: EventRef, scope: RecurrenceScope) -> (id: String, useVersion: Bool) {
         guard let series = ref.seriesID, !series.isEmpty else { return (ref.eventID, true) }
         return scope == .allInSeries ? (series, false) : (ref.eventID, true)
+    }
+
+    /// Throws `.unsupported(fields: [.timing])` unless `ref` is the first occurrence of the series (see `update`).
+    private func requireFirstOccurrence(_ ref: EventRef, seriesID: String, calendar: CalendarDescriptor) async throws {
+        let master = try await fetchRaw(ref.calendarID, seriesID)
+        let dto = try api.decode(GoogleEventDTO.self, from: master.data)
+        guard let start = GoogleEventMapper.resolve(dto.start, calendarZone: calendar.timeZone ?? TimeZone(identifier: "UTC")!) else {
+            throw SourceError.invalidResponse("google: unreadable event")
+        }
+        guard let slot = ref.originalStart, abs(slot.timeIntervalSince(start.date)) < 1 else {
+            throw WriteError.unsupported(fields: [.timing])
+        }
     }
 
     /// Implemented in Task 11.

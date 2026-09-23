@@ -110,24 +110,22 @@ struct GoogleAPIClient: Sendable {
         (try? JSONDecoder().decode(ErrorBody.self, from: response.body))?.error?.message ?? "HTTP \(response.status)"
     }
 
-    /// A non-rate-limit 403. Reads: only reason `forbidden` (one unreadable calendar) is skippable and the rest affect
-    /// every calendar. Writes: any reason but `insufficientPermissions` is a permission problem on this event.
     private static let quotaReasons: Set<String> = ["quotaExceeded", "calendarUsageLimitsExceeded", "dailyLimitExceeded"]
 
+    /// A non-rate-limit 403. Reads: only reason `forbidden` (one unreadable calendar) is skippable and the rest affect
+    /// every calendar. Writes: a quota reason is a rate limit (retry later, not a permission problem); any other reason
+    /// but `insufficientPermissions` is a permission problem on this event.
     private static func classifyForbidden(_ response: HTTPResponse, mode: GoogleRequestMode) -> Error {
-        let reason = (try? JSONDecoder().decode(ErrorBody.self, from: response.body))?.error?.errors?.first?.reason
-        // Writes only: a quota 403 is a rate limit (retry later), not a permission problem. Reads keep their mapping.
-        if mode == .write, let reasons = (try? JSONDecoder().decode(ErrorBody.self, from: response.body))?.error?.errors,
-           reasons.contains(where: { quotaReasons.contains($0.reason ?? "") })
-        {
+        let reasons = ((try? JSONDecoder().decode(ErrorBody.self, from: response.body))?.error?.errors ?? []).compactMap(\.reason)
+        if mode == .write, reasons.contains(where: quotaReasons.contains) {
             return SourceError.rateLimited(retryAfter: response.header("retry-after").flatMap(TimeInterval.init))
         }
-        switch reason {
+        switch reasons.first {
         case "forbidden": return GoogleAPIError.forbidden
         case "insufficientPermissions": return SourceError.authExpired
         default:
             if mode == .write { return GoogleAPIError.forbidden }
-            return SourceError.invalidResponse("HTTP 403: \(reason ?? "unknown")")
+            return SourceError.invalidResponse("HTTP 403: \(reasons.first ?? "unknown")")
         }
     }
 

@@ -80,6 +80,8 @@ private func base(title: String = "Standup", version: String = "e1", attendees: 
     let sent = await h.transport.requests(matching: "\(calPath)/ev1")
     #expect(sent.map(\.method) == ["PATCH", "GET", "PATCH"] && sent[0].headers["If-Match"] == "e1" && sent[2].headers["If-Match"] == "e2")
     #expect(updated.title == "New" && updated.location == "Elsewhere")
+    // The retry resends only what this edit changed, not the other writer's location.
+    #expect((bodyJSON(sent[2]) as NSDictionary).isEqual(["summary": "New"] as NSDictionary))
 }
 
 @Test func aStaleVersionWithAnOverlapIsAConflict() async throws {
@@ -246,4 +248,102 @@ private func base(title: String = "Standup", version: String = "e1", attendees: 
     await #expect(throws: SourceError.invalidResponse("HTTP 403: quotaExceeded")) {
         _ = try await h.source.events(in: DateInterval(start: .now, duration: 3600))
     }
+}
+
+// MARK: Review fixes
+
+private func masterRequests(_ h: Harness) async -> [HTTPRequest] {
+    await h.transport.requests(matching: "\(calPath)/master1").filter { $0.url.path.hasSuffix("/master1") }
+}
+
+private func laterOccurrence() -> EventRef {
+    EventRef(calendarID: cal, eventID: "master1_20260921T100000Z", version: "i1", seriesID: "master1", originalStart: instant("2026-09-21T10:00:00Z"))
+}
+
+nonisolated(unsafe) private let masterStart: [String: Any] = ["dateTime": "2026-09-14T10:00:00Z", "timeZone": "UTC"]
+nonisolated(unsafe) private let masterEnd: [String: Any] = ["dateTime": "2026-09-14T10:30:00Z", "timeZone": "UTC"]
+
+private func moved() -> EventTiming {
+    EventTiming(start: instant("2026-09-21T11:00:00Z"), end: instant("2026-09-21T11:30:00Z"), timeZone: utc, isAllDay: false)
+}
+
+@Test func aSeriesWideTimeChangeFromALaterOccurrenceIsRefusedBeforeAnyPatch() async throws {
+    let h = try await Harness()
+    await h.transport.route("\(calPath)/master1", [.json(googleEvent(id: "master1", extra: ["start": masterStart, "end": masterEnd]))])
+    await expectWriteError(.unsupported(fields: [.timing])) {
+        _ = try await h.source.update(laterOccurrence(), EventPatch(timing: moved()), scope: .allInSeries, notify: .none)
+    }
+    // Without the occurrence's slot there is nothing to compare, so it is refused too.
+    var noSlot = laterOccurrence()
+    noSlot.originalStart = nil
+    await expectWriteError(.unsupported(fields: [.timing])) {
+        _ = try await h.source.update(noSlot, EventPatch(timing: moved()), scope: .allInSeries, notify: .none)
+    }
+    #expect(await masterRequests(h).allSatisfy { $0.method == "GET" })
+}
+
+@Test func aSeriesWideTimeChangeFromTheFirstOccurrenceIsSent() async throws {
+    let h = try await Harness()
+    await h.transport.route("\(calPath)/master1", [
+        .json(googleEvent(id: "master1", extra: ["start": masterStart, "end": masterEnd])), .json(googleEvent(id: "master1", etag: "m2")),
+    ])
+    let first = EventRef(calendarID: cal, eventID: "master1_20260914T100000Z", version: "i1", seriesID: "master1", originalStart: instant("2026-09-14T10:00:00Z"))
+    _ = try await h.source.update(first, EventPatch(timing: moved()), scope: .allInSeries, notify: .none)
+    let sent = await masterRequests(h)
+    #expect(sent.map(\.method) == ["GET", "PATCH"])
+}
+
+@Test func aSeriesWideTitleChangeNeedsNoMasterFetch() async throws {
+    let h = try await Harness()
+    await h.transport.route("\(calPath)/master1", [.json(googleEvent(id: "master1", etag: "m2", summary: "All"))])
+    _ = try await h.source.update(laterOccurrence(), EventPatch(title: "All"), scope: .allInSeries, notify: .none)
+    #expect(await masterRequests(h).map(\.method) == ["PATCH"])
+}
+
+@Test func aTimeChangeToASingleInstanceOrANonRecurringEventIsNotRestricted() async throws {
+    let h = try await Harness()
+    await h.transport.route("\(calPath)/master1_20260921T100000Z", [.json(googleEvent(id: "master1_20260921T100000Z", etag: "i2"))])
+    _ = try await h.source.update(laterOccurrence(), EventPatch(timing: moved()), scope: .thisInstance, notify: .none)
+    await h.transport.route("\(calPath)/ev1", [.json(googleEvent(id: "ev1", etag: "e2"))])
+    _ = try await h.source.update(EventRef(calendarID: cal, eventID: "ev1", version: "e1"), EventPatch(timing: moved()), scope: .allInSeries, notify: .none)
+    #expect(await h.transport.requests.filter { $0.method == "GET" && $0.url.path.contains("/events/") }.isEmpty)
+}
+
+@Test func deleteAndRespondWithSeriesScopeTargetTheMaster() async throws {
+    let h = try await Harness()
+    let attendees: [[String: Any]] = [["email": "me@x.com", "self": true, "responseStatus": "needsAction"]]
+    await h.transport.route("\(calPath)/master1", [HTTPResponse(status: 204)])
+    try await h.source.delete(laterOccurrence(), scope: .allInSeries, notify: .none)
+    #expect(await masterRequests(h).map(\.method) == ["DELETE"])
+    await h.transport.route("\(calPath)/master1", [.json(googleEvent(id: "master1", etag: "m1", extra: ["attendees": attendees])), .json(googleEvent(id: "master1", etag: "m2"))])
+    _ = try await h.source.respond(to: laterOccurrence(), .tentative, scope: .allInSeries, notify: .none)
+    #expect(await masterRequests(h).map(\.method) == ["DELETE", "GET", "PATCH"])
+    #expect(await h.transport.requests(matching: "master1_2026").isEmpty)
+}
+
+@Test func aStaleAttendeeEditWithNoOverlapMergesOnTheFreshEtag() async throws {
+    let h = try await Harness()
+    var edit = EventEdit(base(version: "e1"))
+    edit.event.attendees = [Attendee(email: "dee@x.com", role: .required)]
+    let current = googleEvent(id: "ev1", etag: "e2", extra: ["attendees": [["email": "me@x.com", "self": true]]])
+    await h.transport.route("\(calPath)/ev1", [.json(current), .json(current), .json(current), .json(googleEvent(id: "ev1", etag: "e3"))])
+    _ = try await h.source.update(EventRef(base(version: "e1")), edit.patch, scope: .thisInstance, notify: .none)
+    let sent = await h.transport.requests(matching: "\(calPath)/ev1")
+    #expect(sent.map(\.method) == ["GET", "GET", "GET", "PATCH"] && sent[3].headers["If-Match"] == "e2")
+    let merged = try #require(bodyJSON(sent[3])["attendees"] as? [[String: Any]])
+    #expect(merged.map { $0["email"] as? String } == ["me@x.com", "dee@x.com"])
+}
+
+@Test func aPreconditionFailedOnTheAttendeePatchIsRetried() async throws {
+    let h = try await Harness()
+    var edit = EventEdit(base(version: "e1"))
+    edit.event.attendees = [Attendee(email: "dee@x.com", role: .required)]
+    let first = googleEvent(id: "ev1", etag: "e1", extra: ["attendees": [["email": "me@x.com", "self": true]]])
+    let second = googleEvent(id: "ev1", etag: "e2", extra: ["attendees": [["email": "me@x.com", "self": true]]])
+    await h.transport.route("\(calPath)/ev1", [
+        .json(first), googleError("conditionNotMet", status: 412), .json(second), .json(second), .json(googleEvent(id: "ev1", etag: "e3")),
+    ])
+    _ = try await h.source.update(EventRef(base(version: "e1")), edit.patch, scope: .thisInstance, notify: .none)
+    let sent = await h.transport.requests(matching: "\(calPath)/ev1")
+    #expect(sent.map(\.method) == ["GET", "PATCH", "GET", "GET", "PATCH"] && sent[1].headers["If-Match"] == "e1" && sent[4].headers["If-Match"] == "e2")
 }

@@ -171,11 +171,19 @@ actor SleepRecorder {
     await #expect(throws: SourceError.self) { try await h.source.checkForChanges() }
 }
 
-@Test func capabilitiesDescribeAReadOnlyTokenSyncedSource() async throws {
+@Test func capabilitiesDescribeAWritableTokenSyncedSourceWithoutPush() async throws {
     let h = try await Harness()
     let c = h.source.capabilities
     #expect(c.canWrite && c.providesConference && c.syncKind == .token && !c.supportsPush)
     #expect(h.source.id == "google-c1" && h.source.displayName == "me@x.com")
+}
+
+@Test func eventsCarryTheSourceIDOfTheirConnection() async throws {
+    let h = try await Harness()
+    await h.transport.route("calendars/team%40group.calendar.google.com/events", [.json(["items": []])])
+    await h.transport.route("calendars/me%40x.com/events", [.json(["items": [eventJSON("one", start: "2026-09-21T10:00:00Z")]])])
+    let events = try await h.source.events(in: DateInterval(start: .now, duration: 3600))
+    #expect(events.count == 1 && events.allSatisfy { $0.sourceID == "google-c1" })
 }
 
 @Test func anItemWithoutAnIdIsDroppedNotFatal() async throws {
