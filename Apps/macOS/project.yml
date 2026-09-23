@@ -19,7 +19,7 @@ packages:
     path: ../../Packages/CalendarApple
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
-    exactVersion: 2.4.0
+    exactVersion: 3.1.0
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     exactVersion: 2.10.0
