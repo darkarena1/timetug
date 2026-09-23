@@ -30,6 +30,6 @@ func bodyJSON(_ request: HTTPRequest) -> [String: Any] {
     (try? JSONSerialization.jsonObject(with: request.body ?? Data())) as? [String: Any] ?? [:]
 }
 
-func googleError(_ reason: String, message: String = "m", status: Int) -> HTTPResponse {
-    .json(["error": ["errors": [["reason": reason]], "message": message]], status: status)
+func googleError(_ reason: String, message: String = "m", status: Int, headers: [String: String] = [:]) -> HTTPResponse {
+    .json(["error": ["errors": [["reason": reason]], "message": message]], status: status, headers: headers)
 }

@@ -174,7 +174,7 @@ actor SleepRecorder {
 @Test func capabilitiesDescribeAReadOnlyTokenSyncedSource() async throws {
     let h = try await Harness()
     let c = h.source.capabilities
-    #expect(!c.canWrite && c.providesConference && c.syncKind == .token && !c.supportsPush)
+    #expect(c.canWrite && c.providesConference && c.syncKind == .token && !c.supportsPush)
     #expect(h.source.id == "google-c1" && h.source.displayName == "me@x.com")
 }
 
