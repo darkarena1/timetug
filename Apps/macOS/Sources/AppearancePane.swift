@@ -69,14 +69,15 @@ private struct MenuBarModeTile: View {
     let isSelected: Bool
     let action: () -> Void
 
-    private static let barColor = Color(white: 0.14)
+    @Environment(\.colorScheme) private var scheme
+    private var isDark: Bool { scheme == .dark }
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
                 preview
-                    .frame(width: 140, height: 28)
-                    .background(Self.barColor, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .frame(width: 140, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .strokeBorder(isSelected ? Color.accentColor : Color.primary.opacity(0.15),
@@ -91,21 +92,53 @@ private struct MenuBarModeTile: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    @ViewBuilder private var preview: some View {
-        HStack(spacing: 5) {
-            Spacer(minLength: 0)
-            Image(systemName: "clock")
-                .resizable()
-                .frame(width: 14, height: 14)
-                .foregroundStyle(.white)
-            if let text = sampleText {
-                Text(text)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
+    private var preview: some View {
+        // A cropped desktop status area, rendered at twice the tile size to keep the
+        // menu bar's proportions consistent. All text and system indicators are illustrative.
+        ZStack(alignment: .top) {
+            LinearGradient(colors: isDark
+                           ? [Color(red: 0.12, green: 0.15, blue: 0.38), Color(red: 0.03, green: 0.06, blue: 0.18)]
+                           : [Color(red: 0.72, green: 0.87, blue: 0.96), Color(red: 0.32, green: 0.62, blue: 0.86)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            Path { path in
+                path.move(to: CGPoint(x: -20, y: 88))
+                path.addCurve(to: CGPoint(x: 300, y: 42),
+                              control1: CGPoint(x: 80, y: 18), control2: CGPoint(x: 170, y: 125))
+                path.addLine(to: CGPoint(x: 300, y: 110))
+                path.addLine(to: CGPoint(x: -20, y: 110))
+                path.closeSubpath()
+            }
+            .fill(LinearGradient(colors: [.cyan.opacity(isDark ? 0.25 : 0.4), .blue.opacity(0.35)],
+                                 startPoint: .leading, endPoint: .trailing))
+
+            HStack(spacing: 10) {
+                Spacer(minLength: 0)
+                HStack(spacing: 5) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 14, weight: .medium))
+                    if let text = sampleText {
+                        Text(text).font(.system(size: 12, weight: .medium))
+                    }
+                }
+                Image(systemName: "wifi")
+                Image(systemName: "switch.2")
+                Text("9:41 AM").font(.system(size: 12, weight: .medium).monospacedDigit())
+            }
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(isDark ? Color.white.opacity(0.95) : Color.black.opacity(0.85))
+            .lineLimit(1)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 14)
+            .frame(height: 38)
+            .background(isDark ? Color.black.opacity(0.25) : Color.white.opacity(0.5))
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.08)).frame(height: 1)
             }
         }
-        .padding(.horizontal, 8)
+        .frame(width: 280, height: 88)
+        .scaleEffect(0.5)
+        .frame(width: 140, height: 44)
+        .accessibilityHidden(true)
     }
 
     /// Illustrative only — not a real event. Matches `TimeFormatting.statusTitle`'s real format:
