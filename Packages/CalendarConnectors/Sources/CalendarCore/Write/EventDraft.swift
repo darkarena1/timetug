@@ -17,7 +17,10 @@ public struct EventTiming: Sendable, Equatable {
 
     /// Every write calls this before any request or store mutation.
     public func validate() throws {
-        // `end > start` is false when either date is NaN, so a non-finite date is rejected here too.
+        // Checked first: NaN and infinite dates must not reach the ordering or calendar math below.
+        guard start.timeIntervalSinceReferenceDate.isFinite, end.timeIntervalSinceReferenceDate.isFinite else {
+            throw WriteError.invalid("times must be finite")
+        }
         guard end > start else { throw WriteError.invalid("end must be after start") }
         guard isAllDay else { return }
         guard let zone = timeZone else { throw WriteError.invalid("an all-day event needs a time zone") }
@@ -38,12 +41,14 @@ public struct AttendeeDraft: Sendable, Hashable {
         self.role = role
     }
 
-    /// One `@` with something on both sides and no whitespace. Deliberately not a full RFC check; the provider
-    /// has the final say.
-    fileprivate var hasValidShape: Bool {
+    /// One `@` with something on both sides; no whitespace, control characters or `, ; < >` (which would smuggle a
+    /// second address or a display-name form into the provider request). Deliberately not a full RFC check; the
+    /// provider has the final say.
+    static func isValidEmail(_ email: String) -> Bool {
         let parts = email.split(separator: "@", omittingEmptySubsequences: false)
-        return parts.count == 2 && !parts[0].isEmpty && !parts[1].isEmpty
-            && !email.contains(where: { $0.isWhitespace })
+        guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { return false }
+        let forbidden = CharacterSet.whitespacesAndNewlines.union(.controlCharacters).union(CharacterSet(charactersIn: ",;<>"))
+        return email.unicodeScalars.allSatisfy { !forbidden.contains($0) }
     }
 }
 
@@ -81,7 +86,7 @@ public struct EventDraft: Sendable, Equatable {
     public func validate() throws {
         try timing.validate()
         try recurrence?.validate()
-        for attendee in attendees where !attendee.hasValidShape {
+        for attendee in attendees where !AttendeeDraft.isValidEmail(attendee.email) {
             throw WriteError.invalid("attendee email is not valid: \(attendee.email)")
         }
         if let reminders, reminders.contains(where: { $0.minutesBefore < 0 }) {
@@ -106,8 +111,10 @@ public struct EventDraft: Sendable, Equatable {
     /// A best-effort copy of `event` for a target with `capabilities`: only fields in `writableFields` are carried
     /// over. Self and email-less attendees are dropped, an empty reminder list becomes "calendar defaults" (reads
     /// cannot tell the two apart), only a Meet link is re-requested, and recurrence is never copied (reads carry none).
+    /// Attendees with an invalid email and negative reminders are dropped so the draft still passes `validate()`.
     public init(copying event: CalendarEvent, for capabilities: SourceCapabilities) {
         let writable = capabilities.writableFields
+        let reminders = event.reminders.filter { $0.minutesBefore >= 0 }
         self.init(
             title: event.title,
             timing: EventTiming(start: event.start, end: event.end, timeZone: event.timeZone, isAllDay: event.isAllDay),
@@ -115,9 +122,11 @@ public struct EventDraft: Sendable, Equatable {
             location: writable.contains(.location) ? event.location : nil,
             availability: writable.contains(.availability) ? event.availability : .busy,
             visibility: writable.contains(.visibility) ? event.visibility : .default,
-            reminders: writable.contains(.reminders) && !event.reminders.isEmpty ? event.reminders : nil,
+            reminders: writable.contains(.reminders) && !reminders.isEmpty ? reminders : nil,
             attendees: writable.contains(.attendees)
-                ? event.attendees.filter { !$0.isSelf }.compactMap { a in a.email.map { AttendeeDraft(email: $0, name: a.name, role: a.role) } }
+                ? event.attendees.filter { !$0.isSelf }
+                    .compactMap { a in a.email.map { AttendeeDraft(email: $0, name: a.name, role: a.role) } }
+                    .filter { AttendeeDraft.isValidEmail($0.email) }
                 : [],
             conference: writable.contains(.conference) && event.conference?.provider == .meet ? .generate : .none,
             recurrence: nil)

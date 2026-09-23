@@ -25,12 +25,21 @@ private func timed() -> EventTiming {
 }
 
 @Test func timingRejectsNonFiniteDates() async {
-    let nan = Date(timeIntervalSinceReferenceDate: .nan)
-    await expectWriteError(.invalid("end must be after start")) {
-        try EventTiming(start: nan, end: instant("2026-09-21T10:00:00Z"), timeZone: utc, isAllDay: false).validate()
-    }
-    await expectWriteError(.invalid("end must be after start")) {
-        try EventTiming(start: instant("2026-09-21T10:00:00Z"), end: nan, timeZone: utc, isAllDay: false).validate()
+    let bad = [Date(timeIntervalSinceReferenceDate: .nan), Date(timeIntervalSinceReferenceDate: .infinity),
+               Date(timeIntervalSinceReferenceDate: -.infinity)]
+    let fine = instant("2026-09-21T10:00:00Z")
+    for isAllDay in [false, true] {
+        for date in bad {
+            await expectWriteError(.invalid("times must be finite")) {
+                try EventTiming(start: date, end: fine, timeZone: utc, isAllDay: isAllDay).validate()
+            }
+            await expectWriteError(.invalid("times must be finite")) {
+                try EventTiming(start: fine, end: date, timeZone: utc, isAllDay: isAllDay).validate()
+            }
+        }
+        await expectWriteError(.invalid("times must be finite")) {
+            try EventTiming(start: bad[2], end: bad[1], timeZone: utc, isAllDay: isAllDay).validate()
+        }
     }
 }
 
@@ -50,7 +59,8 @@ private func timed() -> EventTiming {
 }
 
 @Test func draftValidationRejectsMalformedAddressesBeyondAMissingAt() async {
-    for bad in ["@", "a@", "@b.c", "a@@b.c", "a b@c.d", "a@b@c.d", ""] {
+    for bad in ["@", "a@", "@b.c", "a@@b.c", "a b@c.d", "a@b@c.d", "", "a@b.c,d@e.f", "a@b.c;d@e.f", "<a@b.c>",
+                "a@b.c\nd@e.f", "a@b.c\u{0}", "a\u{7}@b.c"] {
         var draft = EventDraft(title: "T", timing: timed())
         draft.attendees = [AttendeeDraft(email: bad)]
         await expectWriteError(.invalid("attendee email is not valid: \(AttendeeDraft(email: bad).email)")) { try draft.validate() }
@@ -98,6 +108,7 @@ private func source() -> CalendarEvent {
     let draft = EventDraft(copying: source(), for: caps)
     #expect(draft.attendees.isEmpty && draft.visibility == .default && draft.conference == .none)
     #expect(draft.notes == "n" && draft.availability == .free)
+    #expect(draft.recurrence == nil)
 }
 
 @Test func copyingTurnsEmptyRemindersIntoCalendarDefaults() {
@@ -110,6 +121,29 @@ private func source() -> CalendarEvent {
 @Test func copyingToAReadOnlyTargetKeepsOnlyTheRequiredParts() {
     let draft = EventDraft(copying: source(), for: SourceCapabilities())
     #expect(draft.title == "Planning" && draft.notes == nil && draft.location == nil && draft.reminders == nil)
+    #expect(draft.availability == .busy && draft.visibility == .default && draft.attendees.isEmpty)
+    #expect(draft.conference == .none && draft.recurrence == nil)
+}
+
+@Test func copyingDoesNotReRequestANonMeetConference() {
+    var event = source()
+    event.conference = ConferenceInfo(url: URL(string: "https://zoom.us/j/1")!, provider: .zoom)
+    let draft = EventDraft(copying: event, for: SourceCapabilities(canWrite: true, writableFields: Set(EventField.allCases)))
+    #expect(draft.conference == .none)
+}
+
+@Test func copyingDropsSourceDataThatWouldFailValidation() throws {
+    var event = source()
+    event.attendees = [Attendee(email: "nobody"), Attendee(email: "a@b.c,d@e.f"), Attendee(email: "ok@x.com")]
+    event.reminders = [Reminder(minutesBefore: -5), Reminder(minutesBefore: 15)]
+    let caps = SourceCapabilities(canWrite: true, canEditAttendees: true, writableFields: Set(EventField.allCases))
+    let draft = EventDraft(copying: event, for: caps)
+    #expect(draft.attendees == [AttendeeDraft(email: "ok@x.com")])
+    #expect(draft.reminders == [Reminder(minutesBefore: 15)])
+    try draft.validate()
+
+    event.reminders = [Reminder(minutesBefore: -1)]
+    #expect(EventDraft(copying: event, for: caps).reminders == nil)
 }
 
 @Test func copyingKeepsAnAllDayEventInCanonicalForm() throws {
