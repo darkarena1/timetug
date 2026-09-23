@@ -21,7 +21,7 @@ private func base(title: String = "Standup", version: String = "e1", attendees: 
     let h = try await Harness()
     let c = h.source.capabilities
     #expect(c.canWrite && c.canEditAttendees && c.canRespondToInvite && c.controlsNotifications)
-    #expect(c.writableFields == Set(EventField.allCases) && c.recurrenceScopes == [.thisInstance, .allInSeries])
+    #expect(c.writableFields == Set(EventField.allCases) && c.recurrenceScopes == Set(RecurrenceScope.allCases))
 }
 
 @Test func createPostsToTheCalendarAndMapsTheResult() async throws {

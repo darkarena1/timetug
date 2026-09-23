@@ -181,20 +181,166 @@ extension GoogleCalendarSource: WritableCalendarSource {
         return scope == .allInSeries ? (series, false) : (ref.eventID, true)
     }
 
-    /// Throws `.unsupported(fields: [.timing])` unless `ref` is the first occurrence of the series (see `update`).
-    private func requireFirstOccurrence(_ ref: EventRef, seriesID: String, calendar: CalendarDescriptor) async throws {
-        let master = try await fetchRaw(ref.calendarID, seriesID)
-        let dto = try api.decode(GoogleEventDTO.self, from: master.data)
+    /// The start of a raw event resource in the calendar's zone (a floating or all-day start reads in that zone). The one
+    /// place series code reads a master's start.
+    private func start(of raw: RawEvent, calendar: CalendarDescriptor) throws -> GoogleEventMapper.Resolved {
+        let dto = try api.decode(GoogleEventDTO.self, from: raw.data)
         guard let start = GoogleEventMapper.resolve(dto.start, calendarZone: calendar.timeZone ?? TimeZone(identifier: "UTC")!) else {
             throw SourceError.invalidResponse("google: unreadable event")
         }
+        return start
+    }
+
+    /// Throws `.unsupported(fields: [.timing])` unless `ref` is the first occurrence of the series (see `update`).
+    private func requireFirstOccurrence(_ ref: EventRef, seriesID: String, calendar: CalendarDescriptor) async throws {
+        let start = try start(of: try await fetchRaw(ref.calendarID, seriesID), calendar: calendar)
         guard let slot = ref.originalStart, abs(slot.timeIntervalSince(start.date)) < 1 else {
             throw WriteError.unsupported(fields: [.timing])
         }
     }
 
-    /// Implemented in Task 11.
+    // MARK: Splitting a series
+
+    private struct InstancePage: Decodable {
+        struct Item: Decodable { var originalStartTime: GoogleTimeDTO? }
+        var items: [Item]?
+        var nextPageToken: String?
+    }
+
+    /// Occurrences of the series that start before `split`, including individually deleted ones (they still count
+    /// toward a `COUNT` rule).
+    private func priorInstances(calendarID: String, masterID: String, before split: Date, zone: TimeZone) async throws -> Int {
+        var count = 0
+        try await api.pages(
+            InstancePage.self, path: GoogleAPIClient.eventPath(calendarID, masterID) + "/instances",
+            query: [
+                URLQueryItem(name: "showDeleted", value: "true"), URLQueryItem(name: "maxResults", value: "250"),
+                URLQueryItem(name: "fields", value: "nextPageToken,items(originalStartTime)"),
+            ],
+            next: { $0.nextPageToken },
+            handle: { page in
+                for item in page.items ?? [] {
+                    if let resolved = GoogleEventMapper.resolve(item.originalStartTime, calendarZone: zone), resolved.date < split { count += 1 }
+                }
+            })
+        return count
+    }
+
+    private func patchRecurrence(_ calendarID: String, _ eventID: String, _ lines: [String], etag: String?, notify: NotifyPolicy) async throws {
+        var headers: [String: String] = [:]
+        if let etag { headers["If-Match"] = etag }
+        do {
+            _ = try await api.send(
+                method: "PATCH", path: GoogleAPIClient.eventPath(calendarID, eventID), query: query(notify),
+                body: try GoogleWriteMapper.data(["recurrence": lines]), headers: headers, mode: .write)
+        } catch GoogleAPIError.preconditionFailed {
+            throw WriteError.conflict(fields: [.recurrence])
+        }
+    }
+
+    /// Puts the master's original rule back after a failed insert. Runs even when the caller was cancelled (a cancelled
+    /// request would otherwise fail at once and leave the series cut off), and is unconditional so it cannot lose to a
+    /// concurrent edit of another field. If it fails too the result is `WriteError.partial`.
+    private func restoreRecurrence(_ calendarID: String, _ masterID: String, _ original: [String]) async throws {
+        do {
+            try await Task { try await self.patchRecurrence(calendarID, masterID, original, etag: nil, notify: .none) }.value
+        } catch {
+            throw WriteError.partial(
+                "the series was cut off before this occurrence but the new series could not be created, and restoring the original rule failed")
+        }
+    }
+
+    /// Whether a failed request may nevertheless have been applied: the reply was lost (a 5xx, a broken connection, a
+    /// cancellation) rather than the request refused.
+    private static func mightHaveApplied(_ error: Error) -> Bool {
+        if error is GoogleAPIError || error is WriteError { return false }
+        if let source = error as? SourceError {
+            switch source {
+            case .server, .network: return true
+            default: return false
+            }
+        }
+        return true
+    }
+
+    /// The event with this id if it exists, else nil (also when it cannot be checked). Runs even when the caller was
+    /// cancelled, because the answer decides whether the master is restored.
+    private func existingEvent(_ calendarID: String, _ eventID: String) async -> Data? {
+        let lookup = Task<Data?, Never> { try? await self.fetchRaw(calendarID, eventID).data }
+        return await lookup.value
+    }
+
+    /// The insert body for the new series. Everything that can fail without changing anything (the occurrence, the
+    /// count of earlier occurrences, validating the patch) is done here, before the master is touched.
+    private func newSeriesBody(
+        _ ref: EventRef, master: RawEvent, original: [String], split: Date, masterZone: TimeZone, patch: EventPatch,
+        calendar: CalendarDescriptor
+    ) async throws -> GoogleWriteMapper.Body {
+        let instance = try await fetchRaw(ref.calendarID, ref.eventID)
+        var lines = GoogleWriteMapper.rruleLines(original)
+        if patch.recurrence == .keep {
+            if let total = GoogleWriteMapper.count(in: original) {
+                let prior = try await priorInstances(calendarID: ref.calendarID, masterID: master.json["id"] as? String ?? ref.seriesID ?? "", before: split,
+                                                     zone: calendar.timeZone ?? TimeZone(identifier: "UTC")!)
+                guard total - prior >= 1 else { throw WriteError.invalid("the series has no occurrences left to split off") }
+                lines = GoogleWriteMapper.replacingCount(lines, with: total - prior)
+            }
+            lines += GoogleWriteMapper.carriedOver(original, from: split, zone: masterZone)
+        }
+        let zoneName = (master.json["start"] as? [String: Any])?["timeZone"] as? String
+        return try GoogleWriteMapper.newSeriesBody(
+            master: master.json, instance: instance.json, patch: patch, recurrence: lines,
+            fallbackZone: zoneName ?? calendar.timeZone?.identifier ?? "UTC")
+    }
+
+    /// `.thisAndFollowing`: cut the master's rule just before the occurrence. Delete (`patch == nil`) stops there and
+    /// returns nil. Update also inserts a new series from the occurrence with the patch applied. Splitting at the first
+    /// occurrence is the same as `.allInSeries`. Truncation notifies attendees only for delete; for update the insert
+    /// carries the notification, so they are not told twice.
+    ///
+    /// Failure handling for update: everything that can fail without changing anything happens before the truncation.
+    /// The insert carries an id we chose, so if its reply is lost we can look the event up instead of guessing. If the
+    /// insert fails, the master's original rule is restored, and if restoring fails too the result is
+    /// `WriteError.partial`. Once the insert has succeeded it is never undone, even if its reply cannot be read.
     private func splitSeries(_ ref: EventRef, calendar: CalendarDescriptor, patch: EventPatch?, notify: NotifyPolicy) async throws -> CalendarEvent? {
-        throw WriteError.unsupported(fields: [.recurrence])
+        guard let masterID = ref.seriesID, let split = ref.originalStart else {
+            throw WriteError.invalid("this and following needs the occurrence's original start")
+        }
+        let master = try await fetchRaw(ref.calendarID, masterID)
+        let first = try start(of: master, calendar: calendar)
+        if abs(first.date.timeIntervalSince(split)) < 1 {
+            if let patch { return try await update(ref, patch, scope: .allInSeries, notify: notify) }
+            try await delete(ref, scope: .allInSeries, notify: notify)
+            return nil
+        }
+        let original = master.json["recurrence"] as? [String] ?? []
+        guard !GoogleWriteMapper.rruleLines(original).isEmpty else { throw WriteError.invalid("the series has no recurrence rule") }
+        let masterZone = first.zone ?? calendar.timeZone ?? TimeZone(identifier: "UTC")!
+        let truncated = GoogleWriteMapper.truncated(original, before: split, allDay: first.isAllDay, zone: masterZone)
+
+        var newSeries: GoogleWriteMapper.Body?
+        if let patch {
+            newSeries = try await newSeriesBody(ref, master: master, original: original, split: split, masterZone: masterZone, patch: patch, calendar: calendar)
+        }
+        try await patchRecurrence(ref.calendarID, masterID, truncated, etag: master.etag, notify: patch == nil ? notify : .none)
+        guard let newSeries else { return nil }
+
+        var json = newSeries.json
+        let newID = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()   // base32hex: 0-9 a-v
+        json["id"] = newID
+        let created: Data
+        do {
+            created = try await api.send(
+                method: "POST", path: GoogleAPIClient.calendarPath(ref.calendarID, "/events"),
+                query: query(notify, conference: newSeries.needsConferenceVersion), body: try GoogleWriteMapper.data(json), mode: .write)
+        } catch {
+            if Self.mightHaveApplied(error),
+               let found = await existingEvent(ref.calendarID, newID) {
+                return try mapped(found, calendar: calendar)
+            }
+            try await restoreRecurrence(ref.calendarID, masterID, original)
+            throw error
+        }
+        return try mapped(created, calendar: calendar)
     }
 }

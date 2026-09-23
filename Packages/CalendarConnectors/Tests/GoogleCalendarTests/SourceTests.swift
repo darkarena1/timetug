@@ -32,7 +32,11 @@ struct Harness {
     let sleeps = SleepRecorder()
 
     /// `calendarList` is what the account's calendar list returns; pass a shared `sync` to simulate a relaunch.
-    init(calendarList: [String: Any] = calendarListJSON, sync: InMemorySyncStateStore = InMemorySyncStateStore()) async throws {
+    /// `wrap` puts a decorator in front of `transport` (which still records every request that reaches it).
+    init(
+        calendarList: [String: Any] = calendarListJSON, sync: InMemorySyncStateStore = InMemorySyncStateStore(),
+        wrap: (@Sendable (FakeTransport) -> any HTTPTransport)? = nil
+    ) async throws {
         self.sync = sync
         let connection = Connection(kindID: "google", connectionID: "c1", displayName: "me@x.com", config: ["email": "me@x.com"])
         try await store.setSecrets([AccessTokenProvider.refreshTokenKey: "rt"], for: "c1")
@@ -43,7 +47,7 @@ struct Harness {
         let provider = AccessTokenProvider(
             connectionID: "c1", credentials: store,
             refresh: { _ in OAuthTokens(accessToken: "at\(counter.next())", expiresAt: now.date.addingTimeInterval(3600)) }, now: now.provider)
-        let api = GoogleAPIClient(transport: transport, tokens: provider, sleep: { await sleeps.record($0) })
+        let api = GoogleAPIClient(transport: wrap?(transport) ?? transport, tokens: provider, sleep: { await sleeps.record($0) })
         source = GoogleCalendarSource(connection: connection, api: api, syncState: sync, monitor: ChangeMonitor(sleep: { _ in }))
         await transport.route("users/me/calendarList", [.json(calendarList)])
     }

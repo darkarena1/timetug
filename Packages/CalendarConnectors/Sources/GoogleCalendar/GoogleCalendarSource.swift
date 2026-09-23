@@ -22,7 +22,7 @@ public final class GoogleCalendarSource: PollingCalendarSource {
     public var capabilities: SourceCapabilities {
         SourceCapabilities(
             canWrite: true, canEditAttendees: true, canRespondToInvite: true, providesConference: true, syncKind: .token,
-            writableFields: Set(EventField.allCases), controlsNotifications: true, recurrenceScopes: [.thisInstance, .allInSeries])
+            writableFields: Set(EventField.allCases), controlsNotifications: true, recurrenceScopes: Set(RecurrenceScope.allCases))
     }
 
     public func calendars() async throws -> [CalendarDescriptor] {

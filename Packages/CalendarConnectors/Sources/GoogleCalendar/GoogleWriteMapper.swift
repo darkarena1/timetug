@@ -216,3 +216,142 @@ enum GoogleWriteMapper {
         return result
     }
 }
+
+// MARK: Series splitting
+
+extension GoogleWriteMapper {
+    /// Fields a new series must not copy from the master: identity, bookkeeping, and the old conference (a new one is
+    /// requested instead).
+    static let outputOnlyKeys: Set<String> = [
+        "id", "etag", "iCalUID", "htmlLink", "created", "updated", "sequence", "creator", "organizer", "recurringEventId",
+        "originalStartTime", "conferenceData", "hangoutLink", "kind", "status", "recurrence",
+    ]
+
+    private static func isRRule(_ line: String) -> Bool { line.uppercased().hasPrefix("RRULE:") }
+
+    private static func parts(of line: String) -> [String] {
+        line.dropFirst("RRULE:".count).split(separator: ";").map(String.init)
+    }
+
+    /// The `recurrence` lines with every RRULE cut off just before `split` (`COUNT` and `UNTIL` replaced by an `UNTIL`
+    /// that is a date for all-day series and a UTC date-time, one second earlier, for timed ones). Other lines
+    /// (EXDATE, RDATE) are kept. Works on the raw text, so rules outside the authorable subset are fine.
+    static func truncated(_ lines: [String], before split: Date, allDay: Bool, zone: TimeZone?) -> [String] {
+        let until: String
+        if allDay {
+            until = RecurrenceRule.dateText(AllDay.date(of: split, in: zone ?? TimeZone(identifier: "UTC")!).adding(days: -1))
+        } else {
+            until = RecurrenceRule.untilText(split.addingTimeInterval(-1), allDay: false, zone: nil)
+        }
+        return lines.map { line in
+            guard isRRule(line) else { return line }
+            var kept = parts(of: line).filter { !$0.uppercased().hasPrefix("COUNT=") && !$0.uppercased().hasPrefix("UNTIL=") }
+            kept.append("UNTIL=" + until)
+            return "RRULE:" + kept.joined(separator: ";")
+        }
+    }
+
+    /// The `COUNT` of the first RRULE, if any.
+    static func count(in lines: [String]) -> Int? {
+        for line in lines where isRRule(line) {
+            for part in parts(of: line) where part.uppercased().hasPrefix("COUNT=") { return Int(part.dropFirst("COUNT=".count)) }
+        }
+        return nil
+    }
+
+    static func replacingCount(_ lines: [String], with count: Int) -> [String] {
+        lines.map { line in
+            guard isRRule(line) else { return line }
+            return "RRULE:" + parts(of: line).map { $0.uppercased().hasPrefix("COUNT=") ? "COUNT=\(count)" : $0 }.joined(separator: ";")
+        }
+    }
+
+    static func rruleLines(_ lines: [String]) -> [String] { lines.filter(isRRule) }
+
+    /// The EXDATE and RDATE lines cut down to the dates at or after `split`, so deleted or added occurrences that
+    /// belong to the new series follow it. A value that cannot be read is kept rather than lost. `zone` reads floating
+    /// times.
+    static func carriedOver(_ lines: [String], from split: Date, zone: TimeZone) -> [String] {
+        lines.compactMap { line in
+            let name = line.prefix { $0 != ";" && $0 != ":" }.uppercased()
+            guard name == "EXDATE" || name == "RDATE", let colon = line.firstIndex(of: ":") else { return nil }
+            let head = String(line[..<colon])
+            let tzid = head.split(separator: ";").dropFirst().compactMap { param -> String? in
+                param.uppercased().hasPrefix("TZID=") ? String(param.dropFirst("TZID=".count)) : nil
+            }.first
+            let lineZone = tzid.flatMap { TimeZone(identifier: $0) } ?? zone
+            let values = line[line.index(after: colon)...].split(separator: ",").map(String.init)
+            let kept = values.filter { icalInstant($0, zone: lineZone).map { $0 >= split } ?? true }
+            return kept.isEmpty ? nil : head + ":" + kept.joined(separator: ",")
+        }
+    }
+
+    /// `yyyyMMdd` (start of that day in `zone`), `yyyyMMdd'T'HHmmss` (in `zone`) or the same with a trailing `Z` (UTC).
+    /// A PERIOD value (`start/end`) reads as its start.
+    private static func icalInstant(_ text: String, zone: TimeZone) -> Date? {
+        var value = (text.split(separator: "/").first.map(String.init) ?? text).trimmingCharacters(in: .whitespaces).uppercased()
+        let isUTC = value.hasSuffix("Z")
+        if isUTC { value.removeLast() }
+        let pieces = value.split(separator: "T", omittingEmptySubsequences: false).map(String.init)
+        guard let day = pieces.first, day.count == 8, let year = Int(day.prefix(4)), let month = Int(day.dropFirst(4).prefix(2)),
+              let dayOfMonth = Int(day.suffix(2))
+        else { return nil }
+        let effectiveZone = isUTC ? TimeZone(identifier: "UTC")! : zone
+        if pieces.count == 1 { return AllDay.startOfDay(CalendarDate(year: year, month: month, day: dayOfMonth), in: effectiveZone) }
+        guard pieces.count == 2, pieces[1].count == 6, let hour = Int(pieces[1].prefix(2)), let minute = Int(pieces[1].dropFirst(2).prefix(2)),
+              let second = Int(pieces[1].suffix(2))
+        else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = effectiveZone
+        return calendar.date(from: DateComponents(year: year, month: month, day: dayOfMonth, hour: hour, minute: minute, second: second))
+    }
+
+    private static func hasMeetLink(_ json: JSON) -> Bool {
+        let key = ((json["conferenceData"] as? JSON)?["conferenceSolution"] as? JSON)?["key"] as? JSON
+        return key?["type"] as? String == "hangoutsMeet" || json["hangoutLink"] != nil
+    }
+
+    /// The insert body for the new series: the whole master resource (so unmodeled fields such as color, attachments and
+    /// extended properties carry over) minus output-only fields, starting at the instance's own start and end, guests'
+    /// responses reset, the patch applied, and a new Meet link requested when the master had one (unless the patch
+    /// removes the conference).
+    static func newSeriesBody(master: JSON, instance: JSON, patch: EventPatch, recurrence: [String], fallbackZone: String?) throws -> Body {
+        var json = master.filter { !outputOnlyKeys.contains($0.key) }
+        if let attendees = json["attendees"] as? [JSON] {
+            json["attendees"] = attendees.map { attendee -> JSON in
+                var copy = attendee
+                copy["responseStatus"] = nil
+                copy["self"] = nil
+                copy["organizer"] = nil
+                return copy
+            }
+        }
+        json["start"] = instance["start"]
+        json["end"] = instance["end"]
+        let changes = try patchBody(patch, currentAttendees: json["attendees"] as? [JSON] ?? [])
+        for (key, value) in changes.json {
+            if value is NSNull {
+                json[key] = nil
+            } else if let nested = value as? JSON {
+                // A PATCH clears the other form of a date with a null; an insert has nothing to clear.
+                json[key] = nested.filter { !($0.value is NSNull) }
+            } else {
+                json[key] = value
+            }
+        }
+        // A recurring event's times need a zone name for its rule to be read in.
+        for key in ["start", "end"] {
+            if var time = json[key] as? JSON, time["dateTime"] != nil, time["timeZone"] == nil, let zone = fallbackZone {
+                time["timeZone"] = zone
+                json[key] = time
+            }
+        }
+        if patch.recurrence == .keep { json["recurrence"] = recurrence }
+        var needsConferenceVersion = changes.needsConferenceVersion
+        if patch.conference == nil, hasMeetLink(master) {
+            json["conferenceData"] = conferenceRequestJSON()
+            needsConferenceVersion = true
+        }
+        return Body(json: json, needsConferenceVersion: needsConferenceVersion)
+    }
+}
