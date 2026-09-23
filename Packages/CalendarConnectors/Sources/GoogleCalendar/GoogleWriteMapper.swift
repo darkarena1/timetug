@@ -235,7 +235,9 @@ extension GoogleWriteMapper {
 
     /// The `recurrence` lines with every RRULE cut off just before `split` (`COUNT` and `UNTIL` replaced by an `UNTIL`
     /// that is a date for all-day series and a UTC date-time, one second earlier, for timed ones). Other lines
-    /// (EXDATE, RDATE) are kept. Works on the raw text, so rules outside the authorable subset are fine.
+    /// (EXDATE, RDATE) keep only the dates before `split`: later ones now belong to the new series (see `carriedOver`),
+    /// so the master must not keep them too (a later RDATE would show up twice, and survive a delete). A value that
+    /// cannot be read stays with the master. Works on the raw text, so rules outside the authorable subset are fine.
     static func truncated(_ lines: [String], before split: Date, allDay: Bool, zone: TimeZone?) -> [String] {
         let until: String
         if allDay {
@@ -243,8 +245,11 @@ extension GoogleWriteMapper {
         } else {
             until = RecurrenceRule.untilText(split.addingTimeInterval(-1), allDay: false, zone: nil)
         }
-        return lines.map { line in
-            guard isRRule(line) else { return line }
+        return lines.compactMap { line in
+            guard isRRule(line) else {
+                guard isDateLine(line) else { return line }
+                return dateLine(line, zone: zone ?? TimeZone(identifier: "UTC")!) { $0.map { $0 < split } ?? true }
+            }
             var kept = parts(of: line).filter { !$0.uppercased().hasPrefix("COUNT=") && !$0.uppercased().hasPrefix("UNTIL=") }
             kept.append("UNTIL=" + until)
             return "RRULE:" + kept.joined(separator: ";")
@@ -259,6 +264,7 @@ extension GoogleWriteMapper {
         return nil
     }
 
+    /// Google allows a single RRULE per event, so every RRULE line is the one rule.
     static func replacingCount(_ lines: [String], with count: Int) -> [String] {
         lines.map { line in
             guard isRRule(line) else { return line }
@@ -269,21 +275,29 @@ extension GoogleWriteMapper {
     static func rruleLines(_ lines: [String]) -> [String] { lines.filter(isRRule) }
 
     /// The EXDATE and RDATE lines cut down to the dates at or after `split`, so deleted or added occurrences that
-    /// belong to the new series follow it. A value that cannot be read is kept rather than lost. `zone` reads floating
-    /// times.
+    /// belong to the new series follow it (`truncated` removes the same dates from the master). A line left with no
+    /// values is dropped, and a value that cannot be read stays with the master. `zone` reads floating times.
     static func carriedOver(_ lines: [String], from split: Date, zone: TimeZone) -> [String] {
-        lines.compactMap { line in
-            let name = line.prefix { $0 != ";" && $0 != ":" }.uppercased()
-            guard name == "EXDATE" || name == "RDATE", let colon = line.firstIndex(of: ":") else { return nil }
-            let head = String(line[..<colon])
-            let tzid = head.split(separator: ";").dropFirst().compactMap { param -> String? in
-                param.uppercased().hasPrefix("TZID=") ? String(param.dropFirst("TZID=".count)) : nil
-            }.first
-            let lineZone = tzid.flatMap { TimeZone(identifier: $0) } ?? zone
-            let values = line[line.index(after: colon)...].split(separator: ",").map(String.init)
-            let kept = values.filter { icalInstant($0, zone: lineZone).map { $0 >= split } ?? true }
-            return kept.isEmpty ? nil : head + ":" + kept.joined(separator: ",")
-        }
+        lines.filter(isDateLine).compactMap { line in dateLine(line, zone: zone) { $0.map { $0 >= split } ?? false } }
+    }
+
+    private static func isDateLine(_ line: String) -> Bool {
+        let name = line.prefix { $0 != ";" && $0 != ":" }.uppercased()
+        return (name == "EXDATE" || name == "RDATE") && line.contains(":")
+    }
+
+    /// An EXDATE or RDATE `line` reduced to the values for which `keep` (given the value's instant, nil if unreadable)
+    /// is true; nil when none remain.
+    private static func dateLine(_ line: String, zone: TimeZone, keep: (Date?) -> Bool) -> String? {
+        guard let colon = line.firstIndex(of: ":") else { return nil }
+        let head = String(line[..<colon])
+        let tzid = head.split(separator: ";").dropFirst().compactMap { param -> String? in
+            param.uppercased().hasPrefix("TZID=") ? String(param.dropFirst("TZID=".count)) : nil
+        }.first
+        let lineZone = tzid.flatMap { TimeZone(identifier: $0) } ?? zone
+        let values = line[line.index(after: colon)...].split(separator: ",").map(String.init)
+        let kept = values.filter { keep(icalInstant($0, zone: lineZone)) }
+        return kept.isEmpty ? nil : head + ":" + kept.joined(separator: ",")
     }
 
     /// `yyyyMMdd` (start of that day in `zone`), `yyyyMMdd'T'HHmmss` (in `zone`) or the same with a trailing `Z` (UTC).

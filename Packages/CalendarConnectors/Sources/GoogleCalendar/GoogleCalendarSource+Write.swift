@@ -128,9 +128,10 @@ extension GoogleCalendarSource: WritableCalendarSource {
         }
     }
 
-    private func query(_ notify: NotifyPolicy, conference: Bool = false) -> [URLQueryItem] {
+    private func query(_ notify: NotifyPolicy, conference: Bool = false, attachments: Bool = false) -> [URLQueryItem] {
         var items = [URLQueryItem(name: "sendUpdates", value: GoogleWriteMapper.sendUpdates(notify))]
         if conference { items.append(URLQueryItem(name: "conferenceDataVersion", value: "1")) }
+        if attachments { items.append(URLQueryItem(name: "supportsAttachments", value: "true")) }
         return items
     }
 
@@ -240,47 +241,70 @@ extension GoogleCalendarSource: WritableCalendarSource {
 
     /// Puts the master's original rule back after a failed insert. Runs even when the caller was cancelled (a cancelled
     /// request would otherwise fail at once and leave the series cut off), and is unconditional so it cannot lose to a
-    /// concurrent edit of another field. If it fails too the result is `WriteError.partial`.
-    private func restoreRecurrence(_ calendarID: String, _ masterID: String, _ original: [String]) async throws {
+    /// concurrent edit of another field. If it fails too the result is `WriteError.partial`, which names the insert's error.
+    private func restoreRecurrence(_ calendarID: String, _ masterID: String, _ original: [String], after cause: Error) async throws {
         do {
             try await Task { try await self.patchRecurrence(calendarID, masterID, original, etag: nil, notify: .none) }.value
         } catch {
             throw WriteError.partial(
-                "the series was cut off before this occurrence but the new series could not be created, and restoring the original rule failed")
+                "the series was cut off before this occurrence but the new series could not be created (\(cause)), and restoring the original rule failed (\(error))")
         }
     }
 
-    /// Whether a failed request may nevertheless have been applied: the reply was lost (a 5xx, a broken connection, a
-    /// cancellation) rather than the request refused.
+    /// Whether a failed insert may nevertheless have been applied: the reply was lost (a 5xx, a broken connection, a
+    /// cancellation) rather than the request refused. A 409 counts too: the id is ours alone, so it can only mean an
+    /// earlier attempt of this same POST went through. (The client reports it as a plain invalid response.)
     private static func mightHaveApplied(_ error: Error) -> Bool {
         if error is GoogleAPIError || error is WriteError { return false }
         if let source = error as? SourceError {
             switch source {
             case .server, .network: return true
+            case .invalidResponse(let text): return text == "HTTP 409"
             default: return false
             }
         }
         return true
     }
 
-    /// The event with this id if it exists, else nil (also when it cannot be checked). Runs even when the caller was
-    /// cancelled, because the answer decides whether the master is restored.
-    private func existingEvent(_ calendarID: String, _ eventID: String) async -> Data? {
-        let lookup = Task<Data?, Never> { try? await self.fetchRaw(calendarID, eventID).data }
-        return await lookup.value
+    private enum Lookup: Sendable {
+        case found(Data)
+        /// Definitely not there (404, or already deleted).
+        case absent
+        case failed(any Error)
+    }
+
+    /// Looks an event up by id. Runs even when the caller was cancelled, because the answer decides whether the master
+    /// is restored. Only a definite "not there" is `.absent`; a lookup that itself fails says nothing.
+    private func lookUp(_ calendarID: String, _ eventID: String) async -> Lookup {
+        await Task<Lookup, Never> {
+            do {
+                return .found(try await self.fetchRaw(calendarID, eventID).data)
+            } catch GoogleAPIError.notFound {
+                return .absent
+            } catch WriteError.notFound {
+                return .absent
+            } catch {
+                return .failed(error)
+            }
+        }.value
     }
 
     /// The insert body for the new series. Everything that can fail without changing anything (the occurrence, the
     /// count of earlier occurrences, validating the patch) is done here, before the master is touched.
     private func newSeriesBody(
-        _ ref: EventRef, master: RawEvent, original: [String], split: Date, masterZone: TimeZone, patch: EventPatch,
+        _ ref: EventRef, masterID: String, master: RawEvent, original: [String], split: Date, masterZone: TimeZone, patch: EventPatch,
         calendar: CalendarDescriptor
     ) async throws -> GoogleWriteMapper.Body {
         let instance = try await fetchRaw(ref.calendarID, ref.eventID)
+        // The split rewrites the occurrence's fields from the fetched copy, so judge staleness like any other update.
+        if let version = ref.version, let etag = instance.etag, etag != version {
+            let overlapping = PatchMerge.conflicts(patch: patch, current: try mapped(instance.data, calendar: calendar))
+            if !overlapping.isEmpty { throw WriteError.conflict(fields: overlapping) }
+        }
         var lines = GoogleWriteMapper.rruleLines(original)
         if patch.recurrence == .keep {
             if let total = GoogleWriteMapper.count(in: original) {
-                let prior = try await priorInstances(calendarID: ref.calendarID, masterID: master.json["id"] as? String ?? ref.seriesID ?? "", before: split,
+                let prior = try await priorInstances(calendarID: ref.calendarID, masterID: masterID, before: split,
                                                      zone: calendar.timeZone ?? TimeZone(identifier: "UTC")!)
                 guard total - prior >= 1 else { throw WriteError.invalid("the series has no occurrences left to split off") }
                 lines = GoogleWriteMapper.replacingCount(lines, with: total - prior)
@@ -320,7 +344,7 @@ extension GoogleCalendarSource: WritableCalendarSource {
 
         var newSeries: GoogleWriteMapper.Body?
         if let patch {
-            newSeries = try await newSeriesBody(ref, master: master, original: original, split: split, masterZone: masterZone, patch: patch, calendar: calendar)
+            newSeries = try await newSeriesBody(ref, masterID: masterID, master: master, original: original, split: split, masterZone: masterZone, patch: patch, calendar: calendar)
         }
         try await patchRecurrence(ref.calendarID, masterID, truncated, etag: master.etag, notify: patch == nil ? notify : .none)
         guard let newSeries else { return nil }
@@ -328,19 +352,34 @@ extension GoogleCalendarSource: WritableCalendarSource {
         var json = newSeries.json
         let newID = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()   // base32hex: 0-9 a-v
         json["id"] = newID
+        // Without this Google drops the attachments the master carries (the live smoke test must confirm both this and
+        // the Meet re-request's `conferenceDataVersion`).
+        let insertQuery = query(notify, conference: newSeries.needsConferenceVersion, attachments: json["attachments"] != nil)
         let created: Data
         do {
             created = try await api.send(
                 method: "POST", path: GoogleAPIClient.calendarPath(ref.calendarID, "/events"),
-                query: query(notify, conference: newSeries.needsConferenceVersion), body: try GoogleWriteMapper.data(json), mode: .write)
+                query: insertQuery, body: try GoogleWriteMapper.data(json), mode: .write)
         } catch {
-            if Self.mightHaveApplied(error),
-               let found = await existingEvent(ref.calendarID, newID) {
-                return try mapped(found, calendar: calendar)
+            if Self.mightHaveApplied(error) {
+                switch await lookUp(ref.calendarID, newID) {
+                case .found(let data): return try mapped(data, calendar: calendar)
+                case .failed(let lookupError):
+                    // Neither restoring (would duplicate the series if the insert applied) nor leaving it is safe to do blindly.
+                    throw WriteError.partial(
+                        "the series was cut off before this occurrence and the outcome of creating the new series is unknown (insert: \(error); lookup: \(lookupError)); check the calendar")
+                case .absent: break
+                }
             }
-            try await restoreRecurrence(ref.calendarID, masterID, original)
+            try await restoreRecurrence(ref.calendarID, masterID, original, after: error)
             throw error
         }
-        return try mapped(created, calendar: calendar)
+        do {
+            return try mapped(created, calendar: calendar)
+        } catch {
+            // The insert applied; never undo it. If the reply cannot be read, try the copy stored under our id.
+            if case .found(let data) = await lookUp(ref.calendarID, newID), let event = try? mapped(data, calendar: calendar) { return event }
+            throw error
+        }
     }
 }
