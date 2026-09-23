@@ -17,17 +17,17 @@ final class StatusItemController: NSObject {
     /// The display of the last menu bar click (fallbacks: the item's own screen, then the main screen).
     var clickedScreen: NSScreen? { lastClickedScreen ?? item.button?.window?.screen ?? NSScreen.main }
 
+    /// The brand accent used for the "soon" icon; matches `SettingsPane.tugRules`'s icon color.
+    private static let soonColor = NSColor(red: 1.0, green: 0.62, blue: 0.10, alpha: 1)
+
     init(popoverContent: NSViewController, onOpenSettings: @escaping () -> Void,
          onCheckForUpdates: @escaping () -> Void, onOpenAbout: @escaping () -> Void) {
         self.onOpenSettings = onOpenSettings
         self.onCheckForUpdates = onCheckForUpdates
         self.onOpenAbout = onOpenAbout
-        let fallback = NSImage(systemSymbolName: "alarm", accessibilityDescription: "TimeTug")
-        idleImage = NSImage(named: "MenuBarTemplate") ?? fallback
+        idleImage = NSImage(systemSymbolName: "clock", accessibilityDescription: "TimeTug")
         idleImage?.isTemplate = true            // the OS tints it for light/dark menu bars
-        idleImage?.accessibilityDescription = "TimeTug"
-        soonImage = NSImage(named: "MenuBarColor") ?? idleImage
-        if soonImage !== idleImage { soonImage?.isTemplate = false }
+        soonImage = Self.tinted(symbolName: "clock.fill", color: Self.soonColor) ?? idleImage
         soonImage?.accessibilityDescription = "TimeTug: meeting soon"
         super.init()
         popover.behavior = .transient
@@ -105,4 +105,12 @@ final class StatusItemController: NSObject {
     @objc private func checkForUpdates() { onCheckForUpdates() }
     @objc private func openAbout() { onOpenAbout() }
     @objc private func openSettings() { onOpenSettings() }
+
+    /// An SF Symbol rendered in a fixed color rather than as an OS-tinted template.
+    private static func tinted(symbolName: String, color: NSColor) -> NSImage? {
+        guard let base = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil) else { return nil }
+        let image = base.withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [color]))
+        image?.isTemplate = false
+        return image
+    }
 }

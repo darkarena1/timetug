@@ -1,7 +1,7 @@
 import Foundation
 import TimeTugCore
 
-/// Which menu bar icon to show: the template icon, or the color puppy while a tug-worthy meeting is near.
+/// Which menu bar icon to show: the template clock, or the color clock while a tug-worthy meeting is near.
 enum MenuBarIconState: Equatable {
     case idle
     case soon

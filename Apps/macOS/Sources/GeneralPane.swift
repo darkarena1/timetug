@@ -18,16 +18,36 @@ struct GeneralPane: View {
                 .navigationDestination(for: GeneralDestination.self) { destination in
                     switch destination {
                     case .about:
-                        Form { AboutPaneContent() }
-                            .formStyle(.grouped)
-                            .navigationTitle("About")
+                        Form {
+                            backToGeneral
+                            AboutPaneContent()
+                        }
+                        .formStyle(.grouped)
+                        .navigationTitle("About")
                     case .softwareUpdate:
-                        Form { UpdatesSection(updates: updates, navigation: navigation) }
-                            .formStyle(.grouped)
-                            .navigationTitle("Software Update")
+                        Form {
+                            backToGeneral
+                            UpdatesSection(updates: updates, navigation: navigation)
+                        }
+                        .formStyle(.grouped)
+                        .navigationTitle("Software Update")
                     }
                 }
         }
+    }
+
+    /// The Settings window has no NSToolbar (it's a hand-built NSWindow, not a SwiftUI `Settings` scene),
+    /// so `NavigationStack`'s automatic back button — which renders as a toolbar item — never appears.
+    /// This is a plain in-content button instead, which renders regardless.
+    private var backToGeneral: some View {
+        Button {
+            if !navigation.generalPath.isEmpty { navigation.generalPath.removeLast() }
+        } label: {
+            Label("General", systemImage: "chevron.left")
+                .font(.callout.weight(.medium))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.blue)
     }
 
     private var hub: some View {
@@ -57,26 +77,32 @@ struct GeneralPane: View {
                 }
             }
             Section("App") {
-                Toggle(SettingsText.launchAtLogin, isOn: $launchAtLogin)
-                    .settingsHighlight("launch-at-login", navigation: navigation)
-                    .onChange(of: launchAtLogin) { _, enabled in
-                        if isReverting {
-                            isReverting = false
-                            return
-                        }
-                        do {
-                            if enabled { try SMAppService.mainApp.register() }
-                            else { try SMAppService.mainApp.unregister() }
-                            launchError = nil
-                        } catch {
-                            launchError = "Couldn't change launch at login: \(error.localizedDescription)"
-                            let actual = SMAppService.mainApp.status == .enabled
-                            if actual != launchAtLogin {
-                                isReverting = true
-                                launchAtLogin = actual
-                            }
+                Toggle(isOn: $launchAtLogin) {
+                    Label {
+                        Text(SettingsText.launchAtLogin)
+                    } icon: {
+                        SettingsRowIcon(systemImage: "power", color: .gray)
+                    }
+                }
+                .settingsHighlight("launch-at-login", navigation: navigation)
+                .onChange(of: launchAtLogin) { _, enabled in
+                    if isReverting {
+                        isReverting = false
+                        return
+                    }
+                    do {
+                        if enabled { try SMAppService.mainApp.register() }
+                        else { try SMAppService.mainApp.unregister() }
+                        launchError = nil
+                    } catch {
+                        launchError = "Couldn't change launch at login: \(error.localizedDescription)"
+                        let actual = SMAppService.mainApp.status == .enabled
+                        if actual != launchAtLogin {
+                            isReverting = true
+                            launchAtLogin = actual
                         }
                     }
+                }
                 if let launchError {
                     Text(launchError)
                         .font(.callout)
@@ -85,8 +111,11 @@ struct GeneralPane: View {
             }
             Section("Shortcut") {
                 VStack(alignment: .leading, spacing: 4) {
-                    KeyboardShortcuts.Recorder(SettingsText.popupShortcut, name: .togglePopup)
-                        .settingsHighlight("popup-shortcut", navigation: navigation)
+                    HStack(spacing: 11) {
+                        SettingsRowIcon(systemImage: "keyboard", color: .orange)
+                        KeyboardShortcuts.Recorder(SettingsText.popupShortcut, name: .togglePopup)
+                    }
+                    .settingsHighlight("popup-shortcut", navigation: navigation)
                     Text("Press a shortcut to show or hide the popup from anywhere. Click ✕ to clear it.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)

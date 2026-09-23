@@ -61,8 +61,9 @@ struct AppearancePane: View {
     }
 }
 
-/// A selectable miniature menu bar preview: the real `MenuBarTemplate` glyph plus sample text for
-/// `mode`, so people can see what each Menu Bar Text option actually looks like before picking it.
+/// A selectable miniature menu bar preview: the `clock` SF Symbol (as `StatusItemController` draws
+/// it) plus sample text for `mode`, so people can see what each Menu Bar Text option actually looks
+/// like before picking it.
 private struct MenuBarModeTile: View {
     let mode: MenuBarDisplayMode
     let isSelected: Bool
@@ -92,10 +93,9 @@ private struct MenuBarModeTile: View {
 
     @ViewBuilder private var preview: some View {
         HStack(spacing: 5) {
-            Image("MenuBarTemplate")
-                .renderingMode(.template)
+            Image(systemName: "clock")
                 .resizable()
-                .frame(width: 16, height: 16)
+                .frame(width: 14, height: 14)
                 .foregroundStyle(.white)
             if let text = sampleText {
                 Text(text)
@@ -108,11 +108,12 @@ private struct MenuBarModeTile: View {
         .padding(.horizontal, 8)
     }
 
-    /// Illustrative only — not a real event.
+    /// Illustrative only — not a real event. Matches `TimeFormatting.statusTitle`'s real format:
+    /// next-meeting combines title and remaining time; countdown shows the remaining time alone.
     private var sampleText: String? {
         switch mode {
         case .iconOnly: nil
-        case .nextMeeting: "Team Sync"
+        case .nextMeeting: "Team Sync · 12m"
         case .countdown: "12m"
         }
     }
@@ -148,14 +149,11 @@ private struct PopupCardStyleTile: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
+    /// Uses the real `CardSurface` modifier — the same glass/frosted/solid materials the popup itself
+    /// renders — rather than an approximation, so the picker shows exactly what each style looks like.
     @ViewBuilder private var preview: some View {
         ZStack(alignment: .leading) {
-            switch style {
-            case .glass, .frosted:
-                Rectangle().fill(.ultraThinMaterial)
-            case .solid:
-                Rectangle().fill(palette.cardFill)
-            }
+            Color.clear.modifier(CardSurface(style: style, isNext: false, palette: palette, strongBorder: false))
             Capsule().fill(palette.blue).frame(width: 3).padding(.vertical, 10).padding(.leading, 8)
             Text("Team Sync · 10:00 AM")
                 .font(.system(size: 9, weight: .medium))
