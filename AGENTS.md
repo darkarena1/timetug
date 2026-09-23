@@ -39,7 +39,7 @@ TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
 ## Gotchas
 - App and EventKitSource use Swift 5 language mode; Core uses Swift 6.
 - Generated `*.xcodeproj` is git-ignored; regenerate after editing `project.yml`.
-- The app depends on the remote package KeyboardShortcuts, pinned exactly in `Apps/macOS/project.yml`; regenerate the project after changing it (first build needs network).
+- The app depends on the remote package KeyboardShortcuts, pinned exactly in `Apps/macOS/project.yml`; regenerate the project after changing it (first build needs network). Keep it at 3.1.0 or newer: 2.x silently drops modifier key combos in the Settings recorder on macOS 27.
 - Calendar access needs the calendars entitlement and `NSCalendarsFullAccessUsageDescription`.
 - Takeover decisions are logged (titles redacted). Read them with ``log show --predicate 'subsystem == "com.timetug.app" AND category == "takeover"' --last 1h``. The persisted ledger is `~/Library/Application Support/TimeTug/takeover-ledger.json`; delete it to reset "already shown" memory.
 - Duplicate detection: rules run always; on-device inference is opt-in (Settings > Calendars, Beta), default off. Lessons and verdicts persist at `~/Library/Application Support/TimeTug/dedup-state.json` (delete to reset).
