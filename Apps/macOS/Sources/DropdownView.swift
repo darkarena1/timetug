@@ -460,7 +460,7 @@ struct CardSurface: ViewModifier {
 }
 
 /// Lets neighbouring glass cards blend (macOS 26+); a plain pass-through otherwise.
-private struct CardGroup<Content: View>: View {
+struct CardGroup<Content: View>: View {
     let style: PopupCardStyle
     @ViewBuilder let content: Content
 
