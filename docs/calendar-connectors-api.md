@@ -335,8 +335,9 @@ public protocol WritableCalendarSource: CalendarSource {
 **Three levels of "can I write?"**
 1. Conformance to `WritableCalendarSource` (checked by callers with `as?`). Invariant: `capabilities.canWrite` is true
    exactly when the source conforms; a conformance test enforces it.
-2. `capabilities` gains `canWriteRecurrence`, `controlsNotifications` and `recurrenceScopes: Set<RecurrenceScope>`
-   alongside the existing `canEditAttendees` and `canRespondToInvite`.
+2. `capabilities` gains `writableFields: Set<EventField>` (what create/update can write, including `.recurrence`),
+   `controlsNotifications` and `recurrenceScopes: Set<RecurrenceScope>`, alongside the existing `canEditAttendees`
+   (true exactly when `.attendees` is writable) and `canRespondToInvite`.
 3. `CalendarDescriptor.accessRole` per calendar.
 
 **Unsupported means an error, never a partial write.** A write that touches something the connector cannot represent
@@ -348,10 +349,11 @@ public enum RecurrenceScope: Sendable { case thisInstance, thisAndFollowing, all
 public enum EventField: Sendable, Hashable { case title, notes, location, timing, availability, visibility, reminders, attendees, recurrence, conference }
 public enum WriteError: Error, Sendable, Equatable {
     case unsupported(fields: Set<EventField>), conflict(fields: Set<EventField>), notFound, forbidden(String?), invalid(String)
+    case partial(String)   // a multi-step write stopped half way (Google `.thisAndFollowing`)
 }   // forbidden = read-only calendar or no permission on the event; auth, network, rate-limit and 5xx stay SourceError
 public struct EventRef: Hashable, Sendable {
     var calendarID: String; var eventID: String
-    var version: String?; var seriesID: String?; var instanceStart: Date?
+    var version: String?; var seriesID: String?; var originalStart: Date?   // the occurrence's slot in its series
     init(_ event: CalendarEvent)
 }
 ```
@@ -364,9 +366,11 @@ account without a host wrapper. `CalendarEvent.id` is unchanged.
   visibility, reminders (`nil` = calendar defaults, empty = none), attendee drafts (`email`, `name?`, `role`),
   conference request (`none` or `generate`), optional `RecurrenceRule`. `EventDraft(copying: event, for: capabilities)`
   carries over what the target can represent and drops the rest (best-effort copy across calendars or accounts).
-- `EventPatch` (update): each field is `FieldUpdate<T>` = `.keep` (default), `.set(value)` or `.clear`. Time is one unit
-  (`EventTiming`: start, end, zone, all-day). Attendees are a delta (`AttendeeChanges(add:remove:)`), never a replacement
-  list. `EventPatch(from: original, to: edited)` computes the minimal patch from two events and ignores provider-owned
+- `EventPatch` (update): optional fields where `nil` means keep (`title`, `timing`, `availability`, `visibility`,
+  `attendees`, `conference`) and `FieldUpdate<T>` = `.keep` (default), `.set(value)` or `.clear` where clearing is
+  meaningful (`notes`, `location`, `reminders`, `recurrence`). Time is one unit (`EventTiming`: start, end, zone,
+  all-day; validated on write). Attendees are a delta (`AttendeeChanges(add:remove:)`), never a replacement list. A patch
+  built with `EventPatch(from:to:)` remembers its `base` (the original event) so conflicts can be judged per field. `EventPatch(from: original, to: edited)` computes the minimal patch from two events and ignores provider-owned
   fields (`id`, `uid`, `organizer`, `status`, `url`, `seriesID`, `myResponse`, attendee responses).
 - `EventEdit { let original: CalendarEvent; var event: CalendarEvent }` with `patch` and `hasChanges` for callers that
   want tracked edits.
@@ -375,10 +379,11 @@ account without a host wrapper. `CalendarEvent.id` is unchanged.
   RFC 5545 subset throws `WriteError.unsupported`. EXDATE and RDATE are not authorable; removing one occurrence is a
   `delete` with `.thisInstance`.
 
-**Conflicts.** A write sends `If-Match: original.version` where the provider supports it (Google etag) or compares
+**Conflicts.** A write sends `If-Match: ref.version` where the provider supports it (Google etag) or compares
 `lastModifiedDate` (EventKit). On a stale version the shared merge helper fetches the current event and compares only
-the fields the patch touches against the original: if none differ, the patch is re-applied once on the fresh version;
-otherwise it throws `WriteError.conflict(fields:)`.
+the fields the patch touches against the patch's `base`: if none differ, the patch is re-applied on the fresh version
+(re-judged if it goes stale again, at most three attempts); otherwise it throws `WriteError.conflict(fields:)`. A patch
+without a `base` conflicts on any stale version.
 
 **Provider mapping.**
 
@@ -392,8 +397,8 @@ otherwise it throws `WriteError.conflict(fields:)`.
 | `.allInSeries` | master id (its etag differs from the instance's, so the instance `version` cannot lock it) | first occurrence with `.futureEvents` (to be verified) |
 | `.thisAndFollowing` | delete truncates the master's RRULE `UNTIL`; update truncates then inserts a new series (two calls, best-effort rollback) | `.futureEvents` |
 
-EventKit's declared capabilities: writes yes, recurrence yes, all three scopes, attendee edits no, RSVP no, notification
-control no (a `NotifyPolicy` of `.none` or `.externalOnly` throws `.unsupported` when the event has other attendees).
+EventKit's declared capabilities: writes yes, `writableFields` everything except attendees, visibility and conference, all
+three scopes, RSVP no, notification control no (a `NotifyPolicy` of `.none` or `.externalOnly` throws `.unsupported` when the event has other attendees).
 
 **Out of scope for Phase 3:** TimeTug write UI, cross-calendar link orchestration (kept in TimeTug's local store, not in
 provider metadata; a `metadata` field and capability can be added later without breaking this API), Microsoft, CalDAV.
@@ -402,7 +407,7 @@ provider metadata; a `metadata` field and capability can be added later without 
 
 - **EventKit event ids.** The read model promises a per-instance `eventID`, but EventKit's `eventIdentifier` is, to our
   knowledge, shared by every occurrence of a series (TimeTug's wrapper id already appends the start time for this
-  reason). To verify in the Phase 3 plan; writes need `EventRef.instanceStart` either way.
+  reason). To verify in the Phase 3 plan; writes identify the occurrence by `EventRef.originalStart` either way. The EventKit reader also does not yet set `seriesID`, `originalStart` or `version`; Phase 3 adds them.
 - **Reminder defaults.** A provider's "use default reminders" and "no reminders" both read as an empty list.
 - **Google OAuth client in release builds.** The client id and secret are injected from git-ignored configuration; CI
   injection for release builds is a separate follow-up.
