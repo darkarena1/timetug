@@ -48,13 +48,13 @@ public struct RecurrenceRule: Hashable, Sendable {
             guard frequency == .monthly || frequency == .yearly else {
                 throw WriteError.invalid("an ordinal weekday needs a monthly or yearly rule")
             }
-            guard ordinal != 0, abs(ordinal) <= 5 else { throw WriteError.invalid("weekday ordinal must be 1...5 or -5...-1") }
+            guard (1...5).contains(ordinal) || (-5 ... -1).contains(ordinal) else { throw WriteError.invalid("weekday ordinal must be 1...5 or -5...-1") }
         }
         if !monthDays.isEmpty {
             guard frequency == .monthly || frequency == .yearly else {
                 throw WriteError.invalid("month days apply to monthly and yearly rules")
             }
-            guard monthDays.allSatisfy({ $0 != 0 && abs($0) <= 31 }) else { throw WriteError.invalid("month days must be 1...31 or -31...-1") }
+            guard monthDays.allSatisfy({ (1...31).contains($0) || (-31 ... -1).contains($0) }) else { throw WriteError.invalid("month days must be 1...31 or -31...-1") }
         }
         if !months.isEmpty {
             guard frequency == .yearly else { throw WriteError.invalid("months apply to yearly rules only") }
@@ -73,7 +73,9 @@ public struct RecurrenceRule: Hashable, Sendable {
         for piece in body.split(separator: ";") {
             let pair = piece.split(separator: "=", maxSplits: 1).map(String.init)
             guard pair.count == 2, !pair[1].isEmpty else { throw WriteError.invalid("malformed RRULE part: \(piece)") }
-            parts[pair[0].uppercased()] = pair[1]
+            let key = pair[0].uppercased()
+            guard parts[key] == nil else { throw WriteError.invalid("duplicate RRULE part: \(key)") }
+            parts[key] = pair[1]
         }
         let supported: Set<String> = ["FREQ", "INTERVAL", "COUNT", "UNTIL", "BYDAY", "BYMONTHDAY", "BYMONTH", "WKST"]
         guard Set(parts.keys).isSubset(of: supported) else { throw WriteError.unsupported(fields: [.recurrence]) }
@@ -96,7 +98,7 @@ public struct RecurrenceRule: Hashable, Sendable {
 
         self.init(
             frequency: frequency, interval: interval,
-            weekdays: try parts["BYDAY"].map { try $0.split(separator: ",").map { try Self.parseWeekday(String($0)) } } ?? [],
+            weekdays: try parts["BYDAY"].map { try $0.split(separator: ",", omittingEmptySubsequences: false).map { try Self.parseWeekday(String($0)) } } ?? [],
             monthDays: try parts["BYMONTHDAY"].map { try Self.parseInts($0, name: "BYMONTHDAY") } ?? [],
             months: try parts["BYMONTH"].map { try Self.parseInts($0, name: "BYMONTH") } ?? [],
             end: end)
@@ -104,7 +106,7 @@ public struct RecurrenceRule: Hashable, Sendable {
     }
 
     private static func parseInts(_ text: String, name: String) throws -> [Int] {
-        try text.split(separator: ",").map {
+        try text.split(separator: ",", omittingEmptySubsequences: false).map {
             guard let value = Int($0) else { throw WriteError.invalid("bad \(name) value: \($0)") }
             return value
         }
@@ -124,24 +126,32 @@ public struct RecurrenceRule: Hashable, Sendable {
     private static let utc = TimeZone(identifier: "UTC")!
 
     private static func parseUntil(_ text: String, zone: TimeZone?) throws -> Date {
-        let upper = text.uppercased()
-        var calendar = Calendar(identifier: .gregorian)
-        func number(_ range: Range<Int>) -> Int? {
-            let chars = Array(upper)
-            return Int(String(chars[range]))
+        let chars = Array(text.uppercased())
+        let bad = WriteError.invalid("bad UNTIL: \(text)")
+        func isDigit(_ c: Character) -> Bool { c.isASCII && c.isNumber }
+        /// The ASCII-digit value of `chars[range]`.
+        func number(_ range: Range<Int>) throws -> Int {
+            guard chars[range].allSatisfy(isDigit), let value = Int(String(chars[range])) else { throw bad }
+            return value
         }
-        if upper.count == 8, upper.allSatisfy(\.isNumber) {
+        var calendar = Calendar(identifier: .gregorian)
+        if chars.count == 8 {
             calendar.timeZone = zone ?? utc
-            guard let date = calendar.date(from: DateComponents(year: number(0..<4), month: number(4..<6), day: number(6..<8))) else {
-                throw WriteError.invalid("bad UNTIL: \(text)")
-            }
+            let (year, month, day) = (try number(0..<4), try number(4..<6), try number(6..<8))
+            guard let date = calendar.date(from: DateComponents(year: year, month: month, day: day)) else { throw bad }
+            let back = calendar.dateComponents([.year, .month, .day], from: date)
+            guard back.year == year, back.month == month, back.day == day else { throw bad }
             return date
         }
-        if upper.count == 16, upper.hasSuffix("Z"), Array(upper)[8] == "T" {
+        if chars.count == 16, chars[8] == "T", chars[15] == "Z" {
             calendar.timeZone = utc
-            let parts = DateComponents(year: number(0..<4), month: number(4..<6), day: number(6..<8),
-                                       hour: number(9..<11), minute: number(11..<13), second: number(13..<15))
-            guard let date = calendar.date(from: parts) else { throw WriteError.invalid("bad UNTIL: \(text)") }
+            let (year, month, day) = (try number(0..<4), try number(4..<6), try number(6..<8))
+            let (hour, minute, second) = (try number(9..<11), try number(11..<13), try number(13..<15))
+            let parts = DateComponents(year: year, month: month, day: day, hour: hour, minute: minute, second: second)
+            guard let date = calendar.date(from: parts) else { throw bad }
+            let back = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+            guard back.year == year, back.month == month, back.day == day,
+                  back.hour == hour, back.minute == minute, back.second == second else { throw bad }
             return date
         }
         throw WriteError.unsupported(fields: [.recurrence])   // a floating date-time has no zone to resolve against
@@ -149,7 +159,7 @@ public struct RecurrenceRule: Hashable, Sendable {
 
     // MARK: Rendering
 
-    /// The RRULE value without the `RRULE:` prefix, in a fixed order.
+    /// The RRULE value without the `RRULE:` prefix, in a fixed order. Callers must `validate()` first; this does not.
     public func rruleString(allDay: Bool, in zone: TimeZone?) -> String {
         var parts = ["FREQ=\(frequency.rawValue)"]
         if interval > 1 { parts.append("INTERVAL=\(interval)") }
