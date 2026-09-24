@@ -479,10 +479,13 @@ failed save leaves the in-memory event edited, discards it with `rollback()`.
 **Known limitations of Google's `.thisAndFollowing` (a split is a truncation plus a new series, not a native operation).**
 The new series starts at the occurrence's original slot with the master's length, so a moved occurrence does not move
 the following ones; a patch that sets `timing` applies its time to the new series instead. Beyond that:
+- Notifications: the truncation, the insert and any restore of the master's rule all carry the caller's `NotifyPolicy`, so on
+  an update guests may receive two messages (the cut and the new series). External iTIP guests would otherwise keep the
+  old series and also get the new one. A caller who wants silence passes `.none`.
 - If the split occurrence was moved and the patch sets no `timing`, it snaps back to its original slot in the new series,
   and its old exception may linger next to it.
 - If the truncating `PATCH` fails in a way that may have been applied (a 5xx, a broken connection, a cancellation) on an
-  update, the connector restores the master's original rule (unconditionally, `sendUpdates=none`, even if the caller was
+  update, the connector restores the master's original rule (unconditionally, with the caller's `sendUpdates` policy, even if the caller was
   cancelled) and rethrows the original error, so a retry is safe; if the restore fails too the result is
   `WriteError.partial` naming both errors. A definite failure (412 as `.conflict([.recurrence])`, 400, 403, 404, auth or rate
   limit) is not restored. A delete keeps the plain error: the truncation is the operation and repeating it is harmless.
@@ -517,7 +520,6 @@ provider metadata; a `metadata` field and capability can be added later without 
   attachments, the Meet re-request on a new series, and the `COUNT` arithmetic (assumes `events.instances?showDeleted=true`
   includes EXDATE'd occurrences) are checked only against the fake transport until the Google smoke test confirms them.
   The same goes for how a split treats exceptions after the split point (see the known limitations in part 10).
-  Whether the truncation of the old series should notify guests on update is an open decision (spec, Risks).
 - **Reminder defaults.** A provider's "use default reminders" and "no reminders" both read as an empty list.
 - **Google OAuth client in release builds.** The client id and secret are injected from git-ignored configuration; CI
   injection for release builds is a separate follow-up.
