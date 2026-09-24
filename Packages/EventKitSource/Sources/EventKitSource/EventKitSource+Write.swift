@@ -58,9 +58,10 @@ extension EventKitSource: WritableCalendarSource {
                 self.apply(patch, to: current.event)
                 do { try self.save(current.event, span: current.span) }
                 catch {
-                    // The in-memory event already carries the edit; reload it so a failed save leaves nothing
-                    // pending on the (possibly shared) store object. UNSURE: `refresh()` is the documented reload.
-                    _ = current.event.refresh()
+                    // The in-memory event already carries the edit; discard it so a failed save leaves nothing
+                    // pending on the (possibly shared) store object. `rollback()` unloads the dirty state, whereas
+                    // `refresh()` keeps unsaved edits (it only unloads properties that have not been modified).
+                    current.event.rollback()
                     throw error
                 }
                 return .done(self.map(self.reload(current.event, isSeries: ref.seriesID != nil)))

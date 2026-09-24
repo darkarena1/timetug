@@ -55,7 +55,12 @@ import Testing
         for (index, event) in list.enumerated() {
             print("LIVE after allInSeries \(index): eventIdentifier=\(event.eventID) notes=\(event.notes ?? "nil")")
         }
-        #expect(list.filter { $0.seriesID == seriesOfLast }.allSatisfy { $0.notes == "all" })
+        // Not vacuous: the series list[3] belongs to still has several occurrences, all carry the note, and an
+        // occurrence that a split moved into another series was left alone.
+        let sameSeries = list.filter { $0.seriesID == seriesOfLast }
+        try #require(sameSeries.count >= 2, "the series of the last occurrence should still have at least two occurrences")
+        #expect(sameSeries.allSatisfy { $0.notes == "all" })
+        #expect(list.filter { $0.seriesID != seriesOfLast }.allSatisfy { $0.notes == nil })
 
         // A series-wide time change from a later occurrence would move the whole series to that occurrence's date.
         do {
