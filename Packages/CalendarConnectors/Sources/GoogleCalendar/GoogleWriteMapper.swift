@@ -42,10 +42,11 @@ enum GoogleWriteMapper {
     }
 
     /// The zone name Google can resolve. A fixed-offset zone (`GMT+0500`) is not an IANA name, so it yields nil; a
-    /// timed event still carries its offset in `dateTime`.
+    /// timed event still carries its offset in `dateTime`. Darwin names the UTC zone "GMT" and Linux "UTC"; the wire
+    /// format is "UTC" on both.
     private static func zoneName(_ zone: TimeZone?) -> String? {
         guard let identifier = zone?.identifier, !(identifier.hasPrefix("GMT") && identifier.count > 3) else { return nil }
-        return identifier
+        return identifier == "GMT" ? "UTC" : identifier
     }
 
     /// Google cannot store times outside years 1 to 9999; an out-of-range date would render as a malformed string.

@@ -12,7 +12,7 @@ private func timed(_ zone: TimeZone? = utc) -> EventTiming {
 private func dict(_ any: Any?) -> [String: Any] { any as? [String: Any] ?? [:] }
 private func same(_ a: Any, _ b: Any) -> Bool { (a as AnyObject).isEqual(b) }
 
-// Foundation reports the "UTC" zone's identifier as "GMT" (a valid IANA name), so compare with `utc.identifier`.
+// Foundation on Darwin reports the "UTC" zone's identifier as "GMT" while Linux says "UTC"; the wire format is always "UTC".
 @Test func createBodyForATimedEvent() throws {
     let draft = EventDraft(
         title: "Sync", timing: timed(), notes: "n", location: "Room", availability: .free, visibility: .privateEvent,
@@ -21,7 +21,7 @@ private func same(_ a: Any, _ b: Any) -> Bool { (a as AnyObject).isEqual(b) }
     let body = try GoogleWriteMapper.createBody(draft)
     let json = body.json
     #expect(json["summary"] as? String == "Sync" && json["description"] as? String == "n" && json["location"] as? String == "Room")
-    #expect(dict(json["start"])["dateTime"] as? String == "2026-09-21T10:00:00Z" && dict(json["start"])["timeZone"] as? String == utc.identifier)
+    #expect(dict(json["start"])["dateTime"] as? String == "2026-09-21T10:00:00Z" && dict(json["start"])["timeZone"] as? String == "UTC")
     #expect(dict(json["end"])["dateTime"] as? String == "2026-09-21T10:30:00Z")
     #expect(json["transparency"] as? String == "transparent" && json["visibility"] as? String == "private")
     #expect(same(json["reminders"]!, ["useDefault": false, "overrides": [["method": "popup", "minutes": 10]]] as NSDictionary))
@@ -177,4 +177,15 @@ private func same(_ a: Any, _ b: Any) -> Bool { (a as AnyObject).isEqual(b) }
     changes.remove = ["CY@X.com"]
     let merged = GoogleWriteMapper.mergeAttendees(current: [["email": "cy@x.com"], ["email": "Dee@x.com"]], changes: changes)
     #expect(merged.map { $0["email"] as? String } == ["Dee@x.com"])
+}
+
+@Test func aGmtOrUtcZoneIsSentAsUtcOnEveryPlatform() throws {
+    for name in ["UTC", "GMT"] {
+        let zone = try #require(TimeZone(identifier: name))
+        let json = GoogleWriteMapper.timeJSON(timed(zone))
+        #expect(json.start["timeZone"] as? String == "UTC" && json.end["timeZone"] as? String == "UTC")
+    }
+    // The same zone gates and renders a recurrence, so a series on a GMT zone still gets its rule.
+    let draft = EventDraft(title: "Daily", timing: timed(try #require(TimeZone(identifier: "GMT"))), recurrence: RecurrenceRule(frequency: .daily))
+    #expect(try GoogleWriteMapper.createBody(draft).json["recurrence"] != nil)
 }
