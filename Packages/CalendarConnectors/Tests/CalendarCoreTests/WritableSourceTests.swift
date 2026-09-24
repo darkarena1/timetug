@@ -146,7 +146,10 @@ private func draft(_ title: String = "Sync") -> EventDraft {
 
 /// Forwards to a fake and lets a test break one behaviour.
 private final class BrokenSource: WritableCalendarSource, @unchecked Sendable {
-    enum Flaw { case ignoresTitleChange, throwsOnUpdate, deleteKeepsEvent, silentlyAcceptsAttendees, canWriteFalse }
+    enum Flaw {
+        case ignoresTitleChange, throwsOnUpdate, deleteKeepsEvent, silentlyAcceptsAttendees, canWriteFalse
+        case emptyPatchBumpsVersion, titleUpdateShiftsEnd, titleUpdateFlipsAllDay, deleteAlwaysFails
+    }
     let inner: FakeWritableSource
     let flaw: Flaw
     init(_ flaw: Flaw, writableFields: Set<EventField> = [.title, .location, .timing]) {
@@ -172,11 +175,24 @@ private final class BrokenSource: WritableCalendarSource, @unchecked Sendable {
         case .throwsOnUpdate: throw WriteError.forbidden("no")
         case .silentlyAcceptsAttendees where patch.attendees != nil:
             return try await inner.update(ref, EventPatch(), scope: scope, notify: notify)
+        case .emptyPatchBumpsVersion where patch.isEmpty:
+            var event = try await inner.update(ref, patch, scope: scope, notify: notify)
+            event.version = "bumped-by-an-empty-patch"
+            return event
+        case .titleUpdateShiftsEnd where patch.title != nil:
+            var event = try await inner.update(ref, patch, scope: scope, notify: notify)
+            event.end = event.end.addingTimeInterval(60)
+            return event
+        case .titleUpdateFlipsAllDay where patch.title != nil:
+            var event = try await inner.update(ref, patch, scope: scope, notify: notify)
+            event.isAllDay = true
+            return event
         default: return try await inner.update(ref, patch, scope: scope, notify: notify)
         }
     }
     func delete(_ ref: EventRef, scope: RecurrenceScope, notify: NotifyPolicy) async throws {
         if flaw == .deleteKeepsEvent { return }
+        if flaw == .deleteAlwaysFails { throw WriteError.forbidden("no delete") }
         try await inner.delete(ref, scope: scope, notify: notify)
     }
     func respond(to ref: EventRef, _ response: ResponseStatus, scope: RecurrenceScope, notify: NotifyPolicy) async throws -> CalendarEvent {
@@ -184,11 +200,26 @@ private final class BrokenSource: WritableCalendarSource, @unchecked Sendable {
     }
 }
 
-@Test(arguments: [BrokenSource.Flaw.ignoresTitleChange, .throwsOnUpdate, .deleteKeepsEvent, .silentlyAcceptsAttendees, .canWriteFalse])
+@Test(arguments: [BrokenSource.Flaw.ignoresTitleChange, .throwsOnUpdate, .deleteKeepsEvent, .silentlyAcceptsAttendees, .canWriteFalse,
+            .emptyPatchBumpsVersion, .titleUpdateShiftsEnd, .titleUpdateFlipsAllDay, .deleteAlwaysFails])
 private func theConformanceChecksReportBrokenSources(flaw: BrokenSource.Flaw) async {
     let source = BrokenSource(flaw)
     let found = await WritableSourceConformance.violations(of: source, calendarID: "cal", window: window)
     #expect(!found.isEmpty, "expected a violation for \(flaw)")
+}
+
+@Test func theConformanceChecksNameTheFlawTheyFound() async {
+    func found(_ flaw: BrokenSource.Flaw) async -> [String] {
+        await WritableSourceConformance.violations(of: BrokenSource(flaw), calendarID: "cal", window: window)
+    }
+    #expect(await found(.emptyPatchBumpsVersion).contains("an empty patch changed the version"))
+    #expect(await found(.titleUpdateShiftsEnd).contains("update changed a field the patch did not touch (timing)"))
+    #expect(await found(.titleUpdateFlipsAllDay).contains("update changed a field the patch did not touch (timing)"))
+}
+
+@Test func theConformanceChecksReportACleanupThatFails() async {
+    let found = await WritableSourceConformance.violations(of: BrokenSource(.deleteAlwaysFails), calendarID: "cal", window: window)
+    #expect(found.contains { $0.hasPrefix("cleanup delete failed") }, "\(found)")
 }
 
 @Test func theConformanceChecksLeaveNothingBehindWhenAStepFails() async throws {

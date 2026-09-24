@@ -38,11 +38,18 @@ public enum WritableSourceConformance {
             let renamed = try await source.update(EventRef(latest), EventPatch(title: "Conformance B"), scope: .thisInstance, notify: .none)
             latest = renamed
             if renamed.title != "Conformance B" { found.append("update did not change the title") }
-            if usesLocation && renamed.location != "Room 1" { found.append("update changed a field the patch did not touch") }
+            if usesLocation && renamed.location != "Room 1" { found.append("update changed a field the patch did not touch (location)") }
+            if renamed.start != created.start || renamed.end != created.end || renamed.isAllDay != created.isAllDay {
+                found.append("update changed a field the patch did not touch (timing)")
+            }
             if renamed.version != nil, renamed.version == created.version { found.append("update did not change the version") }
 
             let unchanged = try await source.update(EventRef(renamed), EventPatch(), scope: .thisInstance, notify: .none)
+            // The ref for the later delete follows whatever the source last returned, so a version-checking source
+            // does not see a stale ref.
+            latest = unchanged
             if unchanged.title != "Conformance B" { found.append("an empty patch changed the event") }
+            if renamed.version != nil, unchanged.version != renamed.version { found.append("an empty patch changed the version") }
 
             if !caps.writableFields.contains(.attendees) {
                 do {
@@ -71,7 +78,10 @@ public enum WritableSourceConformance {
         } catch {
             found.append("threw \(error)")
         }
-        if !deleted { try? await source.delete(EventRef(latest), scope: .thisInstance, notify: .none) }
+        if !deleted {
+            do { try await source.delete(EventRef(latest), scope: .thisInstance, notify: .none) }
+            catch { found.append("cleanup delete failed, the test event may be left behind: \(error)") }
+        }
         return found
     }
 }
