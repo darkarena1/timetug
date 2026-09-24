@@ -198,10 +198,11 @@ extension GoogleCalendarSource: WritableCalendarSource {
     }
 
     /// The id a write addresses: the instance, or the series master for `.allInSeries` (whose etag differs from the
-    /// instance's, so the caller's version cannot lock it).
+    /// instance's, so the caller's version cannot lock it; a master ref's own version can).
     private func target(_ ref: EventRef, scope: RecurrenceScope) -> (id: String, useVersion: Bool) {
         guard let series = ref.seriesID, !series.isEmpty else { return (ref.eventID, true) }
-        return scope == .allInSeries ? (series, false) : (ref.eventID, true)
+        // A series master ref carries the master's own version, so it keeps the lock; an instance's etag cannot lock it.
+        return scope == .allInSeries ? (series, series == ref.eventID) : (ref.eventID, true)
     }
 
     /// The start of a raw event resource in the calendar's zone (a floating or all-day start reads in that zone). The one
@@ -270,6 +271,17 @@ extension GoogleCalendarSource: WritableCalendarSource {
         } catch {
             throw WriteError.partial(
                 "the series was cut off before this occurrence but the new series could not be created (\(cause)), and restoring the original rule failed (\(error))")
+        }
+    }
+
+    /// Restores the master after a truncation whose reply was lost; a successful restore leaves the caller to rethrow the
+    /// truncation's own error. Shielded and unconditional like `restoreRecurrence`; `.partial` when it fails too.
+    private func restoreTruncation(_ calendarID: String, _ masterID: String, _ original: [String], after cause: Error) async throws {
+        do {
+            try await Task { try await self.patchRecurrence(calendarID, masterID, original, etag: nil, notify: .none) }.value
+        } catch {
+            throw WriteError.partial(
+                "cutting the series off before this occurrence failed with an unknown outcome (\(cause)), and restoring the original rule failed (\(error)); check the calendar")
         }
     }
 
@@ -369,7 +381,16 @@ extension GoogleCalendarSource: WritableCalendarSource {
         if let patch {
             newSeries = try await newSeriesBody(ref, masterID: masterID, master: master, original: original, split: split, masterZone: masterZone, patch: patch, calendar: calendar)
         }
-        try await patchRecurrence(ref.calendarID, masterID, truncated, etag: master.etag, notify: patch == nil ? notify : .none)
+        do {
+            try await patchRecurrence(ref.calendarID, masterID, truncated, etag: master.etag, notify: patch == nil ? notify : .none)
+        } catch {
+            // A delete stops here and repeating the truncation is harmless. An update goes on to insert, so a truncation whose
+            // reply was lost (it may have been applied) must not stay half done: it also moved the master's EXDATE and RDATE
+            // values, which a retry would then lose. Put the original rule back, so the caller may retry, and report the
+            // original error. Definite failures (a 412, a 400, a 403, ...) changed nothing and are not restored.
+            if newSeries != nil, Self.mightHaveApplied(error) { try await restoreTruncation(ref.calendarID, masterID, original, after: error) }
+            throw error
+        }
         guard let newSeries else { return nil }
 
         var json = newSeries.json

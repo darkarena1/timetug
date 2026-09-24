@@ -398,6 +398,8 @@ private func createdSeries(_ h: Harness) async throws -> (event: CalendarEvent, 
     try await h.source.delete(ref, scope: .allInSeries, notify: .none)
     let sent = await h.transport.requests(matching: "\(calPath)/new1")
     #expect(sent.map(\.method) == ["PATCH", "DELETE"])
+    // The ref's version IS the master's, so the series-wide update keeps the lock (an instance ref sends none, see above).
+    #expect(sent[0].headers["If-Match"] == ref.version && ref.version == "e9")
 }
 
 @Test func thisAndFollowingAtTheMasterStartIsTheWholeSeries() async throws {

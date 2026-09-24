@@ -319,6 +319,63 @@ private func partialMessage(_ body: () async throws -> Void) async -> String? {
     #expect(await h.transport.requests(matching: "\(calPath)?").filter { $0.method == "POST" }.isEmpty)
 }
 
+// MARK: A lost reply to the truncation
+
+@Test func aTruncationWhoseReplyIsLostIsRestoredAndTheOriginalErrorRethrown() async throws {
+    // The PATCH may have been applied. Restore the original rule so a retry is safe (it would otherwise lose the EXDATE and
+    // RDATE values the first truncation moved), and never insert.
+    let h = try await harness(masterResponses: [.json(master()), HTTPResponse(status: 502), .json(master())])
+    await #expect(throws: SourceError.server(status: 502)) {
+        _ = try await h.source.update(ref, EventPatch(location: .set("Lab")), scope: .thisAndFollowing, notify: .all)
+    }
+    let writes = await masterWrites(h)
+    #expect(writes.count == 2)
+    #expect(bodyJSON(writes[0])["recurrence"] as? [String] == ["RRULE:FREQ=WEEKLY;UNTIL=20260915T145959Z"])
+    let restore = try #require(writes.last)
+    #expect(restore.method == "PATCH" && restore.headers["If-Match"] == nil && restore.url.absoluteString.contains("sendUpdates=none"))
+    #expect(bodyJSON(restore)["recurrence"] as? [String] == ["RRULE:FREQ=WEEKLY;COUNT=10"])
+    #expect(await h.transport.requests(matching: "\(calPath)?").filter { $0.method == "POST" }.isEmpty)
+}
+
+@Test func aLostTruncationReplyAndAFailedRestoreIsReportedAsPartial() async throws {
+    let h = try await harness(masterResponses: [.json(master()), HTTPResponse(status: 502), HTTPResponse(status: 503)])
+    let message = await partialMessage { _ = try await h.source.update(ref, EventPatch(location: .set("Lab")), scope: .thisAndFollowing, notify: .none) }
+    #expect(message?.contains("502") == true && message?.contains("503") == true)   // both errors are named
+    #expect(await h.transport.requests(matching: "\(calPath)?").filter { $0.method == "POST" }.isEmpty)
+}
+
+@Test func theRestoreAfterALostTruncationReplyStillRunsWhenTheCallerIsCancelled() async throws {
+    let h = try await harness(
+        masterResponses: [.json(master()), HTTPResponse(status: 502), .json(master())],
+        hook: { request in
+            guard request.method == "PATCH", request.url.path.hasSuffix("/m1"), bodyJSON(request)["recurrence"] as? [String] != ["RRULE:FREQ=WEEKLY;COUNT=10"] else { return nil }
+            withUnsafeCurrentTask { $0?.cancel() }
+            return nil
+        })
+    _ = try? await h.source.update(ref, EventPatch(location: .set("Lab")), scope: .thisAndFollowing, notify: .none)
+    let restore = try #require(await masterWrites(h).last)
+    #expect(restore.method == "PATCH" && bodyJSON(restore)["recurrence"] as? [String] == ["RRULE:FREQ=WEEKLY;COUNT=10"])
+}
+
+@Test func aDefiniteTruncationFailureIsNotRestored() async throws {
+    let refused = try await harness(masterResponses: [.json(master()), googleError("invalid", message: "bad rule", status: 400)])
+    await expectWriteError(.invalid("bad rule")) { _ = try await refused.source.update(ref, EventPatch(location: .set("Lab")), scope: .thisAndFollowing, notify: .none) }
+    #expect(await masterWrites(refused).count == 1)
+    let forbidden = try await harness(masterResponses: [.json(master()), googleError("forbidden", status: 403)])
+    await expectWriteError(.forbidden(nil)) { _ = try await forbidden.source.update(ref, EventPatch(location: .set("Lab")), scope: .thisAndFollowing, notify: .none) }
+    #expect(await masterWrites(forbidden).count == 1)
+    let gone = try await harness(masterResponses: [.json(master()), .json([:], status: 404)])
+    await expectWriteError(.notFound) { _ = try await gone.source.update(ref, EventPatch(location: .set("Lab")), scope: .thisAndFollowing, notify: .none) }
+    #expect(await masterWrites(gone).count == 1)
+}
+
+@Test func deleteWithALostTruncationReplyKeepsItsPlainErrorAndDoesNotRestore() async throws {
+    // For a delete the truncation is the operation and repeating it is idempotent.
+    let h = try await harness(masterResponses: [.json(master()), HTTPResponse(status: 502)])
+    await #expect(throws: SourceError.server(status: 502)) { try await h.source.delete(ref, scope: .thisAndFollowing, notify: .none) }
+    #expect(await masterWrites(h).count == 1)
+}
+
 @Test func deleteThisAndFollowingOnlyTruncatesTheMaster() async throws {
     let h = try await harness(masterResponses: [.json(master()), .json(master())])
     try await h.source.delete(ref, scope: .thisAndFollowing, notify: .all)
