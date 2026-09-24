@@ -159,7 +159,7 @@ private func partialMessage(_ body: () async throws -> Void) async -> String? {
     let h = try await harness(masterResponses: [.json(master()), .json(master())])
     let event = try await h.source.update(ref, EventPatch(location: .set("Lab")), scope: .thisAndFollowing, notify: .all)
     let truncate = try #require(await masterWrites(h).last)
-    #expect(truncate.method == "PATCH" && truncate.headers["If-Match"] == "em1" && truncate.url.absoluteString.contains("sendUpdates=none"))
+    #expect(truncate.method == "PATCH" && truncate.headers["If-Match"] == "em1" && truncate.url.absoluteString.contains("sendUpdates=all"))
     #expect(bodyJSON(truncate)["recurrence"] as? [String] == ["RRULE:FREQ=WEEKLY;UNTIL=20260915T145959Z"])
     let post = try #require(await h.transport.requests(matching: "\(calPath)?").last)
     #expect(post.method == "POST" && post.url.absoluteString.contains("sendUpdates=all"))
@@ -209,6 +209,27 @@ private func partialMessage(_ body: () async throws -> Void) async -> String? {
     _ = try await h.source.update(first, EventPatch(timing: timing), scope: .thisAndFollowing, notify: .none)
     let last = try #require(await masterWrites(h).last)
     #expect(last.method == "PATCH" && (bodyJSON(last)["start"] as? [String: Any])?["dateTime"] as? String == "2026-09-01T16:00:00Z")
+}
+
+@Test(arguments: [(NotifyPolicy.all, "all"), (.externalOnly, "externalOnly"), (.none, "none")])
+func theTruncationAndTheInsertBothCarryTheCallersPolicy(policy: NotifyPolicy, wire: String) async throws {
+    let h = try await harness(masterResponses: [.json(master()), .json(master())])
+    _ = try await h.source.update(ref, EventPatch(location: .set("Lab")), scope: .thisAndFollowing, notify: policy)
+    let truncate = try #require(await masterWrites(h).last)
+    #expect(truncate.url.absoluteString.contains("sendUpdates=\(wire)"))
+    let post = try #require(await h.transport.requests(matching: "\(calPath)?").last)
+    #expect(post.url.absoluteString.contains("sendUpdates=\(wire)"))
+}
+
+@Test(arguments: [(NotifyPolicy.all, "all"), (.externalOnly, "externalOnly"), (.none, "none")])
+func aFailedInsertRestoresTheOriginalRuleWithTheCallersPolicy(policy: NotifyPolicy, wire: String) async throws {
+    let h = try await harness(masterResponses: [.json(master()), .json(master()), .json(master())], post: googleError("invalid", message: "bad start", status: 400))
+    await expectWriteError(.invalid("bad start")) { _ = try await h.source.update(ref, EventPatch(location: .set("Lab")), scope: .thisAndFollowing, notify: policy) }
+    let writes = await masterWrites(h)
+    #expect(writes.count == 2 && writes[0].url.absoluteString.contains("sendUpdates=\(wire)"))
+    let restore = try #require(writes.last)
+    #expect(restore.headers["If-Match"] == nil && restore.url.absoluteString.contains("sendUpdates=\(wire)"))
+    #expect(bodyJSON(restore)["recurrence"] as? [String] == ["RRULE:FREQ=WEEKLY;COUNT=10"])
 }
 
 @Test func aFailedInsertRestoresTheOriginalRule() async throws {
@@ -331,8 +352,10 @@ private func partialMessage(_ body: () async throws -> Void) async -> String? {
     let writes = await masterWrites(h)
     #expect(writes.count == 2)
     #expect(bodyJSON(writes[0])["recurrence"] as? [String] == ["RRULE:FREQ=WEEKLY;UNTIL=20260915T145959Z"])
+    #expect(writes[0].url.absoluteString.contains("sendUpdates=all"))
     let restore = try #require(writes.last)
-    #expect(restore.method == "PATCH" && restore.headers["If-Match"] == nil && restore.url.absoluteString.contains("sendUpdates=none"))
+    // Guests told about the truncation hear about its reversal too.
+    #expect(restore.method == "PATCH" && restore.headers["If-Match"] == nil && restore.url.absoluteString.contains("sendUpdates=all"))
     #expect(bodyJSON(restore)["recurrence"] as? [String] == ["RRULE:FREQ=WEEKLY;COUNT=10"])
     #expect(await h.transport.requests(matching: "\(calPath)?").filter { $0.method == "POST" }.isEmpty)
 }
