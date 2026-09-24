@@ -116,16 +116,18 @@ struct GoogleAPIClient: Sendable {
     /// every calendar. Writes: a quota reason is a rate limit (retry later, not a permission problem); any other reason
     /// but `insufficientPermissions` is a permission problem on this event.
     private static func classifyForbidden(_ response: HTTPResponse, mode: GoogleRequestMode) -> Error {
-        let reasons = ((try? JSONDecoder().decode(ErrorBody.self, from: response.body))?.error?.errors ?? []).compactMap(\.reason)
-        if mode == .write, reasons.contains(where: quotaReasons.contains) {
+        let errors = (try? JSONDecoder().decode(ErrorBody.self, from: response.body))?.error?.errors ?? []
+        // Only the write-mode quota check looks at every error; reads judge the first error's own reason, as they always did.
+        if mode == .write, errors.contains(where: { $0.reason.map(quotaReasons.contains) ?? false }) {
             return SourceError.rateLimited(retryAfter: response.header("retry-after").flatMap(TimeInterval.init))
         }
-        switch reasons.first {
+        let firstReason = errors.first?.reason
+        switch firstReason {
         case "forbidden": return GoogleAPIError.forbidden
         case "insufficientPermissions": return SourceError.authExpired
         default:
             if mode == .write { return GoogleAPIError.forbidden }
-            return SourceError.invalidResponse("HTTP 403: \(reasons.first ?? "unknown")")
+            return SourceError.invalidResponse("HTTP 403: \(firstReason ?? "unknown")")
         }
     }
 

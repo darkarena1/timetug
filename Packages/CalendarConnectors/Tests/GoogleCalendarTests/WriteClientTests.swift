@@ -149,3 +149,13 @@ private func errorBody(_ reason: String, message: String = "m", status: Int) -> 
     #expect(error as? SourceError == .server(status: 503))
     #expect(await transport.requests.count == 1)
 }
+
+@Test func aReadClassifiesA403ByItsFirstErrorOnly() async throws {
+    // The first error has no reason, the second says `forbidden`: a read keeps judging the first error alone.
+    let transport = FakeTransport()
+    let body: [String: Any] = ["error": ["errors": [["message": "no reason"], ["reason": "forbidden"]], "message": "m"]]
+    await transport.route("events", [.json(body, status: 403)])
+    let client = try await makeClient(transport)
+    let error = await thrown { _ = try await client.get(path: "/calendars/c/events", query: []) }
+    #expect(error as? SourceError == .invalidResponse("HTTP 403: unknown"))
+}
