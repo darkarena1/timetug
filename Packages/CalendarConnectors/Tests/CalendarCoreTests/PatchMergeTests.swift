@@ -220,3 +220,20 @@ private final class Box<T>: @unchecked Sendable {
     var value: T
     init(_ value: T) { self.value = value }
 }
+
+@Test func attendeeEmailsAreComparedCaseInsensitively() {
+    // The provider stores a mixed-case address; the patch carries the normalised (lowercase) one.
+    var mixed = base()
+    mixed.attendees = [Attendee(email: "Bob@X.com", role: .required)]
+    var edit = EventEdit(mixed)
+    edit.event.attendees.removeAll()
+    let removeBob = edit.patch
+    #expect(removeBob.attendees?.remove == ["bob@x.com"])
+    var current = mixed
+    current.attendees[0].role = .optional                            // someone changed bob's role meanwhile
+    #expect(PatchMerge.conflicts(patch: removeBob, current: current) == [.attendees])
+
+    var upsert = EventEdit(mixed)
+    upsert.event.attendees[0].role = .resource
+    #expect(PatchMerge.conflicts(patch: upsert.patch, current: current) == [.attendees])
+}

@@ -38,3 +38,9 @@ private func event(series: String? = nil, original: Date? = nil) -> CalendarEven
     #expect(WriteError.conflict(fields: [.title]) != .conflict(fields: [.notes]))
     #expect(WriteError.forbidden(nil) != .forbidden("read-only calendar"))
 }
+
+@Test func anEmptySeriesIDIsNoSeries() {
+    #expect(EventRef(calendarID: "cal", eventID: "e1", seriesID: "").seriesID == nil)
+    #expect(EventRef(calendarID: "cal", eventID: "e1", seriesID: "s1").seriesID == "s1")
+    #expect(EventRef(event(series: "")).seriesID == nil)
+}

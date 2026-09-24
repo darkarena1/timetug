@@ -47,7 +47,8 @@ public struct EventRef: Hashable, Sendable {
         self.calendarID = calendarID
         self.eventID = eventID
         self.version = version
-        self.seriesID = seriesID
+        // An empty id means "no series" for every connector (Google and EventKit would otherwise read `""` differently).
+        self.seriesID = seriesID?.isEmpty == true ? nil : seriesID
         self.originalStart = originalStart
     }
 

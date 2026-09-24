@@ -158,3 +158,15 @@ private func original() -> CalendarEvent {
     #expect(Set(result.attendees.map(\.email)) == Set(edit.event.attendees.map(\.email)))
     #expect(result.attendees.first { $0.email == "cy@x.com" }?.role == .required)
 }
+
+@Test func applyingAPatchMatchesAttendeeEmailsCaseInsensitively() {
+    var event = original()
+    event.attendees = [Attendee(email: "Bob@X.com", role: .required), Attendee(email: "Cy@X.com")]
+    // `Attendee` lowercases its address on creation, so a provider's mixed-case address is already normalised:
+    // an upsert updates that attendee instead of appending a duplicate.
+    let upserted = EventPatch(attendees: AttendeeChanges(add: [AttendeeDraft(email: "bob@x.com", role: .optional)])).applied(to: event)
+    #expect(upserted.attendees.count == 2 && upserted.attendees[0].role == .optional)
+    // A removal by normalised address removes the mixed-case attendee.
+    let removed = EventPatch(attendees: AttendeeChanges(remove: ["CY@x.com"])).applied(to: event)
+    #expect(removed.attendees.map(\.email) == ["bob@x.com"])
+}
