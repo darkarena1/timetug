@@ -459,7 +459,7 @@ so deleting an event that someone else edited meanwhile deletes it anyway.
 | delete | `DELETE …?sendUpdates=…` | `remove` with span |
 | respond | fetch, set own attendee's `responseStatus`, `PATCH` the full array with the fetched etag (a 412 restarts, three tries) | `.unsupported(fields: [.attendees])` |
 | `.thisInstance` | instance id (own etag) | `.thisEvent` |
-| `.allInSeries` | master id (its etag differs from the instance's, so no `If-Match`) | first occurrence with `.futureEvents`; no version check |
+| `.allInSeries` | master id (an instance ref sends no `If-Match`, since its etag differs from the master's; a master ref keeps the lock, its version being the master's) | first occurrence with `.futureEvents`; no version check |
 | `.thisAndFollowing` | delete truncates the master's RRULE `UNTIL`; update truncates then inserts a new series (client-chosen id; rollback only after a definite failure; `.partial` if the rollback fails or the outcome is unknown; a patch that sets or clears `recurrence` replaces or omits the new series' rule instead of copying the master's); `respond` is `.unsupported(fields: [.attendees])` | `.futureEvents` |
 
 An `.allInSeries` update that changes timing is refused with `.unsupported(fields: [.timing])` unless `ref` is the
@@ -479,6 +479,13 @@ failed save leaves the in-memory event edited, discards it with `rollback()`.
 **Known limitations of Google's `.thisAndFollowing` (a split is a truncation plus a new series, not a native operation).**
 The new series starts at the occurrence's original slot with the master's length, so a moved occurrence does not move
 the following ones; a patch that sets `timing` applies its time to the new series instead. Beyond that:
+- If the split occurrence was moved and the patch sets no `timing`, it snaps back to its original slot in the new series,
+  and its old exception may linger next to it.
+- If the truncating `PATCH` fails in a way that may have been applied (a 5xx, a broken connection, a cancellation) on an
+  update, the connector restores the master's original rule (unconditionally, `sendUpdates=none`, even if the caller was
+  cancelled) and rethrows the original error, so a retry is safe; if the restore fails too the result is
+  `WriteError.partial` naming both errors. A definite failure (412 as `.conflict([.recurrence])`, 400, 403, 404, auth or rate
+  limit) is not restored. A delete keeps the plain error: the truncation is the operation and repeating it is harmless.
 - An occurrence after the split point that was cancelled (deleted through the API) is not carried over: only `EXDATE`
   lines are, so the cancelled occurrence may reappear in the new series.
 - The carried `EXDATE` lines keep the old time of day, so if the patch changes the series' time they no longer match the
