@@ -37,7 +37,8 @@ public struct EventRef: Hashable, Sendable {
     public var eventID: String
     /// The version the caller last saw; used for optimistic locking.
     public var version: String?
-    public var seriesID: String?
+    /// An empty id means "no series" (normalised to nil here and in `init`).
+    public var seriesID: String? { didSet { if seriesID?.isEmpty == true { seriesID = nil } } }
     /// The occurrence's slot in its series (Google `originalStartTime`, EventKit `occurrenceDate`); differs from
     /// `start` for a moved occurrence. It identifies the occurrence when `eventID` is shared and is the split
     /// point for `.thisAndFollowing`.

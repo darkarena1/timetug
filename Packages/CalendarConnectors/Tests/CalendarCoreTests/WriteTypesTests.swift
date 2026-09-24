@@ -44,3 +44,11 @@ private func event(series: String? = nil, original: Date? = nil) -> CalendarEven
     #expect(EventRef(calendarID: "cal", eventID: "e1", seriesID: "s1").seriesID == "s1")
     #expect(EventRef(event(series: "")).seriesID == nil)
 }
+
+@Test func settingTheSeriesIDToEmptyLaterIsNoSeriesToo() {
+    var ref = EventRef(calendarID: "cal", eventID: "e1", seriesID: "s1")
+    ref.seriesID = ""
+    #expect(ref.seriesID == nil)
+    ref.seriesID = "s2"
+    #expect(ref.seriesID == "s2")
+}
