@@ -51,8 +51,8 @@ private func original() -> CalendarEvent {
     if let i = edit.event.attendees.firstIndex(where: { $0.email == "cy@x.com" }) { edit.event.attendees[i].role = .required }   // role changed: upsert
     let changes = try #require(edit.patch.attendees)
     #expect(changes.remove == ["bob@x.com"])
-    #expect(changes.add == [AttendeeDraft(email: "cy@x.com", role: .required), AttendeeDraft(email: "dee@x.com", name: "Dee")]
-        || changes.add == [AttendeeDraft(email: "dee@x.com", name: "Dee"), AttendeeDraft(email: "cy@x.com", role: .required)])
+    // Upserts follow the edited list's order (cy was already there, dee was appended).
+    #expect(changes.add == [AttendeeDraft(email: "cy@x.com", role: .required), AttendeeDraft(email: "dee@x.com", name: "Dee")])
     #expect(edit.patch.touchedFields == [.attendees])
 }
 
@@ -124,6 +124,19 @@ private func original() -> CalendarEvent {
     #expect(edit.patch.isEmpty)
     edit.event.attendees[1].role = .optional
     #expect(edit.patch.attendees?.add == [AttendeeDraft(email: "bob@x.com", role: .optional)])
+}
+
+@Test func aNameOnlyChangeToAValueIsAnUpsert() {
+    var edit = EventEdit(original())
+    edit.event.attendees[1].name = "Bob"          // nil -> "Bob"
+    #expect(edit.patch.attendees?.add == [AttendeeDraft(email: "bob@x.com", name: "Bob")])
+    #expect(edit.patch.attendees?.remove.isEmpty == true && edit.patch.touchedFields == [.attendees])
+    var renamed = original()
+    renamed.attendees[1].name = "Bob"
+    var second = EventEdit(renamed)
+    second.event.attendees[1].name = "Robert"     // "Bob" -> "Robert"
+    #expect(second.patch.attendees?.add == [AttendeeDraft(email: "bob@x.com", name: "Robert")])
+    #expect(second.patch.touchedFields == [.attendees])
 }
 
 @Test func rebuildingTheSelfAttendeeWithoutTheSelfFlagIsNotAnAddition() {

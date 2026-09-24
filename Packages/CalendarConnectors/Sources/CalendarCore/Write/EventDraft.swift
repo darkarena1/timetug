@@ -111,7 +111,8 @@ public struct EventDraft: Sendable, Equatable {
     /// A best-effort copy of `event` for a target with `capabilities`: only fields in `writableFields` are carried
     /// over. Self and email-less attendees are dropped, an empty reminder list becomes "calendar defaults" (reads
     /// cannot tell the two apart), only a Meet link is re-requested, and recurrence is never copied (reads carry none).
-    /// Attendees with an invalid email and negative reminders are dropped so the draft still passes `validate()`.
+    /// Attendees with an invalid email and negative reminders are dropped, so those two never make `validate()` fail.
+    /// Timing is copied as is: a source event with a zero-length or inverted interval still fails `validate()`.
     public init(copying event: CalendarEvent, for capabilities: SourceCapabilities) {
         let writable = capabilities.writableFields
         let reminders = event.reminders.filter { $0.minutesBefore >= 0 }
