@@ -126,8 +126,8 @@ Guarantees:
 
 ```swift
 public struct SourceCapabilities: Equatable, Sendable {
-    var canWrite: Bool              // true exactly when the source conforms to WritableCalendarSource
-    var canEditAttendees: Bool      // true exactly when writableFields contains .attendees
+    var canWrite: Bool              // by convention true exactly when the source conforms to WritableCalendarSource
+    var canEditAttendees: Bool      // true exactly when writableFields contains .attendees (checked by the conformance suite)
     var canRespondToInvite: Bool
     var providesConference: Bool
     var syncKind: SyncKind          // .none, .token, .notification
@@ -354,14 +354,14 @@ the master or first occurrence; callers that need instances re-read. `scope` is 
 
 **Three levels of "can I write?"**
 1. Conformance to `WritableCalendarSource` (checked by callers with `as?`). Invariant: `capabilities.canWrite` is true
-   exactly when the source conforms; the conformance checks enforce it.
+   exactly when the source conforms (a convention; `WritableSourceConformance` only checks that it is true on a writable source).
 2. `capabilities` (part 3.3): `writableFields` (what create/update can write, including `.recurrence`),
    `controlsNotifications` and `recurrenceScopes`, alongside `canEditAttendees` (true exactly when `.attendees` is
-   writable) and `canRespondToInvite`. `writableFields` and `recurrenceScopes` are empty unless `canWrite`.
+   writable) and `canRespondToInvite`. `writableFields` and `recurrenceScopes` are empty unless `canWrite`, and `canRespondToInvite` implies `canWrite` (conventions upheld by the read-only defaults and unit tests; the conformance checks verify only `canEditAttendees == writableFields.contains(.attendees)`).
 3. `CalendarDescriptor.accessRole` per calendar (a read-only calendar is `.forbidden`).
 
 **Unsupported means an error, never a partial write.** A write that touches something the connector cannot represent
-throws `WriteError.unsupported`, naming the fields, before any request or store change. `WriteValidation.requireWritable(_:_:)`
+throws `WriteError.unsupported`, naming the fields, before any write request or store change. `WriteValidation.requireWritable(_:_:)`
 is the shared check of a set of fields against `writableFields`.
 
 ```swift
@@ -387,7 +387,7 @@ public struct EventRef: Hashable, Sendable {
 }
 ```
 
-A ref with a `seriesID` but no `originalStart` is `.invalid` for `.thisAndFollowing` (and cannot locate an EventKit occurrence).
+A ref with a `seriesID` but no `originalStart` is handled per connector. Google: only `.thisAndFollowing` needs it (it throws `.invalid`, "this and following needs the occurrence's original start"); `.thisInstance`, `.allInSeries` and `respond` never read it, except that an `.allInSeries` update with a timing change and no `originalStart` is `.unsupported(fields: [.timing])`. EventKit: `.thisInstance` and `.thisAndFollowing` throw `.invalid` (a recurring occurrence is located by its original start); `.allInSeries` starts from the series' first occurrence and needs it only for a timing change (`.unsupported(fields: [.timing])` without it).
 `NotifyPolicy` with `controlsNotifications == false` is accepted only when nobody else would be told (EventKit: only for
 an event with no other attendees; otherwise `.unsupported(fields: [.attendees])`).
 
@@ -416,7 +416,7 @@ an event with no other attendees; otherwise `.unsupported(fields: [.attendees])`
 - `RecurrenceRule`: frequency (daily/weekly/monthly/yearly), interval, weekdays with optional ordinal, month days,
   months, and end (`.never`, `.count(n)`, `.until(date)`), with `init(rrule:in:)`, `validate()` and
   `rruleString(allDay:in:)`. Anything outside this RFC 5545 subset (`BYSETPOS`, `BYHOUR`, sub-daily frequencies,
-  `COUNT` with `UNTIL`, ...) throws `WriteError.unsupported(fields: [.recurrence])`. EXDATE and RDATE are not
+  `COUNT` with `UNTIL`, a daily rule with `BYDAY`, ...) throws `WriteError.unsupported(fields: [.recurrence])`. EXDATE and RDATE are not
   authorable; removing one occurrence is a `delete` with `.thisInstance`.
 
 **Conflicts.** A write sends `If-Match: ref.version` where the provider supports it (Google etag) or compares
@@ -450,7 +450,7 @@ version. Known limitation: a retry whose fetched event has no `version` is an un
 | respond | fetch, set own attendee's `responseStatus`, `PATCH` the full array with the fetched etag (a 412 restarts, three tries) | `.unsupported(fields: [.attendees])` |
 | `.thisInstance` | instance id (own etag) | `.thisEvent` |
 | `.allInSeries` | master id (its etag differs from the instance's, so no `If-Match`) | first occurrence with `.futureEvents`; no version check |
-| `.thisAndFollowing` | delete truncates the master's RRULE `UNTIL`; update truncates then inserts a new series (client-chosen id; rollback only after a definite failure; `.partial` if the rollback fails or the outcome is unknown); `respond` is `.unsupported(fields: [.attendees])` | `.futureEvents` |
+| `.thisAndFollowing` | delete truncates the master's RRULE `UNTIL`; update truncates then inserts a new series (client-chosen id; rollback only after a definite failure; `.partial` if the rollback fails or the outcome is unknown; a patch that sets or clears `recurrence` replaces or omits the new series' rule instead of copying the master's); `respond` is `.unsupported(fields: [.attendees])` | `.futureEvents` |
 
 An `.allInSeries` update that changes timing is refused with `.unsupported(fields: [.timing])` unless `ref` is the
 series' first occurrence (the series' start equals `ref.originalStart`), on Google and EventKit: callers read expanded
@@ -459,7 +459,7 @@ instances, so an instance's date would otherwise move the whole series' start.
 EventKit's declared capabilities: writes yes, `writableFields` = title, notes, location, timing, availability, reminders
 and recurrence, all three scopes, RSVP no, attendee editing no, notification control no. It refuses attendee changes,
 `respond`, `visibility` and a generated conference with `.unsupported`, and update or delete on a read-only calendar with
-`.forbidden`. Its writes validate input before checking calendar access.
+`.forbidden` (an empty-patch update returns before that check). Its writes validate input before checking calendar access.
 
 **Testing seams (`CalendarTestSupport`).** `FakeWritableSource` is an in-memory `WritableCalendarSource` (non-recurring
 events, `writeCount`, `simulateExternalEdit`). `WritableSourceConformance.violations(of:calendarID:window:)` runs the
