@@ -52,6 +52,13 @@ enum EventKitWriteMapping {
         scope == .thisInstance ? .thisEvent : .futureEvents
     }
 
+    /// Where to look for an occurrence whose slot is `slot`. A date-range predicate matches an occurrence's ACTUAL
+    /// dates, and an occurrence can be moved far from its slot, so the window is a year either way (EventKit
+    /// searches at most four years at a time).
+    static func occurrenceSearchWindow(around slot: Date) -> DateInterval {
+        DateInterval(start: slot.addingTimeInterval(-366 * 86_400), end: slot.addingTimeInterval(367 * 86_400))
+    }
+
     /// EventKit has no etag; the modification date is the version.
     static func version(_ modified: Date?) -> String? {
         modified.map { String($0.timeIntervalSince1970) }

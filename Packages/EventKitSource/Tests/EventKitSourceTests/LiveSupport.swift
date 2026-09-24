@@ -3,7 +3,7 @@ import EventKit
 import Foundation
 import Testing
 
-/// Live EventKit tests are opt-in: `TIMETUG_LIVE_EVENTKIT=1 swift test --package-path Packages/EventKitSource --filter Live`.
+/// Live EventKit tests are opt-in: `TIMETUG_LIVE_EVENTKIT=1 swift test --package-path Packages/EventKitSource --filter eventKit`.
 let liveEventKit = ProcessInfo.processInfo.environment["TIMETUG_LIVE_EVENTKIT"] == "1"
 
 /// Creates a scratch calendar in the local ("On My Mac") source, runs `body`, then deletes the calendar and

@@ -37,9 +37,11 @@ extension EventKitSource: WritableCalendarSource {
         try requireAccess()
         let target = try locateTarget(ref, scope: scope)
         if patch.isEmpty { return patch.base ?? map(target.event) }
+        try requireModifiable(target.event)
         if scope == .allInSeries, patch.timing != nil, ref.seriesID != nil {
             // Unverified: the event fetched by identifier is the series' first occurrence.
-            guard let original = ref.originalStart, abs(target.event.occurrenceDate.timeIntervalSince(original)) < 1 else {
+            guard let original = ref.originalStart, let slot = target.event.occurrenceDate,
+                  abs(slot.timeIntervalSince(original)) < 1 else {
                 throw WriteError.unsupported(fields: [.timing])
             }
         }
@@ -54,7 +56,13 @@ extension EventKitSource: WritableCalendarSource {
                 // Unverified: `lastModifiedDate` changes on every save, and `refresh()` (in `locate`) makes it current.
                 if let expected, expected != EventKitWriteMapping.version(current.event.lastModifiedDate) { return .stale }
                 self.apply(patch, to: current.event)
-                try self.save(current.event, span: current.span)
+                do { try self.save(current.event, span: current.span) }
+                catch {
+                    // The in-memory event already carries the edit; reload it so a failed save leaves nothing
+                    // pending on the (possibly shared) store object. UNSURE: `refresh()` is the documented reload.
+                    _ = current.event.refresh()
+                    throw error
+                }
                 return .done(self.map(self.reload(current.event, isSeries: ref.seriesID != nil)))
             })
     }
@@ -62,6 +70,7 @@ extension EventKitSource: WritableCalendarSource {
     public func delete(_ ref: EventRef, scope: RecurrenceScope, notify: NotifyPolicy) async throws {
         try requireAccess()
         let target = try locateTarget(ref, scope: scope)
+        try requireModifiable(target.event)
         try EventKitWriteMapping.checkNotify(notify, hasOtherAttendees: hasOtherAttendees(target.event))
         do { try store.remove(target.event, span: target.span, commit: true) }
         catch { throw WriteError.invalid(error.localizedDescription) }
@@ -106,21 +115,30 @@ extension EventKitSource: WritableCalendarSource {
         catch { throw WriteError.invalid(error.localizedDescription) }
     }
 
-    /// The occurrence a ref designates. A recurring occurrence is found through a date-range predicate around its
-    /// `originalStart` and matched on `eventIdentifier` and `occurrenceDate` (Unverified: occurrences share an
-    /// identifier). A deleted event, or one `refresh()` reports as gone (Unverified), is `.notFound`.
+    private func requireModifiable(_ event: EKEvent) throws {
+        guard event.calendar?.allowsContentModifications == true else { throw WriteError.forbidden("read-only calendar") }
+    }
+
+    /// The occurrence a ref designates, in the ref's calendar. A recurring occurrence is found through a date-range
+    /// predicate around its `originalStart` (wide, because the predicate matches an occurrence's actual dates and
+    /// it may have been moved) and matched on `eventIdentifier` and `occurrenceDate` (Unverified: occurrences share
+    /// an identifier). A deleted event, one in another calendar, or one `refresh()` reports as gone (Unverified) is
+    /// `.notFound`.
     private func locate(_ ref: EventRef) throws -> EKEvent {
         var found: EKEvent?
         if ref.seriesID != nil {
             guard let original = ref.originalStart else { throw WriteError.invalid("a recurring occurrence needs its original start") }
-            let predicate = store.predicateForEvents(withStart: original.addingTimeInterval(-86_400), end: original.addingTimeInterval(2 * 86_400), calendars: nil)
-            found = store.events(matching: predicate).first {
-                $0.eventIdentifier == ref.eventID && abs($0.occurrenceDate.timeIntervalSince(original)) < 1
+            guard let calendar = store.calendar(withIdentifier: ref.calendarID) else { throw WriteError.notFound }
+            let window = EventKitWriteMapping.occurrenceSearchWindow(around: original)
+            let predicate = store.predicateForEvents(withStart: window.start, end: window.end, calendars: [calendar])
+            found = store.events(matching: predicate).first { event in
+                guard event.eventIdentifier == ref.eventID, let slot = event.occurrenceDate else { return false }
+                return abs(slot.timeIntervalSince(original)) < 1
             }
         } else {
             found = store.event(withIdentifier: ref.eventID)
         }
-        guard let event = found, event.refresh() else { throw WriteError.notFound }
+        guard let event = found, event.calendar?.calendarIdentifier == ref.calendarID, event.refresh() else { throw WriteError.notFound }
         return event
     }
 
@@ -129,7 +147,8 @@ extension EventKitSource: WritableCalendarSource {
     private func locateTarget(_ ref: EventRef, scope: RecurrenceScope) throws -> (event: EKEvent, span: EKSpan) {
         guard ref.seriesID != nil else { return (try locate(ref), .thisEvent) }
         if scope == .allInSeries {
-            guard let first = store.event(withIdentifier: ref.eventID), first.refresh() else { throw WriteError.notFound }
+            guard let first = store.event(withIdentifier: ref.eventID), first.calendar?.calendarIdentifier == ref.calendarID,
+                  first.refresh() else { throw WriteError.notFound }
             return (first, .futureEvents)
         }
         return (try locate(ref), EventKitWriteMapping.span(for: scope))

@@ -43,9 +43,19 @@ import Testing
         list = try await occurrences()
         #expect(list.map(\.location) == [nil, nil, "Lab", "Lab"])
 
+        // Unverified: `.futureEvents` on list[2] may keep one series, or split it and re-identify the occurrences
+        // from list[2] on. Print the identifiers so a failure is easy to read, and judge `.allInSeries` only on the
+        // occurrences that share list[3]'s series, so a split does not produce a misleading failure.
+        for (index, event) in list.enumerated() {
+            print("LIVE occurrence \(index): eventIdentifier=\(event.eventID) seriesID=\(event.seriesID ?? "nil")")
+        }
         _ = try await source.update(EventRef(list[3]), EventPatch(notes: .set("all")), scope: .allInSeries, notify: .none)
+        let seriesOfLast = list[3].seriesID
         list = try await occurrences()
-        #expect(list.allSatisfy { $0.notes == "all" })
+        for (index, event) in list.enumerated() {
+            print("LIVE after allInSeries \(index): eventIdentifier=\(event.eventID) notes=\(event.notes ?? "nil")")
+        }
+        #expect(list.filter { $0.seriesID == seriesOfLast }.allSatisfy { $0.notes == "all" })
 
         // A series-wide time change from a later occurrence would move the whole series to that occurrence's date.
         do {

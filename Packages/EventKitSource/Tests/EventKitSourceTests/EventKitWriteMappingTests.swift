@@ -112,3 +112,15 @@ private func newYork() -> Calendar {
     let floating = try #require(EventKitWriteMapping.floatingAllDay(timing, calendar: newYork()))
     #expect(floating.start == iso("2026-09-18T04:00:00Z") && floating.end == iso("2026-09-19T03:59:59Z"))
 }
+
+@Test func theOccurrenceSearchWindowCoversOccurrencesMovedFarFromTheirSlot() {
+    let slot = iso("2026-10-14T15:00:00Z")
+    let window = EventKitWriteMapping.occurrenceSearchWindow(around: slot)
+    for days in [3.0, 60, -30, 365, -365] {
+        let moved = slot.addingTimeInterval(days * 86_400)
+        #expect(window.contains(moved) && window.contains(moved.addingTimeInterval(1800)), "moved by \(days) days")
+    }
+    #expect(window.contains(slot))
+    // EventKit only searches up to four years at a time.
+    #expect(window.duration < 4 * 365 * 86_400)
+}
