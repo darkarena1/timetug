@@ -9,7 +9,12 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
     public static let sourceID = "eventkit"
     public let id = EventKitSource.sourceID
     public let displayName = "Apple Calendar"
-    public var capabilities: SourceCapabilities { SourceCapabilities(providesConference: false, syncKind: .notification) }
+    public var capabilities: SourceCapabilities {
+        SourceCapabilities(
+            canWrite: true, providesConference: false, syncKind: .notification,
+            writableFields: [.title, .notes, .location, .timing, .availability, .reminders, .recurrence],
+            controlsNotifications: false, recurrenceScopes: Set(RecurrenceScope.allCases))
+    }
     let store: EKEventStore
 
     public init(store: EKEventStore = EKEventStore()) {
