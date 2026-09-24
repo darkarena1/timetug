@@ -1,6 +1,6 @@
 # Calendar Connectors: API contract
 
-Status: parts 1-9 and 11 describe the code on `master` after Phase 2.5; part 10 is the Phase 3 design and is marked **Proposed**.
+Status: parts 1 to 10 describe the code on `master` once Phase 3 (write capabilities) has merged; part 11 lists the known gaps.
 The library is pre-1.0 and lives in this repository; it is meant to be extracted into its own repository once a
 second provider (Microsoft, Phase 4) has proved the API is provider-neutral. Until then, anything here can change
 with a matching change to this document.
@@ -83,14 +83,15 @@ public struct CalendarDescriptor: Hashable, Sendable, Identifiable {
 | `availability` | `Availability` | `busy`, `free` |
 | `visibility` | `Visibility` | `default`, `publicEvent`, `privateEvent`, `confidential` |
 | `kind` | `EventKind` | `standard`, `focusTime`, `outOfOffice`, `workingLocation`, `birthday`, `other` |
-| `seriesID`, `originalStart` | `String?`, `Date?` | Set on an instance of a recurring series |
+| `seriesID`, `originalStart` | `String?`, `Date?` | Set on an instance of a recurring series (Google `recurringEventId` and `originalStartTime`; EventKit `eventIdentifier` and `occurrenceDate`, for events that recur or are detached occurrences) |
 | `attendees` | `[Attendee]` | `name?`, `email?` (trimmed, lowercased), `role` (`required/optional/resource`), `response`, `isSelf`, `isOrganizer` |
 | `organizer` | `Attendee?` | |
 | `conference` | `ConferenceInfo?` | `url` + `provider` (`meet/teams/zoom/other`) |
 | `reminders` | `[Reminder]` | `minutesBefore`; empty means none *or* provider defaults (not distinguished today) |
 | `url` | `URL?` | Link to the event in the provider's UI |
-| `version` | `String?` | Opaque provider version (Google etag); used for optimistic writes in Phase 3 |
+| `version` | `String?` | Opaque provider version (Google etag, EventKit `lastModifiedDate` as a fractional-epoch string); the base of optimistic writes (part 10) |
 | `myResponse` | `ResponseStatus?` | The account owner's own response, when the provider says |
+| `sourceID` | `String?` | The source that produced the event (`Connection.sourceID`; `"eventkit"` for EventKit); lets a host route an event to its account. Does not change `id` |
 
 Reads return recurring events already expanded into instances. No read path returns a recurrence rule.
 
@@ -119,23 +120,31 @@ Guarantees:
 - `events(in:)` returns events sorted by start (then id) for network connectors, excluding calendars the account
   can no longer read. Cancelled events may be present in the model (`status == .cancelled`); consumers such as the
   bridge drop them.
-- A source is read-only unless it also conforms to `WritableCalendarSource` (Phase 3, part 10).
+- A source is read-only unless it also conforms to `WritableCalendarSource` (part 10).
 
 ### 3.3 Capabilities
 
 ```swift
 public struct SourceCapabilities: Equatable, Sendable {
-    var canWrite: Bool              // false today for every source
-    var canEditAttendees: Bool
+    var canWrite: Bool              // true exactly when the source conforms to WritableCalendarSource
+    var canEditAttendees: Bool      // true exactly when writableFields contains .attendees
     var canRespondToInvite: Bool
     var providesConference: Bool
     var syncKind: SyncKind          // .none, .token, .notification
     var supportsPush: Bool
+    var writableFields: Set<EventField>          // what create/update can write; empty when read-only
+    var controlsNotifications: Bool              // honors NotifyPolicy; false = the server decides
+    var recurrenceScopes: Set<RecurrenceScope>   // scopes accepted on a series; empty when read-only
 }
 ```
 
 Capabilities are what a source *can* do, declared per connector; the per-calendar `accessRole` says which of its
-calendars are writable. Current values: Google = `providesConference`, `.token`; EventKit = `.notification`.
+calendars are writable. The three write fields default to the read-only value. Current values:
+
+| | `canWrite` | `canEditAttendees` | `canRespondToInvite` | `providesConference` | `syncKind` | `writableFields` | `controlsNotifications` | `recurrenceScopes` |
+|---|---|---|---|---|---|---|---|---|
+| Google | true | true | true | true | `.token` | all | true | all three |
+| EventKit | true | false | false | false | `.notification` | title, notes, location, timing, availability, reminders, recurrence | false | all three (subject to the EventKit spike, part 11) |
 
 ### 3.4 Changes
 
@@ -220,7 +229,8 @@ public enum SourceError: Error, Sendable, Equatable {
 ```
 
 Provider-specific outcomes (404, 410, per-calendar 403) are handled inside the connector and never escape as
-provider types.
+provider types. Write methods additionally throw `WriteError` (part 10); authentication, network, rate-limit and server
+failures on a write are still `SourceError`.
 
 ### 3.7 HTTP seam
 
@@ -255,8 +265,8 @@ Public surface: `GoogleOAuthConfig(clientID:clientSecret:)`, `GoogleConnectorKin
 and the `CalendarSource` returned by `makeSource` (id `google-<connectionID>`).
 
 - **Kind:** id `google`, display name "Google", all platforms, `.oauth`. Scopes
-  `calendar.events` and `calendar.calendarlist.readonly` (the events scope already covers Phase 3 writes, so no
-  re-consent is needed). Authorization requests `access_type=offline` and `prompt=consent` so a refresh token is issued.
+  `calendar.events` and `calendar.calendarlist.readonly` (the events scope already covers writes, so no
+  re-consent is needed; it cannot create calendars). Authorization requests `access_type=offline` and `prompt=consent` so a refresh token is issued.
 - **Connection:** `displayName` and `config["email"]` are the primary calendar's id (lowercased); sign-in throws
   `invalidResponse` if no refresh token or no primary calendar comes back.
 - **Reads:** `calendarList` (paged, `showHidden=false`, `minAccessRole=freeBusyReader`), then per calendar
@@ -269,7 +279,8 @@ and the `CalendarSource` returned by `makeSource` (id `google-<connectionID>`).
 - **HTTP behaviour:** 401 refreshes the token once, then `.authExpired`; 403 `insufficientPermissions` is
   `.authExpired`; 429 and rate-limit 403 retry up to three times honoring `Retry-After` (else jittered exponential
   backoff) and then throw `.rateLimited`; 5xx throws `.server`; anything else is `.invalidResponse`.
-- **Capabilities:** `providesConference`, `.token` sync.
+- **Writes:** `GoogleCalendarSource` conforms to `WritableCalendarSource` (part 10). Create, update (only the changed fields, `If-Match` from `ref.version`), delete and RSVP, with all three recurrence scopes; `.thisAndFollowing` truncates the master's `RRULE` and inserts a new series (two calls; see part 10 for the failure handling). Write requests use a write mode of the client: 412 is a stale version (handled by `PatchMerge`), 400 is `.invalid`, and a 403 with any reason but `insufficientPermissions` is `.forbidden`, except quota reasons, which are `SourceError.rateLimited`. Reads keep their original mapping.
+- **Capabilities:** `canWrite`, `canEditAttendees`, `canRespondToInvite`, `providesConference`, `.token` sync, every field writable, `controlsNotifications`, all three scopes.
 
 ## 6. `CalendarApple` (macOS adapters)
 
@@ -286,11 +297,14 @@ and the `CalendarSource` returned by `makeSource` (id `google-<connectionID>`).
   full calendar access; every read requires it and otherwise throws `.needsPermission`. Calendars map
   `allowsContentModifications` to `accessRole` `.writer` / `.reader` and EventKit's calendar types to `CalendarKind`.
   All-day events are normalised from EventKit's floating device-local dates to the canonical form in the device zone.
-  `changes()` yields `.calendarsChanged` on every `EKEventStoreChanged`.
+  `changes()` yields `.calendarsChanged` on every `EKEventStoreChanged`. `init(store:)` lets a host or test share an
+  `EKEventStore`. Reads fill `version` (`lastModifiedDate`), `sourceID`, and, for events that recur or are detached
+  occurrences, `seriesID` (the `eventIdentifier`) and `originalStart` (`occurrenceDate`).
 - `EventKitConnectorKind` (`.system` authorization, macOS only): `authorize` requests access and returns the
   synthesised `Connection` (`kindID: "eventkit"`, `connectionID: "this-mac"`); hosts do not persist it, and
   `makeSource` returns the shared source.
-- Capabilities: no conference links, `.notification` sync, read-only until Phase 3.
+- **Writes:** `EventKitSource` conforms to `WritableCalendarSource` (part 10). Create, update and delete with all three scopes (subject to the spike in part 11); `respond`, attendee changes, `visibility` and generated conferences throw `.unsupported`; a read-only calendar is `.forbidden`. Inputs are validated before the access check.
+- Capabilities: no conference links, `.notification` sync, `canWrite`, `writableFields` = title, notes, location, timing, availability, reminders, recurrence, no attendee editing or RSVP, no notification control, all three scopes.
 
 ## 8. `CalendarBridge` (TimeTug only)
 
@@ -308,82 +322,123 @@ Core defines its own `CalendarSource` (`calendars() -> [CalendarInfo]`, `events(
 
 1. Conform to `CalendarSource`; add `PollingCalendarSource` and use `ChangeMonitor` when the provider has a cheap
    incremental check.
-2. Throw only `SourceError`; map provider errors inside the module.
+2. Throw only `SourceError` (and `WriteError` from write methods); map provider errors inside the module.
 3. Emit canonical all-day events and run your mapper fixtures through `AllDayConformance`.
 4. Set `id` to `Connection.sourceID` (unless a documented compatibility reason applies) and keep it stable across
    `reauthorize`.
 5. Declare `capabilities` honestly; `calendars()` must set `accessRole` per calendar.
 6. Keep secrets in the injected `CredentialStore` and persist nothing during a failed `authorize`.
 7. Test against `FakeTransport` (network) or pure mappers (local stores); no test may need a real account.
+8. To support writing, also conform to `WritableCalendarSource` (part 10), declare `writableFields`, `controlsNotifications` and `recurrenceScopes` honestly, throw `WriteError.unsupported` before changing anything for what you cannot write, and run `WritableSourceConformance` against a scratch calendar or a fake backend.
 
-## 10. Proposed: write capabilities (Phase 3)
+## 10. Write capabilities (Phase 3)
 
-Status: **Proposed**. This part summarizes `docs/superpowers/specs/2026-09-23-calendar-connectors-phase3-design.md`,
-which is authoritative for signatures and behavior; update this part when Phase 3 lands.
+`docs/superpowers/specs/2026-09-23-calendar-connectors-phase3-design.md` is the design and rationale; this part is the
+contract as built. The types live in `CalendarCore` (`Write/`), so they are portable.
 
 **Opt-in.** Writing is an optional, separate protocol. A read-only connector never implements it.
 
 ```swift
 public protocol WritableCalendarSource: CalendarSource {
     func create(_ draft: EventDraft, in calendarID: String, notify: NotifyPolicy) async throws -> CalendarEvent
+    /// An empty patch writes nothing and returns the patch's `base`, or the current event when it has none.
     func update(_ ref: EventRef, _ patch: EventPatch, scope: RecurrenceScope, notify: NotifyPolicy) async throws -> CalendarEvent
     func delete(_ ref: EventRef, scope: RecurrenceScope, notify: NotifyPolicy) async throws
+    /// `response` must be `.accepted`, `.tentative` or `.declined`.
     func respond(to ref: EventRef, _ response: ResponseStatus, scope: RecurrenceScope, notify: NotifyPolicy) async throws -> CalendarEvent
 }
 ```
 
+Writes return the event in the provider's resulting form, including its new `version`. A series-wide Google write returns
+the master or first occurrence; callers that need instances re-read. `scope` is ignored for an event that is not part of a series.
+
 **Three levels of "can I write?"**
 1. Conformance to `WritableCalendarSource` (checked by callers with `as?`). Invariant: `capabilities.canWrite` is true
-   exactly when the source conforms; a conformance test enforces it.
-2. `capabilities` gains `writableFields: Set<EventField>` (what create/update can write, including `.recurrence`),
-   `controlsNotifications` and `recurrenceScopes: Set<RecurrenceScope>`, alongside the existing `canEditAttendees`
-   (true exactly when `.attendees` is writable) and `canRespondToInvite`.
-3. `CalendarDescriptor.accessRole` per calendar.
+   exactly when the source conforms; the conformance checks enforce it.
+2. `capabilities` (part 3.3): `writableFields` (what create/update can write, including `.recurrence`),
+   `controlsNotifications` and `recurrenceScopes`, alongside `canEditAttendees` (true exactly when `.attendees` is
+   writable) and `canRespondToInvite`. `writableFields` and `recurrenceScopes` are empty unless `canWrite`.
+3. `CalendarDescriptor.accessRole` per calendar (a read-only calendar is `.forbidden`).
 
 **Unsupported means an error, never a partial write.** A write that touches something the connector cannot represent
-throws `WriteError.unsupported`, naming the fields.
+throws `WriteError.unsupported`, naming the fields, before any request or store change. `WriteValidation.requireWritable(_:_:)`
+is the shared check of a set of fields against `writableFields`.
 
 ```swift
-public enum NotifyPolicy: Sendable { case all, externalOnly, none }        // required argument, no default
-public enum RecurrenceScope: Sendable { case thisInstance, thisAndFollowing, allInSeries }  // ignored for non-series events
-public enum EventField: Sendable, Hashable { case title, notes, location, timing, availability, visibility, reminders, attendees, recurrence, conference }
+public enum EventField: String, Sendable, Hashable, CaseIterable { case title, notes, location, timing, availability, visibility, reminders, attendees, recurrence, conference }
+public enum NotifyPolicy: Sendable, Hashable { case all, externalOnly, none }        // required argument, no default
+public enum RecurrenceScope: Sendable, Hashable, CaseIterable { case thisInstance, thisAndFollowing, allInSeries }
+public enum ConferenceRequest: Sendable, Hashable { case none, generate }    // on a draft
+public enum ConferenceChange: Sendable, Hashable { case generate, remove }   // on a patch
 public enum WriteError: Error, Sendable, Equatable {
-    case unsupported(fields: Set<EventField>), conflict(fields: Set<EventField>), notFound, forbidden(String?), invalid(String)
-    case partial(String)   // a multi-step write stopped half way (Google `.thisAndFollowing`)
-}   // forbidden = read-only calendar or no permission on the event; auth, network, rate-limit and 5xx stay SourceError
+    case unsupported(fields: Set<EventField>)   // the connector cannot write these (or the operation; RSVP is reported as .attendees)
+    case conflict(fields: Set<EventField>)      // someone else changed a field this patch touches
+    case notFound                               // the event or calendar is gone
+    case forbidden(String?)                     // read-only calendar or no permission on the event
+    case invalid(String)                        // malformed input (end before start, needsAction RSVP, bad rule, ...)
+    case partial(String)                        // a multi-step write stopped half way (Google .thisAndFollowing)
+}   // auth, network, rate-limit and 5xx stay SourceError
 public struct EventRef: Hashable, Sendable {
     var calendarID: String; var eventID: String
-    var version: String?; var seriesID: String?; var originalStart: Date?   // the occurrence's slot in its series
+    var version: String?; var seriesID: String?
+    var originalStart: Date?   // the occurrence's slot in its series; identifies it when eventID is shared, and is the .thisAndFollowing split point
+    init(calendarID:eventID:version:seriesID:originalStart:)
     init(_ event: CalendarEvent)
 }
 ```
 
-`CalendarEvent` gains an optional `sourceID`, stamped by the source that produced it, so an event can be routed to its
-account without a host wrapper. `CalendarEvent.id` is unchanged.
+A ref with a `seriesID` but no `originalStart` is `.invalid` for `.thisAndFollowing` (and cannot locate an EventKit occurrence).
+`NotifyPolicy` with `controlsNotifications == false` is accepted only when nobody else would be told (EventKit: only for
+an event with no other attendees; otherwise `.unsupported(fields: [.attendees])`).
 
 **Models.**
-- `EventDraft` (create): title, notes, location, start/end/timeZone/isAllDay in the canonical form, availability,
-  visibility, reminders (`nil` = calendar defaults, empty = none), attendee drafts (`email`, `name?`, `role`),
-  conference request (`none` or `generate`), optional `RecurrenceRule`. `EventDraft(copying: event, for: capabilities)`
-  carries over what the target can represent and drops the rest (best-effort copy across calendars or accounts).
+- `EventTiming { start, end, timeZone, isAllDay }`: time is one unit, in the canonical all-day form; `validate()` throws
+  `.invalid` for a non-finite time, `end <= start`, or an all-day timing without a zone or off midnight in it.
+- `AttendeeDraft(email:name:role:)`: `Hashable`; the email is trimmed and lowercased on init.
+- `EventDraft` (create): `title`, `timing`, `notes`, `location`, `availability` (`.busy`), `visibility` (`.default`),
+  `reminders` (`nil` = calendar defaults, empty = none), `attendees: [AttendeeDraft]`, `conference: ConferenceRequest`,
+  `recurrence: RecurrenceRule?`. `validate()` checks timing, recurrence, attendee emails and non-negative reminders;
+  `usedFields` is what the draft sets beyond defaults. `EventDraft(copying: event, for: capabilities)` is the one lenient
+  path: it carries over what the target's `writableFields` allow and drops the rest (self and email-less attendees
+  are dropped, an empty reminder list becomes `nil`, only a Meet link is re-requested, recurrence is never copied).
 - `EventPatch` (update): optional fields where `nil` means keep (`title`, `timing`, `availability`, `visibility`,
-  `attendees`, `conference`) and `FieldUpdate<T>` = `.keep` (default), `.set(value)` or `.clear` where clearing is
-  meaningful (`notes`, `location`, `reminders`, `recurrence`). Time is one unit (`EventTiming`: start, end, zone,
-  all-day; validated on write). Attendees are a delta (`AttendeeChanges(add:remove:)`), never a replacement list. A patch
-  built with `EventPatch(from:to:)` remembers its `base` (the original event) so conflicts can be judged per field. `EventPatch(from: original, to: edited)` computes the minimal patch from two events and ignores provider-owned
-  fields (`id`, `uid`, `organizer`, `status`, `url`, `seriesID`, `myResponse`, attendee responses).
-- `EventEdit { let original: CalendarEvent; var event: CalendarEvent }` with `patch` and `hasChanges` for callers that
-  want tracked edits.
+  `attendees`, `conference`) and `FieldUpdate<Value>` = `.keep` (default), `.set(value)` or `.clear` where clearing is
+  meaningful (`notes`, `location`, `reminders`, `recurrence`; `.clear` on reminders means the calendar defaults). Attendees are a
+  delta, `AttendeeChanges(add:remove:)`, never a replacement list; `add` upserts by email (an existing attendee keeps their
+  response). `touchedFields` and `isEmpty` describe what it changes. `private(set) var base: CalendarEvent?` is the original the
+  patch was diffed from (`nil` for a hand-built patch), which is what lets conflicts be judged per field.
+  `EventPatch(from: original, to: edited)` computes the minimal patch and sets `base`. It compares title, notes, location,
+  timing, availability, visibility, reminders and attendees (by normalized email), plus removal of `conference`, and ignores
+  provider-owned fields, a changed or added conference, recurrence, the account owner (the `isSelf` attendee), and a name
+  cleared to `nil` with the role unchanged (an `AttendeeDraft` cannot express clearing a name). `withoutBase()` drops the
+  base; `applied(to:)` applies a patch to an event (used by the in-memory test source; `.clear` reminders gives `[]`).
+- `EventEdit(original)` with `event` (the working copy), `patch` and `hasChanges` for callers that want tracked edits.
 - `RecurrenceRule`: frequency (daily/weekly/monthly/yearly), interval, weekdays with optional ordinal, month days,
-  months, and end (`.never`, `.count(n)`, `.until(date)`), with `init(rrule:)` and `rruleString`. Anything outside this
-  RFC 5545 subset throws `WriteError.unsupported`. EXDATE and RDATE are not authorable; removing one occurrence is a
-  `delete` with `.thisInstance`.
+  months, and end (`.never`, `.count(n)`, `.until(date)`), with `init(rrule:in:)`, `validate()` and
+  `rruleString(allDay:in:)`. Anything outside this RFC 5545 subset (`BYSETPOS`, `BYHOUR`, sub-daily frequencies,
+  `COUNT` with `UNTIL`, ...) throws `WriteError.unsupported(fields: [.recurrence])`. EXDATE and RDATE are not
+  authorable; removing one occurrence is a `delete` with `.thisInstance`.
 
 **Conflicts.** A write sends `If-Match: ref.version` where the provider supports it (Google etag) or compares
-`lastModifiedDate` (EventKit). On a stale version the shared merge helper fetches the current event and compares only
-the fields the patch touches against the patch's `base`: if none differ, the patch is re-applied on the fresh version
-(re-judged if it goes stale again, at most three attempts); otherwise it throws `WriteError.conflict(fields:)`. A patch
-without a `base` conflicts on any stale version.
+`lastModifiedDate` (EventKit). The shared helper in `CalendarCore` does the rest:
+
+```swift
+public enum PatchMerge {
+    public enum Attempt<Result> { case done(Result), stale }
+    public static func conflicts(patch: EventPatch, current: CalendarEvent) -> Set<EventField>
+    public static func apply<Result>(patch: EventPatch, version: String?, maxAttempts: Int = 3,
+        fetchCurrent: () async throws -> CalendarEvent,
+        write: (String?) async throws -> Attempt<Result>) async throws -> Result
+}
+```
+
+On `.stale` it fetches the current event and compares only the fields the patch touches against the patch's `base`
+(timing as a unit; `nil` and `""` equal for notes and location; reminder order ignored; attendees only for the emails the
+patch adds or removes, and an attendee someone else already changed to the wanted state is not a conflict). No difference:
+the patch is re-applied on the fresh version and re-judged if it goes stale again. A difference: `WriteError.conflict(fields:)`.
+`maxAttempts` is clamped to at least 1, cancellation is checked per attempt, and after the last attempt it throws
+`.conflict(fields: touchedFields)`. A patch without a `base` (or that touches `recurrence`) conflicts on any stale
+version. Known limitation: a retry whose fetched event has no `version` is an unconditional write.
 
 **Provider mapping.**
 
@@ -392,22 +447,43 @@ without a `base` conflicts on any stale version.
 | create | `POST …/events?sendUpdates=…` (`conferenceDataVersion=1` for a generated Meet link) | `EKEvent` save |
 | update | `PATCH` of changed fields only, `If-Match`; attendee changes fetch the current event and send the full array | mutate and save |
 | delete | `DELETE …?sendUpdates=…` | `remove` with span |
-| respond | patch own attendee's `responseStatus` | `unsupported` |
+| respond | fetch, set own attendee's `responseStatus`, `PATCH` the full array with the fetched etag (a 412 restarts, three tries) | `.unsupported(fields: [.attendees])` |
 | `.thisInstance` | instance id (own etag) | `.thisEvent` |
-| `.allInSeries` | master id (its etag differs from the instance's, so the instance `version` cannot lock it) | first occurrence with `.futureEvents` (to be verified) |
-| `.thisAndFollowing` | delete truncates the master's RRULE `UNTIL`; update truncates then inserts a new series (two calls, best-effort rollback) | `.futureEvents` |
+| `.allInSeries` | master id (its etag differs from the instance's, so no `If-Match`) | first occurrence with `.futureEvents`; no version check |
+| `.thisAndFollowing` | delete truncates the master's RRULE `UNTIL`; update truncates then inserts a new series (client-chosen id; rollback only after a definite failure; `.partial` if the rollback fails or the outcome is unknown); `respond` is `.unsupported(fields: [.attendees])` | `.futureEvents` |
 
-EventKit's declared capabilities: writes yes, `writableFields` everything except attendees, visibility and conference, all
-three scopes, RSVP no, notification control no (a `NotifyPolicy` of `.none` or `.externalOnly` throws `.unsupported` when the event has other attendees).
+An `.allInSeries` update that changes timing is refused with `.unsupported(fields: [.timing])` unless `ref` is the
+series' first occurrence (the series' start equals `ref.originalStart`), on Google and EventKit: callers read expanded
+instances, so an instance's date would otherwise move the whole series' start.
+
+EventKit's declared capabilities: writes yes, `writableFields` = title, notes, location, timing, availability, reminders
+and recurrence, all three scopes, RSVP no, attendee editing no, notification control no. It refuses attendee changes,
+`respond`, `visibility` and a generated conference with `.unsupported`, and update or delete on a read-only calendar with
+`.forbidden`. Its writes validate input before checking calendar access.
+
+**Testing seams (`CalendarTestSupport`).** `FakeWritableSource` is an in-memory `WritableCalendarSource` (non-recurring
+events, `writeCount`, `simulateExternalEdit`). `WritableSourceConformance.violations(of:calendarID:window:)` runs the
+behavior every writable source must have (create and read back, update touches only patched fields, empty patch writes
+nothing, unwritable fields throw `.unsupported`, delete and delete-again `.notFound`) and returns a list of violations;
+it runs against the fake and, live and opt-in, against the real EventKit source. Google is covered by request-shape tests
+with `FakeTransport`. Live tests are gated by `TIMETUG_LIVE_EVENTKIT=1` and `TIMETUG_LIVE_GOOGLE=1` and never run in CI.
 
 **Out of scope for Phase 3:** TimeTug write UI, cross-calendar link orchestration (kept in TimeTug's local store, not in
 provider metadata; a `metadata` field and capability can be added later without breaking this API), Microsoft, CalDAV.
 
 ## 11. Known gaps
 
-- **EventKit event ids.** The read model promises a per-instance `eventID`, but EventKit's `eventIdentifier` is, to our
-  knowledge, shared by every occurrence of a series (TimeTug's wrapper id already appends the start time for this
-  reason). To verify in the Phase 3 plan; writes identify the occurrence by `EventRef.originalStart` either way. The EventKit reader also does not yet set `seriesID`, `originalStart` or `version`; Phase 3 adds them.
+- **EventKit identifiers and write behavior (unverified).** EventKit's `eventIdentifier` is, to our knowledge, shared by
+  every occurrence of a series (TimeTug's wrapper id already appends the start time for this reason), so the read model's
+  per-instance `eventID` promise is not kept for EventKit; writes identify the occurrence by `EventRef.originalStart`
+  (`occurrenceDate`). Reads now fill `seriesID`, `originalStart` and `version`. The EventKit spike has not been run: it
+  must confirm the shared identifier, the predicate lookup of a moved occurrence, `.futureEvents` on the first
+  occurrence, `refresh()` on a deleted event and `lastModifiedDate` granularity. Run
+  `TIMETUG_LIVE_EVENTKIT=1 swift test --package-path Packages/EventKitSource --filter eventKit` (see the spec's Risks).
+- **Google write behavior beyond the fake transport (unverified).** `supportsAttachments=true` on a split with
+  attachments, the Meet re-request on a new series, and the `COUNT` arithmetic (assumes `events.instances?showDeleted=true`
+  includes EXDATE'd occurrences) are checked only against the fake transport until the Google smoke test confirms them.
+  Whether the truncation of the old series should notify guests on update is an open decision (spec, Risks).
 - **Reminder defaults.** A provider's "use default reminders" and "no reminders" both read as an empty list.
 - **Google OAuth client in release builds.** The client id and secret are injected from git-ignored configuration; CI
   injection for release builds is a separate follow-up.
