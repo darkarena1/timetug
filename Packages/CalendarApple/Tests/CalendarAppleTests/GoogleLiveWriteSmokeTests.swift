@@ -3,12 +3,64 @@ import CalendarOAuth
 import Foundation
 import GoogleCalendar
 import Testing
-@testable import CalendarApple
+import CalendarApple
 
 private let liveGoogle = ProcessInfo.processInfo.environment["TIMETUG_LIVE_GOOGLE"] == "1"
 
 /// Every event this test creates starts with this prefix, and nothing without it is ever deleted.
 private let smokePrefix = "TimeTug write smoke"
+
+/// Lists and deletes the events this test creates. Every delete goes through here so that only events with the smoke
+/// prefix are ever touched and each series (or single event) is deleted at most once, whichever path reaches it first.
+private actor SmokeCleaner {
+    let source: any CalendarSource
+    let writable: any WritableCalendarSource
+    let calendarID: String
+    let window: DateInterval
+    private var deletedKeys = Set<String>()
+
+    init(source: any CalendarSource, writable: any WritableCalendarSource, calendarID: String, window: DateInterval) {
+        self.source = source
+        self.writable = writable
+        self.calendarID = calendarID
+        self.window = window
+    }
+
+    /// Our events in the primary calendar, oldest first. The prefix and calendar filter is what keeps every delete away
+    /// from the user's own events.
+    func mine() async throws -> [CalendarEvent] {
+        try await source.events(in: window).filter { $0.title.hasPrefix(smokePrefix) && $0.calendarID == calendarID }.sorted { $0.start < $1.start }
+    }
+
+    /// A series is keyed by its master id (`seriesID`, or `eventID` for the master itself). A key is recorded only after
+    /// the delete succeeded, so a failed delete can be retried but a deleted series is never deleted again.
+    func remove(_ event: CalendarEvent, scope: RecurrenceScope = .allInSeries) async throws {
+        guard event.title.hasPrefix(smokePrefix) else { return }
+        let key = event.seriesID ?? event.eventID
+        guard !deletedKeys.contains(key) else { return }
+        try await writable.delete(EventRef(event), scope: scope, notify: .none)
+        deletedKeys.insert(key)
+    }
+
+    /// Deletes the events `created` (masters), then every smoke event still in the window (this finds the new series a
+    /// split created). Failures are printed, not thrown.
+    func cleanUp(created: [CalendarEvent]) async {
+        for event in created {
+            do { try await remove(event) } catch { print("LIVE cleanup could not delete \"\(event.title)\": \(error)") }
+        }
+        do {
+            for event in try await mine() {
+                do { try await remove(event) } catch { print("LIVE cleanup could not delete \"\(event.title)\": \(error)") }
+            }
+        } catch { print("LIVE cleanup could not list events: \(error)") }
+    }
+}
+
+/// Runs the cleanup in a detached task so it still runs when the test task is cancelled (the time limit firing, for
+/// example); a cancelled task would fail every request at once.
+private func detachedCleanUp(_ cleaner: SmokeCleaner, created: [CalendarEvent] = []) async {
+    await Task.detached { await cleaner.cleanUp(created: created) }.value
+}
 
 /// Opt-in, interactive: `TIMETUG_LIVE_GOOGLE=1 GOOGLE_OAUTH_CLIENT_ID=... GOOGLE_OAUTH_CLIENT_SECRET=... swift test
 /// --package-path Packages/CalendarApple --filter googleWriteSmoke`. Signs in through the browser, creates events named
@@ -43,7 +95,7 @@ private let smokePrefix = "TimeTug write smoke"
     let calendars = try await source.calendars()
     let primaryCalendar = calendars.first { $0.isPrimary }
     let primary = try #require(primaryCalendar)
-    print("LIVE signed in as \(connection.displayName); writing to the primary calendar")
+    print("LIVE signed in; writing to the primary calendar")
 
     // An IANA zone, not "UTC" (see the doc comment).
     let zone = try #require(TimeZone(identifier: "Europe/London"))
@@ -58,36 +110,26 @@ private let smokePrefix = "TimeTug write smoke"
     // The series (weekly, four occurrences, from day 2) ends about day 23; the window covers all of it.
     let window = DateInterval(start: start.addingTimeInterval(-3600), duration: 86_400 * 40)
 
-    /// Our events in the primary calendar, oldest first. The prefix and calendar filter is what keeps every delete below
-    /// away from the user's own events.
-    func mine() async throws -> [CalendarEvent] {
-        try await source.events(in: window).filter { $0.title.hasPrefix(smokePrefix) && $0.calendarID == primary.id }.sorted { $0.start < $1.start }
+    let cleaner = SmokeCleaner(source: source, writable: writable, calendarID: primary.id, window: window)
+    /// Polls `mine()` every second, up to 15 s, until `ready` holds. If it never does the last list is returned so the
+    /// caller's `#require` reports what was seen.
+    func poll(until ready: ([CalendarEvent]) -> Bool) async throws -> [CalendarEvent] {
+        var list = try await cleaner.mine()
+        var tries = 0
+        while !ready(list) && tries < 15 {
+            try await Task.sleep(for: .seconds(1))
+            list = try await cleaner.mine()
+            tries += 1
+        }
+        return list
     }
-
-    // Each series (or single event) is deleted at most once, whichever path reaches it first. Only events with the smoke
-    // prefix are accepted, and a series is keyed by its master id (`seriesID`, or `eventID` for the master itself).
-    var deletedKeys = Set<String>()
-    func remove(_ event: CalendarEvent, scope: RecurrenceScope = .allInSeries) async throws {
-        guard event.title.hasPrefix(smokePrefix) else { return }
-        let key = event.seriesID ?? event.eventID
-        guard !deletedKeys.contains(key) else { return }
-        try await writable.delete(EventRef(event), scope: scope, notify: .none)
-        deletedKeys.insert(key)
-    }
-    /// Deletes every smoke event still in the window, one delete per series. Failures are printed, not thrown.
-    func sweep() async {
-        do {
-            for event in try await mine() {
-                do { try await remove(event) } catch { print("LIVE cleanup could not delete \"\(event.title)\": \(error)") }
-            }
-        } catch { print("LIVE cleanup could not list events: \(error)") }
-    }
+    func providers(_ list: [CalendarEvent]) -> [String] { list.map { $0.conference.map { "\($0.provider)" } ?? "-" } }
 
     // Leftovers from an earlier run that died before it could clean up.
-    let earlier = try await mine()
+    let earlier = try await cleaner.mine()
     if !earlier.isEmpty {
         print("LIVE removing \(earlier.count) smoke events left by an earlier run")
-        await sweep()
+        await detachedCleanUp(cleaner)
     }
 
     // Events this run has created (masters), so a failure can delete them even if listing them fails.
@@ -112,54 +154,62 @@ private let smokePrefix = "TimeTug write smoke"
             _ = try await writable.update(EventRef(single), titleEdit.patch, scope: .thisInstance, notify: .none)
             Issue.record("expected a conflict")
         } catch let error as WriteError { #expect(error == .conflict(fields: [.title])) }
-        try await remove(merged, scope: .thisInstance)
+        try await cleaner.remove(merged, scope: .thisInstance)
 
         // 2. A weekly series of four: instance, this-and-following and whole-series edits, then delete.
+        // Anything that indexes `list` is guarded by a thrown `#require`, so a short list reaches the catch below (which
+        // cleans up) instead of trapping.
         let recurrence = RecurrenceRule(frequency: .weekly, end: .count(4))
         let seriesTitle = "\(smokePrefix) series"
         let master: CalendarEvent
+        var wantedMeet = true
         do {
             master = try await writable.create(
                 EventDraft(title: seriesTitle, timing: timing(2), conference: .generate, recurrence: recurrence), in: primary.id, notify: .none)
         } catch {
             // The Meet request is the part most likely to differ by account type; keep going without it.
             print("LIVE creating the series with a Meet link failed, retrying without: \(error)")
+            wantedMeet = false
             master = try await writable.create(EventDraft(title: seriesTitle, timing: timing(2), recurrence: recurrence), in: primary.id, notify: .none)
         }
         created.append(master)
-        try await Task.sleep(for: .seconds(2))
-        var list = try await mine()
-        print("LIVE conference before the split: \(list.map { $0.conference.map { "\($0.provider)" } ?? "-" })")
-        #expect(list.count == 4 && list.allSatisfy { $0.seriesID != nil && $0.originalStart != nil })
+        // Google adds a Meet link a moment after the insert, so wait for it before recording what the split does to it.
+        var list = try await poll { $0.count == 4 && (!wantedMeet || $0.allSatisfy { $0.conference != nil }) }
+        if wantedMeet {
+            if list.allSatisfy({ $0.conference != nil }) { print("LIVE conference before the split: \(providers(list))") }
+            else { print("LIVE conference pending (no Meet link after 15 s): \(providers(list))") }
+        }
+        try #require(list.count == 4, "expected 4 instances of the series, saw \(list.count)")
+        #expect(list.allSatisfy { $0.seriesID != nil && $0.originalStart != nil })
         _ = try await writable.update(EventRef(list[1]), EventPatch(title: "\(seriesTitle) (second)"), scope: .thisInstance, notify: .none)
         _ = try await writable.update(EventRef(list[2]), EventPatch(location: .set("Lab")), scope: .thisAndFollowing, notify: .none)
-        try await Task.sleep(for: .seconds(2))
-        list = try await mine()
+        list = try await poll { $0.count == 4 && $0[2].location == "Lab" && $0[3].location == "Lab" && (!wantedMeet || $0.allSatisfy { $0.conference != nil }) }
         print("LIVE after split: \(list.map { ($0.title, $0.location ?? "-") })")
         // COUNT arithmetic: the old series keeps the two earlier occurrences and the new series gets the other two.
         let perSeries = Dictionary(grouping: list, by: { $0.seriesID ?? $0.eventID }).values.map(\.count).sorted()
         print("LIVE instances per series after split (expected [2, 2]): \(perSeries)")
-        print("LIVE conference after the split: \(list.map { $0.conference.map { "\($0.provider)" } ?? "-" })")
-        #expect(list.count == 4 && list[0].location == nil && list[1].title.hasSuffix("(second)") && list[2].location == "Lab" && list[3].location == "Lab")
+        if wantedMeet {
+            if list.allSatisfy({ $0.conference != nil }) { print("LIVE conference after the split: \(providers(list))") }
+            else { print("LIVE conference pending (not on every instance after the split): \(providers(list))") }
+        }
+        try #require(list.count == 4, "expected 4 instances after the split, saw \(list.count)")
+        #expect(list[0].location == nil && list[1].title.hasSuffix("(second)") && list[2].location == "Lab" && list[3].location == "Lab")
         _ = try await writable.update(EventRef(list[3]), EventPatch(notes: .set("whole series")), scope: .allInSeries, notify: .none)
-        try await Task.sleep(for: .seconds(2))
-        list = try await mine()
+        list = try await poll { $0.last?.notes == "whole series" }
         // Instances after the split belong to the new series, so only the series the ref points at is guaranteed to change.
         print("LIVE notes after allInSeries: \(list.map { $0.notes ?? "-" })")
         // The split left the old and the new series both present; `remove` deletes each once.
-        for event in list { try await remove(event) }
+        for event in list { try await cleaner.remove(event) }
     } catch {
         print("LIVE failure: \(error)")
-        // The masters we created (a no-op for anything already deleted), then anything else carrying the prefix, such
-        // as the new series a split created.
-        for event in created {
-            do { try await remove(event) } catch { print("LIVE cleanup could not delete \"\(event.title)\": \(error)") }
-        }
-        await sweep()
+        await detachedCleanUp(cleaner, created: created)
         throw error
     }
-    try await Task.sleep(for: .seconds(2))
-    let leftovers = try await mine()
+    let leftovers: [CalendarEvent]
+    do { leftovers = try await poll { $0.isEmpty } } catch {
+        await detachedCleanUp(cleaner)
+        throw error
+    }
     #expect(leftovers.isEmpty, "smoke events were left behind: \(leftovers.map(\.title))")
-    if !leftovers.isEmpty { await sweep() }
+    if !leftovers.isEmpty { await detachedCleanUp(cleaner) }
 }
