@@ -159,3 +159,13 @@ private func errorBody(_ reason: String, message: String = "m", status: Int) -> 
     let error = await thrown { _ = try await client.get(path: "/calendars/c/events", query: []) }
     #expect(error as? SourceError == .invalidResponse("HTTP 403: unknown"))
 }
+
+@Test func aWrite409IsATypedConflictButAReadKeepsItsGenericError() async throws {
+    let transport = FakeTransport()
+    await transport.route("events", [errorBody("duplicate", status: 409)])
+    let client = try await makeClient(transport)
+    let write = await thrown { _ = try await client.send(method: "POST", path: "/calendars/c/events", mode: .write) }
+    #expect(write as? GoogleAPIError == .conflict)
+    let read = await thrown { _ = try await client.get(path: "/calendars/c/events", query: []) }
+    #expect(read as? SourceError == .invalidResponse("HTTP 409"))
+}

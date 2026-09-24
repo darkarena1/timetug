@@ -9,12 +9,13 @@ enum GoogleAPIError: Error, Equatable {
     case forbidden  // 403 without a rate-limit reason
     case preconditionFailed   // 412 (write mode only): the `If-Match` version is stale
     case badRequest(String)   // 400 (write mode only), with Google's message
+    case conflict             // 409 (write mode only): e.g. an insert with a client-chosen id that already exists
 
     /// What a public `CalendarSource` method throws if it cannot handle the case itself.
     var sourceError: SourceError { .invalidResponse("google: \(self)") }
 }
 
-/// Reads keep the original error mapping. Writes additionally map a 400 to `badRequest` and a 412 to
+/// Reads keep the original error mapping. Writes additionally map a 400 to `badRequest`, a 409 to `conflict` and a 412 to
 /// `preconditionFailed`, and treat every non-rate-limit 403 (other than `insufficientPermissions`) as `forbidden`.
 enum GoogleRequestMode: Sendable { case read, write }
 
@@ -76,6 +77,8 @@ struct GoogleAPIClient: Sendable {
                 throw GoogleAPIError.gone
             case 404:
                 throw GoogleAPIError.notFound
+            case 409 where mode == .write:
+                throw GoogleAPIError.conflict
             case 412 where mode == .write:
                 throw GoogleAPIError.preconditionFailed
             case 403, 429:

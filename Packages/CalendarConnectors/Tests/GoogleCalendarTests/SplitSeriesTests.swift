@@ -253,7 +253,7 @@ private func partialMessage(_ body: () async throws -> Void) async -> String? {
 }
 
 @Test func aConflictOnTheInsertMeansOurOwnRequestAlreadyApplied() async throws {
-    // The id is ours alone, so a 409 can only be an earlier attempt of this same POST.
+    // The id is ours alone, so a 409 (the typed `GoogleAPIError.conflict`) can only be an earlier attempt of this same POST.
     let sent = SentID()
     let h = try await harness(
         masterResponses: [.json(master()), .json(master()), .json(master())], post: googleError("duplicate", message: "exists", status: 409),
@@ -261,6 +261,18 @@ private func partialMessage(_ body: () async throws -> Void) async -> String? {
     let event = try await h.source.update(ref, EventPatch(location: .set("Lab")), scope: .thisAndFollowing, notify: .none)
     #expect(event.eventID == "n1")
     #expect(await masterWrites(h).count == 1)
+}
+
+@Test func aConflictOnTheInsertThatFindsNothingIsRolledBackAndReportedAsUnexpected() async throws {
+    let sent = SentID()
+    let h = try await harness(
+        masterResponses: [.json(master()), .json(master()), .json(master())], post: googleError("duplicate", message: "exists", status: 409),
+        hook: lookup(sent, answer: googleError("notFound", status: 404)))
+    await #expect(throws: SourceError.invalidResponse("google: unexpected 409")) {
+        _ = try await h.source.update(ref, EventPatch(location: .set("Lab")), scope: .thisAndFollowing, notify: .none)
+    }
+    let restore = try #require(await masterWrites(h).last)
+    #expect(bodyJSON(restore)["recurrence"] as? [String] == ["RRULE:FREQ=WEEKLY;COUNT=10"])
 }
 
 @Test func aLookupThatFailsAfterALostReplyLeavesTheMasterAloneAndReportsPartial() async throws {

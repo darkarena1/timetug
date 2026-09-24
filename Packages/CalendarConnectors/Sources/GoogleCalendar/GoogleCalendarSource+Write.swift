@@ -124,6 +124,8 @@ extension GoogleCalendarSource: WritableCalendarSource {
             case .badRequest(let message): throw WriteError.invalid(message)
             // Unreachable: only writes that carry `If-Match` can get a 412, and each of them handles it itself.
             case .preconditionFailed: throw SourceError.invalidResponse("google: unexpected 412")
+            // Only the split's insert with a client-chosen id can get a 409, and it handles it itself.
+            case .conflict: throw SourceError.invalidResponse("google: unexpected 409")
             }
         }
     }
@@ -252,14 +254,14 @@ extension GoogleCalendarSource: WritableCalendarSource {
     }
 
     /// Whether a failed insert may nevertheless have been applied: the reply was lost (a 5xx, a broken connection, a
-    /// cancellation) rather than the request refused. A 409 counts too: the id is ours alone, so it can only mean an
-    /// earlier attempt of this same POST went through. (The client reports it as a plain invalid response.)
+    /// cancellation) rather than the request refused. A 409 (`GoogleAPIError.conflict`) counts too: the id is ours alone,
+    /// so it can only mean an earlier attempt of this same POST went through.
     private static func mightHaveApplied(_ error: Error) -> Bool {
-        if error is GoogleAPIError || error is WriteError { return false }
+        if let api = error as? GoogleAPIError { return api == .conflict }
+        if error is WriteError { return false }
         if let source = error as? SourceError {
             switch source {
             case .server, .network: return true
-            case .invalidResponse(let text): return text == "HTTP 409"
             default: return false
             }
         }
