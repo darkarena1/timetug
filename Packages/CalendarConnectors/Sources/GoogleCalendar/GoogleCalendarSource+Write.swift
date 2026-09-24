@@ -24,6 +24,8 @@ extension GoogleCalendarSource: WritableCalendarSource {
         try await translated {
             try WriteValidation.requireWritable(patch.touchedFields, capabilities)
             try Self.requireEventID(ref)
+            try Self.requireOccurrence(ref, scope: scope)
+            if scope == .thisInstance, ref.seriesID != nil, patch.recurrence != .keep { throw WriteError.unsupported(fields: [.recurrence]) }
             // Validate the whole patch before the first request; the attendee array is filled in later from a fresh fetch.
             _ = try GoogleWriteMapper.patchBody(patch, currentAttendees: [])
             let calendar = try await writableCalendar(ref.calendarID)
@@ -73,6 +75,7 @@ extension GoogleCalendarSource: WritableCalendarSource {
     public func delete(_ ref: EventRef, scope: RecurrenceScope, notify: NotifyPolicy) async throws {
         try await translated {
             try Self.requireEventID(ref)
+            try Self.requireOccurrence(ref, scope: scope)
             let calendar = try await writableCalendar(ref.calendarID)
             if scope == .thisAndFollowing, ref.seriesID != nil {
                 _ = try await splitSeries(ref, calendar: calendar, patch: nil, notify: notify)
@@ -88,6 +91,7 @@ extension GoogleCalendarSource: WritableCalendarSource {
             // Splitting a series only to change one guest's response is not offered.
             if scope == .thisAndFollowing, ref.seriesID != nil { throw WriteError.unsupported(fields: [.attendees]) }
             try Self.requireEventID(ref)
+            try Self.requireOccurrence(ref, scope: scope)
             // Refuse a response Google cannot store before any request (the attendee list here is only a placeholder).
             _ = try GoogleWriteMapper.respondAttendees(current: [["self": true]], response: response)
             let calendar = try await writableCalendar(ref.calendarID)
@@ -142,6 +146,15 @@ extension GoogleCalendarSource: WritableCalendarSource {
         if ref.eventID.isEmpty { throw WriteError.invalid("the event id must not be empty") }
     }
 
+    /// A write result for a series master carries its own id as `seriesID` (see `mapped`), so a caller can tell it from an
+    /// occurrence. A single-instance write on it would hit the whole series (Google addresses the master by that id), so
+    /// it is refused; `.allInSeries`, and `.thisAndFollowing` at the master's start, work as usual.
+    private static func requireOccurrence(_ ref: EventRef, scope: RecurrenceScope) throws {
+        if scope == .thisInstance, let series = ref.seriesID, series == ref.eventID {
+            throw WriteError.invalid("this is a recurring series; use .allInSeries or read the occurrence first")
+        }
+    }
+
     /// The calendar, provided it exists and the account can write to it.
     private func writableCalendar(_ calendarID: String) async throws -> CalendarDescriptor {
         guard let calendar = try await calendars().first(where: { $0.id == calendarID }) else { throw WriteError.notFound }
@@ -152,8 +165,15 @@ extension GoogleCalendarSource: WritableCalendarSource {
     private func mapped(_ data: Data, calendar: CalendarDescriptor) throws -> CalendarEvent {
         let dto = try api.decode(GoogleEventDTO.self, from: data)
         if dto.status == "cancelled" { throw WriteError.notFound }
-        guard let event = GoogleEventMapper.map(dto, calendar: calendar, sourceID: id) else {
+        guard var event = GoogleEventMapper.map(dto, calendar: calendar, sourceID: id) else {
             throw SourceError.invalidResponse("google: unreadable event")
+        }
+        // A resource with a `recurrence` is a series master (a create with a rule, a series-wide or split write). Reads
+        // expand series and never return one. Mark it as its own series, starting at its own slot, so that a delete
+        // with `.thisInstance` cannot be mistaken for a single event and remove the whole series.
+        if dto.recurrence?.isEmpty == false {
+            event.seriesID = dto.id
+            event.originalStart = event.start
         }
         return event
     }
@@ -298,7 +318,8 @@ extension GoogleCalendarSource: WritableCalendarSource {
         calendar: CalendarDescriptor
     ) async throws -> GoogleWriteMapper.Body {
         let instance = try await fetchRaw(ref.calendarID, ref.eventID)
-        // The split rewrites the occurrence's fields from the fetched copy, so judge staleness like any other update.
+        // The new series is built from the master and starts at the occurrence's original slot, so the occurrence's own
+        // copy is read only to judge staleness like any other update.
         if let version = ref.version, let etag = instance.etag, etag != version {
             let overlapping = PatchMerge.conflicts(patch: patch, current: try mapped(instance.data, calendar: calendar))
             if !overlapping.isEmpty { throw WriteError.conflict(fields: overlapping) }
@@ -315,7 +336,7 @@ extension GoogleCalendarSource: WritableCalendarSource {
         }
         let zoneName = (master.json["start"] as? [String: Any])?["timeZone"] as? String
         return try GoogleWriteMapper.newSeriesBody(
-            master: master.json, instance: instance.json, patch: patch, recurrence: lines,
+            master: master.json, slot: split, patch: patch, recurrence: lines,
             fallbackZone: zoneName ?? calendar.timeZone?.identifier ?? "UTC")
     }
 

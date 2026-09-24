@@ -124,7 +124,7 @@ private func partialMessage(_ body: () async throws -> Void) async -> String? {
 
 @Test func theNewSeriesBodyIsBuiltFromTheMasterWithoutOutputOnlyFields() throws {
     let patch = EventPatch(location: .set("Lab"))
-    let body = try GoogleWriteMapper.newSeriesBody(master: master(), instance: instanceJSON(), patch: patch,
+    let body = try GoogleWriteMapper.newSeriesBody(master: master(), slot: instant(split), patch: patch,
                                                    recurrence: ["RRULE:FREQ=WEEKLY;COUNT=8"], fallbackZone: "UTC")
     let json = body.json
     for key in ["id", "etag", "iCalUID", "htmlLink", "sequence", "recurringEventId", "originalStartTime"] { #expect(json[key] == nil, "\(key) must not be copied") }
@@ -139,14 +139,14 @@ private func partialMessage(_ body: () async throws -> Void) async -> String? {
 }
 
 @Test func aPatchThatRemovesTheConferenceDoesNotRequestANewOne() throws {
-    let body = try GoogleWriteMapper.newSeriesBody(master: master(), instance: instanceJSON(), patch: EventPatch(conference: .remove),
+    let body = try GoogleWriteMapper.newSeriesBody(master: master(), slot: instant(split), patch: EventPatch(conference: .remove),
                                                    recurrence: ["RRULE:FREQ=WEEKLY"], fallbackZone: "UTC")
     #expect(body.json["conferenceData"] == nil)
 }
 
 @Test func aTimingPatchOnTheNewSeriesCarriesNoNullsInsideStartAndEnd() throws {
     let allDay = EventTiming(start: instant("2026-09-15T00:00:00Z"), end: instant("2026-09-16T00:00:00Z"), timeZone: TimeZone(identifier: "UTC")!, isAllDay: true)
-    let body = try GoogleWriteMapper.newSeriesBody(master: master(), instance: instanceJSON(), patch: EventPatch(timing: allDay),
+    let body = try GoogleWriteMapper.newSeriesBody(master: master(), slot: instant(split), patch: EventPatch(timing: allDay),
                                                    recurrence: ["RRULE:FREQ=WEEKLY"], fallbackZone: "UTC")
     let start = try #require(body.json["start"] as? [String: Any])
     #expect(start["date"] as? String == "2026-09-15" && start["dateTime"] == nil && start["timeZone"] == nil)
@@ -372,18 +372,60 @@ private func partialMessage(_ body: () async throws -> Void) async -> String? {
     #expect(bodyJSON(post)["recurrence"] as? [String] == ["RRULE:FREQ=DAILY;COUNT=3"])
 }
 
-@Test func aMovedOccurrenceIsCutAtItsOriginalSlotButTheNewSeriesStartsWhereItIs() async throws {
+@Test func aMovedOccurrenceIsCutAtItsOriginalSlotAndTheNewSeriesStartsThereToo() async throws {
     let h = try await harness(masterResponses: [.json(master()), .json(master())])
     var moved = instanceJSON()
+    // This occurrence was moved an hour later and made longer; the rest of the series was not.
     moved["start"] = ["dateTime": "2026-09-15T16:00:00Z", "timeZone": "UTC"]
-    moved["end"] = ["dateTime": "2026-09-15T16:30:00Z", "timeZone": "UTC"]
+    moved["end"] = ["dateTime": "2026-09-15T17:00:00Z", "timeZone": "UTC"]
     await h.transport.route("\(calPath)/m1_2026", [.json(moved)])
     _ = try await h.source.update(ref, EventPatch(location: .set("Lab")), scope: .thisAndFollowing, notify: .none)
     let truncate = try #require(await masterWrites(h).last)
     #expect(bodyJSON(truncate)["recurrence"] as? [String] == ["RRULE:FREQ=WEEKLY;UNTIL=20260915T145959Z"])
+    // The patch does not touch timing, so the following occurrences keep the series' time and length.
     let post = try #require(await h.transport.requests(matching: "\(calPath)?").last)
-    #expect((bodyJSON(post)["start"] as? [String: Any])?["dateTime"] as? String == "2026-09-15T16:00:00Z")
-    #expect((bodyJSON(post)["end"] as? [String: Any])?["dateTime"] as? String == "2026-09-15T16:30:00Z")
+    let start = try #require(bodyJSON(post)["start"] as? [String: Any])
+    #expect(start["dateTime"] as? String == "2026-09-15T15:00:00Z" && start["timeZone"] as? String == "UTC")
+    let end = try #require(bodyJSON(post)["end"] as? [String: Any])
+    #expect(end["dateTime"] as? String == "2026-09-15T15:30:00Z" && end["timeZone"] as? String == "UTC")
+}
+
+@Test func aMovedAllDayOccurrenceStartsTheNewSeriesOnItsOriginalDayWithTheSeriesLength() async throws {
+    let allDayMaster = googleEvent(id: "m1", etag: "em1", extra: [
+        "start": ["date": "2026-09-01"], "end": ["date": "2026-09-03"], "recurrence": ["RRULE:FREQ=WEEKLY;UNTIL=20261231"]])
+    let allDayInstance = googleEvent(id: "m1_20260915", etag: "ei3", extra: [
+        "start": ["date": "2026-09-16"], "end": ["date": "2026-09-19"], "recurringEventId": "m1", "originalStartTime": ["date": "2026-09-15"]])
+    let h = try await harness(masterResponses: [.json(allDayMaster), .json(allDayMaster)])
+    await h.transport.route("\(calPath)/m1_2026", [.json(allDayInstance)])
+    let day = EventRef(calendarID: cal, eventID: "m1_20260915", version: "ei3", seriesID: "m1", originalStart: instant("2026-09-15T00:00:00Z"))
+    _ = try await h.source.update(day, EventPatch(location: .set("Lab")), scope: .thisAndFollowing, notify: .none)
+    let post = try #require(await h.transport.requests(matching: "\(calPath)?").last)
+    #expect(bodyJSON(post)["start"] as? [String: String] == ["date": "2026-09-15"])
+    #expect(bodyJSON(post)["end"] as? [String: String] == ["date": "2026-09-17"])   // the master spans two days
+}
+
+@Test func aTimingPatchStillSetsTheNewSeriesTimeWhateverTheSlotWas() throws {
+    let timing = EventTiming(start: instant("2026-09-15T18:00:00Z"), end: instant("2026-09-15T19:00:00Z"), timeZone: TimeZone(identifier: "UTC")!, isAllDay: false)
+    let body = try GoogleWriteMapper.newSeriesBody(master: master(), slot: instant(split), patch: EventPatch(timing: timing),
+                                                   recurrence: ["RRULE:FREQ=WEEKLY"], fallbackZone: "UTC")
+    #expect((body.json["start"] as? [String: Any])?["dateTime"] as? String == "2026-09-15T18:00:00Z")
+    #expect((body.json["end"] as? [String: Any])?["dateTime"] as? String == "2026-09-15T19:00:00Z")
+}
+
+@Test func theNewSeriesKeepsTheMastersOwnZoneNameAndTheFallbackUsesTheWireName() throws {
+    // The master's zone name carries over to the slot.
+    var berlin = master()
+    berlin["start"] = ["dateTime": "2026-09-01T17:00:00+02:00", "timeZone": "Europe/Berlin"]
+    berlin["end"] = ["dateTime": "2026-09-01T17:30:00+02:00", "timeZone": "Europe/Berlin"]
+    let carried = try GoogleWriteMapper.newSeriesBody(master: berlin, slot: instant(split), patch: EventPatch(title: "X"),
+                                                      recurrence: ["RRULE:FREQ=WEEKLY"], fallbackZone: "UTC")
+    #expect((carried.json["start"] as? [String: Any])?["timeZone"] as? String == "Europe/Berlin")
+    // A patch time without a zone gets the fallback, spelled as the wire format wants ("UTC", not Darwin's "GMT").
+    let zoneless = EventTiming(start: instant("2026-09-15T18:00:00Z"), end: instant("2026-09-15T19:00:00Z"), timeZone: nil, isAllDay: false)
+    let body = try GoogleWriteMapper.newSeriesBody(master: master(), slot: instant(split), patch: EventPatch(timing: zoneless),
+                                                   recurrence: ["RRULE:FREQ=WEEKLY"], fallbackZone: "GMT")
+    #expect((body.json["start"] as? [String: Any])?["timeZone"] as? String == "UTC")
+    #expect((body.json["end"] as? [String: Any])?["timeZone"] as? String == "UTC")
 }
 
 @Test func earlierOccurrencesAreCountedAcrossPagesIncludingCancelledOnes() async throws {

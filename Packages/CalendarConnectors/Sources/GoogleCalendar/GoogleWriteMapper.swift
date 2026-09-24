@@ -326,11 +326,49 @@ extension GoogleWriteMapper {
         return key?["type"] as? String == "hangoutsMeet" || json["hangoutLink"] != nil
     }
 
+    /// The zone name for a fallback identifier, spelled as Google's wire format wants it. An identifier this platform
+    /// does not know is passed through unchanged (it came from Google in the first place).
+    private static func wireName(_ identifier: String) -> String? {
+        guard let zone = TimeZone(identifier: identifier) else { return identifier }
+        return zoneName(zone)
+    }
+
+    /// The days between two `date` values of an all-day master.
+    private static func dayCount(_ first: String, _ last: String) -> Int? {
+        func day(_ text: String) -> Date? {
+            let parts = text.split(separator: "-").compactMap { Int($0) }
+            guard parts.count == 3 else { return nil }
+            return AllDay.startOfDay(CalendarDate(year: parts[0], month: parts[1], day: parts[2]), in: TimeZone(identifier: "UTC")!)
+        }
+        guard let a = day(first), let b = day(last) else { return nil }
+        return Int((b.timeIntervalSince(a) / 86_400).rounded())
+    }
+
+    /// The start and end of the new series: the occurrence's original `slot` with the master's length, in the master's
+    /// own form (`dateTime` with its zone name, or all-day `date`s), so following occurrences keep the series' time even
+    /// when this one was moved. `fallbackZone` reads an all-day slot's day and names the zone when the master has none.
+    private static func seriesTimes(master: JSON, slot: Date, fallbackZone: String?) throws -> (start: JSON, end: JSON) {
+        let unreadable = SourceError.invalidResponse("google: unreadable event")
+        guard let start = master["start"] as? JSON, let end = master["end"] as? JSON else { throw unreadable }
+        let fallback = fallbackZone.flatMap { TimeZone(identifier: $0) }
+        if let first = start["date"] as? String, let last = end["date"] as? String {
+            guard let days = dayCount(first, last), days >= 1 else { throw unreadable }
+            let day = AllDay.date(of: slot, in: fallback ?? TimeZone(identifier: "UTC")!)
+            return (["date": dayText(day)], ["date": dayText(day.adding(days: days))])
+        }
+        guard let startText = start["dateTime"] as? String, let endText = end["dateTime"] as? String,
+              let masterStart = GoogleEventMapper.parseInstant(startText), let masterEnd = GoogleEventMapper.parseInstant(endText),
+              masterEnd > masterStart
+        else { throw unreadable }
+        let zone = (start["timeZone"] as? String).flatMap { TimeZone(identifier: $0) } ?? fallback
+        return timeJSON(EventTiming(start: slot, end: slot.addingTimeInterval(masterEnd.timeIntervalSince(masterStart)), timeZone: zone, isAllDay: false))
+    }
+
     /// The insert body for the new series: the whole master resource (so unmodeled fields such as color, attachments and
-    /// extended properties carry over) minus output-only fields, starting at the instance's own start and end, guests'
-    /// responses reset, the patch applied, and a new Meet link requested when the master had one (unless the patch
-    /// removes the conference).
-    static func newSeriesBody(master: JSON, instance: JSON, patch: EventPatch, recurrence: [String], fallbackZone: String?) throws -> Body {
+    /// extended properties carry over) minus output-only fields, starting at the occurrence's original `slot` with the
+    /// master's length (unless the patch sets the time), guests' responses reset, the patch applied, and a new Meet link
+    /// requested when the master had one (unless the patch removes the conference).
+    static func newSeriesBody(master: JSON, slot: Date, patch: EventPatch, recurrence: [String], fallbackZone: String?) throws -> Body {
         var json = master.filter { !outputOnlyKeys.contains($0.key) }
         if let attendees = json["attendees"] as? [JSON] {
             json["attendees"] = attendees.map { attendee -> JSON in
@@ -341,8 +379,9 @@ extension GoogleWriteMapper {
                 return copy
             }
         }
-        json["start"] = instance["start"]
-        json["end"] = instance["end"]
+        let times = try seriesTimes(master: master, slot: slot, fallbackZone: fallbackZone)
+        json["start"] = times.start
+        json["end"] = times.end
         let changes = try patchBody(patch, currentAttendees: json["attendees"] as? [JSON] ?? [])
         for (key, value) in changes.json {
             if value is NSNull {
@@ -356,7 +395,7 @@ extension GoogleWriteMapper {
         }
         // A recurring event's times need a zone name for its rule to be read in.
         for key in ["start", "end"] {
-            if var time = json[key] as? JSON, time["dateTime"] != nil, time["timeZone"] == nil, let zone = fallbackZone {
+            if var time = json[key] as? JSON, time["dateTime"] != nil, time["timeZone"] == nil, let zone = fallbackZone.flatMap(wireName) {
                 time["timeZone"] = zone
                 json[key] = time
             }

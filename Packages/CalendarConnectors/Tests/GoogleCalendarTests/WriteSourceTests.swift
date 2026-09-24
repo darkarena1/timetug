@@ -347,3 +347,85 @@ private func moved() -> EventTiming {
     let sent = await h.transport.requests(matching: "\(calPath)/ev1")
     #expect(sent.map(\.method) == ["GET", "PATCH", "GET", "GET", "PATCH"] && sent[1].headers["If-Match"] == "e1" && sent[4].headers["If-Match"] == "e2")
 }
+
+// MARK: Final review: a series master is not a single event
+
+private let masterMessage = "this is a recurring series; use .allInSeries or read the occurrence first"
+private let weekly = RecurrenceRule(frequency: .weekly, end: .count(4))
+
+/// Creates a recurring event (the reply is the series master) and returns the ref a caller would build from it.
+private func createdSeries(_ h: Harness) async throws -> (event: CalendarEvent, ref: EventRef) {
+    await h.transport.route(calPath, [.json(googleEvent(id: "new1", etag: "e9", extra: ["recurrence": ["RRULE:FREQ=WEEKLY;COUNT=4"]]))])
+    let event = try await h.source.create(EventDraft(title: "Standup", timing: timing(), recurrence: weekly), in: cal, notify: .none)
+    return (event, EventRef(event))
+}
+
+@Test func creatingARecurringEventReturnsTheMasterAsASeries() async throws {
+    let h = try await Harness()
+    let (event, ref) = try await createdSeries(h)
+    #expect(event.eventID == "new1" && event.seriesID == "new1" && event.originalStart == event.start)
+    #expect(ref.seriesID == "new1" && ref.originalStart == instant("2026-09-21T10:00:00Z"))
+}
+
+@Test func anEventWithoutARecurrenceIsNotASeriesInWriteResults() async throws {
+    let h = try await Harness()
+    await h.transport.route(calPath, [.json(googleEvent(id: "new1")), .json(googleEvent(id: "new2", extra: ["recurrence": []]))])
+    let plain = try await h.source.create(EventDraft(title: "T", timing: timing()), in: cal, notify: .none)
+    #expect(plain.seriesID == nil && plain.originalStart == nil)
+    let empty = try await h.source.create(EventDraft(title: "T", timing: timing()), in: cal, notify: .none)
+    #expect(empty.seriesID == nil && empty.originalStart == nil)
+}
+
+@Test func aThisInstanceWriteOnASeriesMasterIsRefusedBeforeAnyRequest() async throws {
+    let h = try await Harness()
+    let (_, ref) = try await createdSeries(h)
+    let before = await h.transport.requests.count
+    await expectWriteError(.invalid(masterMessage)) { try await h.source.delete(ref, scope: .thisInstance, notify: .none) }
+    await expectWriteError(.invalid(masterMessage)) { _ = try await h.source.update(ref, EventPatch(title: "X"), scope: .thisInstance, notify: .none) }
+    await expectWriteError(.invalid(masterMessage)) { _ = try await h.source.respond(to: ref, .accepted, scope: .thisInstance, notify: .none) }
+    #expect(await h.transport.requests.count == before)   // no DELETE, PATCH or even a lookup
+}
+
+@Test func seriesWideScopesStillWorkOnASeriesMasterRef() async throws {
+    let h = try await Harness()
+    let (_, ref) = try await createdSeries(h)
+    await h.transport.route("\(calPath)/new1", [
+        .json(googleEvent(id: "new1", etag: "e10", summary: "All", extra: ["recurrence": ["RRULE:FREQ=WEEKLY;COUNT=4"]])),
+        HTTPResponse(status: 204),
+    ])
+    let updated = try await h.source.update(ref, EventPatch(title: "All"), scope: .allInSeries, notify: .none)
+    #expect(updated.seriesID == "new1" && updated.title == "All")
+    try await h.source.delete(ref, scope: .allInSeries, notify: .none)
+    let sent = await h.transport.requests(matching: "\(calPath)/new1")
+    #expect(sent.map(\.method) == ["PATCH", "DELETE"])
+}
+
+@Test func thisAndFollowingAtTheMasterStartIsTheWholeSeries() async throws {
+    let h = try await Harness()
+    let (_, ref) = try await createdSeries(h)
+    await h.transport.route("\(calPath)/new1", [
+        .json(googleEvent(id: "new1", etag: "e9", extra: ["recurrence": ["RRULE:FREQ=WEEKLY;COUNT=4"]])), HTTPResponse(status: 204),
+    ])
+    try await h.source.delete(ref, scope: .thisAndFollowing, notify: .none)
+    let sent = await h.transport.requests(matching: "\(calPath)/new1")
+    #expect(sent.map(\.method) == ["GET", "DELETE"])
+    #expect(await h.transport.requests(matching: "\(calPath)?").filter { $0.method == "POST" }.count == 1)   // only the create
+}
+
+// MARK: Final review: a recurrence change needs the whole series
+
+@Test func aRecurrenceChangeOnASingleOccurrenceIsRefusedBeforeAnyRequest() async throws {
+    let h = try await Harness()
+    let occurrence = EventRef(calendarID: cal, eventID: "m1_20260921T100000Z", version: "i1", seriesID: "m1", originalStart: instant("2026-09-21T10:00:00Z"))
+    for change in [FieldUpdate<RecurrenceRule>.clear, .set(weekly)] {
+        await expectWriteError(.unsupported(fields: [.recurrence])) {
+            _ = try await h.source.update(occurrence, EventPatch(recurrence: change), scope: .thisInstance, notify: .none)
+        }
+    }
+    #expect(await h.transport.requests.isEmpty)
+    // Other scopes and non-series events are not affected by the check.
+    await h.transport.route("\(calPath)/m1", [.json(googleEvent(id: "m1", etag: "m2"))])
+    _ = try await h.source.update(occurrence, EventPatch(recurrence: .clear), scope: .allInSeries, notify: .none)
+    await h.transport.route("\(calPath)/ev1", [.json(googleEvent(id: "ev1", etag: "e2"))])
+    _ = try await h.source.update(EventRef(calendarID: cal, eventID: "ev1", version: "e1"), EventPatch(timing: timing(), recurrence: .set(weekly)), scope: .thisInstance, notify: .none)
+}

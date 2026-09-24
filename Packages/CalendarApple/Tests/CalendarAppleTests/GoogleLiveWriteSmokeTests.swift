@@ -69,12 +69,16 @@ private func detachedCleanUp(_ cleaner: SmokeCleaner, created: [CalendarEvent] =
 ///
 /// What it settles (the unit tests only use a fake transport for these), printed as `LIVE ...` lines to record in the spec:
 /// - `If-Match` etag behaviour on PATCH: the stale-edit merge and conflict below.
-/// - The recurring insert's zone: the series uses an IANA zone (`Europe/London`), not UTC. Darwin's `TimeZone(identifier:
-///   "UTC").identifier` is "GMT", which Google may reject or mishandle, so this test does not depend on it; a request
-///   error is printed as `LIVE failure: ...`.
+/// - The recurring series' zone: the main series uses an IANA zone (`Europe/London`). A separate UTC-zoned recurring
+///   event exercises the "UTC" spelling (Darwin's `TimeZone(identifier: "UTC").identifier` is "GMT", which the mapper
+///   sends as "UTC"); it prints what Google stored as `LIVE UTC ...`, and a request error as `LIVE UTC failure: ...`.
 /// - The `.thisAndFollowing` split and its `COUNT` arithmetic (old series keeps the earlier occurrences, the new series
 ///   gets `total - prior`): printed as the instance count per series after the split (expected `[2, 2]`).
 /// - The Meet re-request on the new series: printed as each instance's conference provider before and after the split.
+/// - A split when the series already has exceptions AFTER the split point (one occurrence modified, another cancelled
+///   through the API): what the calendar shows afterwards is printed as `LIVE split with later exceptions ...`. Unit
+///   tests cannot know whether the cancelled occurrence reappears in the new series or whether the modified one shows
+///   twice (once from the old series' exception, once from the new series); record the answer in the spec.
 /// - `supportsAttachments`: NOT exercised. The series has no attachments, so the split never sends that parameter;
 ///   confirming it needs an event with a Drive attachment, added by hand.
 @Test(.enabled(if: liveGoogle), .timeLimit(.minutes(10))) func googleWriteSmoke() async throws {
@@ -97,7 +101,7 @@ private func detachedCleanUp(_ cleaner: SmokeCleaner, created: [CalendarEvent] =
     let primary = try #require(primaryCalendar)
     print("LIVE signed in; writing to the primary calendar")
 
-    // An IANA zone, not "UTC" (see the doc comment).
+    // The main flow uses an IANA zone; the UTC spelling is exercised separately (see the doc comment).
     let zone = try #require(TimeZone(identifier: "Europe/London"))
     var london = Calendar(identifier: .gregorian)
     london.timeZone = zone
@@ -107,7 +111,7 @@ private func detachedCleanUp(_ cleaner: SmokeCleaner, created: [CalendarEvent] =
         let s = start.addingTimeInterval(Double(offsetDays) * 86_400)
         return EventTiming(start: s, end: s.addingTimeInterval(1800), timeZone: zone, isAllDay: false)
     }
-    // The series (weekly, four occurrences, from day 2) ends about day 23; the window covers all of it.
+    // The longest series (weekly, six occurrences, from day 2) ends about day 37; the window covers all of it.
     let window = DateInterval(start: start.addingTimeInterval(-3600), duration: 86_400 * 40)
 
     let cleaner = SmokeCleaner(source: source, writable: writable, calendarID: primary.id, window: window)
@@ -200,6 +204,53 @@ private func detachedCleanUp(_ cleaner: SmokeCleaner, created: [CalendarEvent] =
         print("LIVE notes after allInSeries: \(list.map { $0.notes ?? "-" })")
         // The split left the old and the new series both present; `remove` deletes each once.
         for event in list { try await cleaner.remove(event) }
+
+        // 3. A split with exceptions after the split point. The events of this step are told apart by title, because
+        // the polls above count every smoke event.
+        let laterTitle = "\(smokePrefix) later exceptions"
+        func titled(_ list: [CalendarEvent], _ prefix: String) -> [CalendarEvent] { list.filter { $0.title.hasPrefix(prefix) } }
+        let later = try await writable.create(
+            EventDraft(title: laterTitle, timing: timing(2), recurrence: RecurrenceRule(frequency: .weekly, end: .count(6))), in: primary.id, notify: .none)
+        created.append(later)
+        var laterList = titled(try await poll { titled($0, laterTitle).count == 6 }, laterTitle)
+        try #require(laterList.count == 6, "expected 6 instances of the later-exceptions series, saw \(laterList.count)")
+        let modifiedSlot = laterList[4].start
+        let cancelledSlot = laterList[5].start
+        _ = try await writable.update(EventRef(laterList[4]), EventPatch(title: "\(laterTitle) (modified)"), scope: .thisInstance, notify: .none)
+        try await writable.delete(EventRef(laterList[5]), scope: .thisInstance, notify: .none)
+        laterList = titled(try await poll { titled($0, laterTitle).count == 5 && titled($0, laterTitle).contains { $0.title.hasSuffix("(modified)") } }, laterTitle)
+        print("LIVE later exceptions before the split (expected 5 shown): \(laterList.count)")
+        try #require(laterList.count == 5, "expected 5 instances before the split, saw \(laterList.count)")
+        _ = try await writable.update(EventRef(laterList[2]), EventPatch(location: .set("Lab")), scope: .thisAndFollowing, notify: .none)
+        // The listing settles a moment after the split; wait until the new series shows, then a little longer for the rest.
+        _ = try await poll { titled($0, laterTitle).contains { $0.location == "Lab" } }
+        try await Task.sleep(for: .seconds(3))
+        laterList = titled(try await cleaner.mine(), laterTitle)
+        let iso = ISO8601DateFormatter()
+        print("LIVE split with later exceptions: \(laterList.count) instances shown (before the split: 5, with one cancelled and one modified)")
+        print("LIVE split with later exceptions: \(laterList.map { ($0.title.dropFirst(laterTitle.count), $0.location ?? "-", iso.string(from: $0.start), $0.seriesID ?? "-") })")
+        print("LIVE split with later exceptions: cancelled occurrence reappeared = \(laterList.contains { $0.start == cancelledSlot }), "
+            + "modified occurrence shown \(laterList.filter { $0.start == modifiedSlot }.count) time(s) at its slot, "
+            + "instances per series \(Dictionary(grouping: laterList, by: { $0.seriesID ?? $0.eventID }).values.map(\.count).sorted())")
+        for event in laterList { try await cleaner.remove(event) }
+
+        // 4. A UTC-zoned recurring event: Google must accept the zone name "UTC" (and a rule read in it). A failure here
+        // is the finding, so it is printed instead of ending the run.
+        let utc = try #require(TimeZone(identifier: "UTC"))
+        let utcStart = start.addingTimeInterval(86_400)
+        let utcTitle = "\(smokePrefix) utc"
+        do {
+            let utcEvent = try await writable.create(
+                EventDraft(title: utcTitle, timing: EventTiming(start: utcStart, end: utcStart.addingTimeInterval(1800), timeZone: utc, isAllDay: false),
+                           recurrence: RecurrenceRule(frequency: .weekly, end: .count(2))), in: primary.id, notify: .none)
+            created.append(utcEvent)
+            let utcList = titled(try await poll { titled($0, utcTitle).count == 2 }, utcTitle)
+            print("LIVE UTC event: \(utcList.count) instances (expected 2), zone \(utcList.map { $0.timeZone?.identifier ?? "-" }), "
+                + "starts \(utcList.map { iso.string(from: $0.start) }) (first expected \(iso.string(from: utcStart)))")
+            for event in utcList { try await cleaner.remove(event) }
+        } catch {
+            print("LIVE UTC failure: \(error)")
+        }
     } catch {
         print("LIVE failure: \(error)")
         await detachedCleanUp(cleaner, created: created)
