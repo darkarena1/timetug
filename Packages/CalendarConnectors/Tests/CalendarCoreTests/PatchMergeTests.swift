@@ -115,6 +115,32 @@ private func patch(_ mutate: (inout EventEdit) -> Void) -> EventPatch {
     #expect(fetched.value == 1)
 }
 
+@Test func aRetryWithoutAFreshVersionFailsClosedWhenTheOriginalWasVersioned() async {
+    var current = base()
+    current.location = "Elsewhere"   // no overlap with a title patch, so a retry would be due
+    current.version = nil
+    let writes = Box(0)
+    await expectWriteError(.conflict(fields: [.title])) {
+        _ = try await PatchMerge.apply(patch: patch { $0.event.title = "New" }, version: "v1", fetchCurrent: { current },
+                                       write: { _ -> Attempt in writes.value += 1; return .stale })
+    }
+    #expect(writes.value == 1)   // never retried unconditionally
+}
+
+@Test func aNilOriginalVersionStillRetriesWithoutOne() async throws {
+    var current = base()
+    current.location = "Elsewhere"
+    current.version = nil
+    let seen = Box<[String?]>([])
+    let result = try await PatchMerge.apply(
+        patch: patch { $0.event.title = "New" }, version: nil, fetchCurrent: { current },
+        write: { version -> Attempt in
+            seen.value.append(version)
+            return seen.value.count == 2 ? .done("saved") : .stale
+        })
+    #expect(result == "saved" && seen.value == [nil, nil])
+}
+
 // MARK: edge cases beyond the plan
 
 @Test func aNonPositiveMaxAttemptsStillWritesOnce() async throws {

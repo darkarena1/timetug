@@ -57,7 +57,10 @@ public enum PatchMerge {
     /// Runs `write` with `version`. When it reports `.stale`, fetches the current event and judges the patch against
     /// it: a real overlap throws `.conflict(fields:)`; otherwise the write is retried on the fresh version, and a
     /// further stale result is judged the same way. After `maxAttempts` writes it throws
-    /// `.conflict(fields: patch.touchedFields)` (the event is being edited concurrently).
+    /// `.conflict(fields: patch.touchedFields)` (the event is being edited concurrently). It fails closed the same way
+    /// when a retry is due but the fresh event carries no version although the write was versioned: retrying without
+    /// one would be an unconditional write that could overwrite an edit made after the fetch. A write that started
+    /// without a version has nothing to lose and retries as before.
     public static func apply<Result>(
         patch: EventPatch, version: String?, maxAttempts: Int = 3,
         fetchCurrent: () async throws -> CalendarEvent,
@@ -74,6 +77,7 @@ public enum PatchMerge {
                 let current = try await fetchCurrent()
                 let overlapping = conflicts(patch: patch, current: current)
                 if !overlapping.isEmpty { throw WriteError.conflict(fields: overlapping) }
+                if version != nil && current.version == nil { throw WriteError.conflict(fields: patch.touchedFields) }
                 version = current.version
             }
         }
