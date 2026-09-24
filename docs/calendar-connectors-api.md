@@ -349,8 +349,13 @@ public protocol WritableCalendarSource: CalendarSource {
 }
 ```
 
-Writes return the event in the provider's resulting form, including its new `version`. A series-wide Google write returns
-the master or first occurrence; callers that need instances re-read. `scope` is ignored for an event that is not part of a series.
+Writes return the event in the provider's resulting form, including its new `version`. What a write on a series returns
+differs by connector, and callers that need instances re-read. Google: `create` with a recurrence, and the series-wide
+writes (`.allInSeries`, a `.thisAndFollowing` at the series' first occurrence, and the new series of a split), return the
+series master, now with `seriesID` set to its own id and `originalStart` to its start, so `EventRef(returned)` designates
+the whole series: a `.thisInstance` update, delete or respond on it throws `WriteError.invalid("this is a recurring series;
+use .allInSeries or read the occurrence first")` before any request (a single-instance write would otherwise hit the
+whole series). EventKit: the first occurrence. `scope` is ignored for an event that is not part of a series.
 
 **Three levels of "can I write?"**
 1. Conformance to `WritableCalendarSource` (checked by callers with `as?`). Invariant: `capabilities.canWrite` is true
@@ -438,7 +443,12 @@ patch adds or removes, and an attendee someone else already changed to the wante
 the patch is re-applied on the fresh version and re-judged if it goes stale again. A difference: `WriteError.conflict(fields:)`.
 `maxAttempts` is clamped to at least 1, cancellation is checked per attempt, and after the last attempt it throws
 `.conflict(fields: touchedFields)`. A patch without a `base` (or that touches `recurrence`) conflicts on any stale
-version. Known limitation: a retry whose fetched event has no `version` is an unconditional write.
+version. It fails closed when a retry is due, the write was versioned and the fresh event carries no `version`:
+retrying without one would be an unconditional write that could overwrite an edit made after the fetch, so it throws
+`.conflict(fields: touchedFields)`. Only a write that started unversioned (no `ref.version`) retries unconditionally.
+
+`delete` ignores `ref.version` on both connectors (no `If-Match`, no modification-date check): it is last-writer-wins,
+so deleting an event that someone else edited meanwhile deletes it anyway.
 
 **Provider mapping.**
 
@@ -460,6 +470,22 @@ EventKit's declared capabilities: writes yes, `writableFields` = title, notes, l
 and recurrence, all three scopes, RSVP no, attendee editing no, notification control no. It refuses attendee changes,
 `respond`, `visibility` and a generated conference with `.unsupported`, and update or delete on a read-only calendar with
 `.forbidden` (an empty-patch update returns before that check). Its writes validate input before checking calendar access.
+
+A recurrence change (`.set` or `.clear`) with `.thisInstance` on an occurrence of a series is refused on both
+connectors with `.unsupported(fields: [.recurrence])`, before any request or store mutation: a rule belongs to the whole
+series (use `.allInSeries`, or `.thisAndFollowing` on Google, which starts a new series with the rule). EventKit, when a
+failed save leaves the in-memory event edited, discards it with `rollback()`.
+
+**Known limitations of Google's `.thisAndFollowing` (a split is a truncation plus a new series, not a native operation).**
+The new series starts at the occurrence's original slot with the master's length, so a moved occurrence does not move
+the following ones; a patch that sets `timing` applies its time to the new series instead. Beyond that:
+- An occurrence after the split point that was cancelled (deleted through the API) is not carried over: only `EXDATE`
+  lines are, so the cancelled occurrence may reappear in the new series.
+- The carried `EXDATE` lines keep the old time of day, so if the patch changes the series' time they no longer match the
+  new series' occurrences.
+- A modified exception after the split point stays with the old series. Whether Google still shows it past the old
+  series' new `UNTIL` (a possible duplicate next to the new series' own occurrence) is UNVERIFIED; the live smoke test
+  prints what the calendar shows (`LIVE split with later exceptions ...`) and the answer has not been recorded yet.
 
 **Testing seams (`CalendarTestSupport`).** `FakeWritableSource` is an in-memory `WritableCalendarSource` (non-recurring
 events, `writeCount`, `simulateExternalEdit`). `WritableSourceConformance.violations(of:calendarID:window:)` runs the
@@ -483,6 +509,7 @@ provider metadata; a `metadata` field and capability can be added later without 
 - **Google write behavior beyond the fake transport (unverified).** `supportsAttachments=true` on a split with
   attachments, the Meet re-request on a new series, and the `COUNT` arithmetic (assumes `events.instances?showDeleted=true`
   includes EXDATE'd occurrences) are checked only against the fake transport until the Google smoke test confirms them.
+  The same goes for how a split treats exceptions after the split point (see the known limitations in part 10).
   Whether the truncation of the old series should notify guests on update is an open decision (spec, Risks).
 - **Reminder defaults.** A provider's "use default reminders" and "no reminders" both read as an empty list.
 - **Google OAuth client in release builds.** The client id and secret are injected from git-ignored configuration; CI
