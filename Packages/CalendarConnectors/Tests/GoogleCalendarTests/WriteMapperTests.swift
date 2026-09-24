@@ -10,7 +10,12 @@ private func timed(_ zone: TimeZone? = utc) -> EventTiming {
     EventTiming(start: instant("2026-09-21T10:00:00Z"), end: instant("2026-09-21T10:30:00Z"), timeZone: zone, isAllDay: false)
 }
 private func dict(_ any: Any?) -> [String: Any] { any as? [String: Any] ?? [:] }
-private func same(_ a: Any, _ b: Any) -> Bool { (a as AnyObject).isEqual(b) }
+/// Structural equality of two JSON containers via canonical (sorted-key) serialization; portable to Linux, where `AnyObject.isEqual` is unavailable.
+private func same(_ a: Any, _ b: Any) -> Bool {
+    func canonical(_ x: Any) -> Data? { try? JSONSerialization.data(withJSONObject: x, options: [.sortedKeys]) }
+    guard let l = canonical(a), let r = canonical(b) else { return false }
+    return l == r
+}
 
 // Foundation on Darwin reports the "UTC" zone's identifier as "GMT" while Linux says "UTC"; the wire format is always "UTC".
 @Test func createBodyForATimedEvent() throws {
