@@ -50,6 +50,37 @@ private func draft(_ title: String = "Sync") -> EventDraft {
     #expect(same == created && source.writeCount == before)
 }
 
+@Test func anEmptyPatchWithABaseReturnsTheBaseAndWritesNothing() async throws {
+    let source = FakeWritableSource()
+    let created = try await source.create(draft(), in: "cal", notify: .none)
+    #expect(source.simulateExternalEdit(calendarID: "cal", eventID: created.eventID) { $0.location = "Elsewhere" })
+    let before = source.writeCount
+    let empty = EventEdit(created).patch   // nothing edited, but it carries `created` as its base
+    #expect(empty.isEmpty && empty.base == created)
+    let result = try await source.update(EventRef(created), empty, scope: .thisInstance, notify: .none)
+    #expect(result == created && source.writeCount == before)
+}
+
+@Test func simulateExternalEditReportsWhetherTheEventExists() async throws {
+    let source = FakeWritableSource()
+    let created = try await source.create(draft(), in: "cal", notify: .none)
+    #expect(source.simulateExternalEdit(calendarID: "cal", eventID: created.eventID) { $0.title = "Theirs" })
+    #expect(!source.simulateExternalEdit(calendarID: "cal", eventID: "ghost") { $0.title = "Theirs" })
+}
+
+@Test func theFakeDoesNotModelRecurrenceSoItRefusesIt() async throws {
+    let source = FakeWritableSource()
+    #expect(!source.capabilities.writableFields.contains(.recurrence))
+    var recurring = draft()
+    recurring.recurrence = RecurrenceRule(frequency: .daily)
+    await expectWriteError(.unsupported(fields: [.recurrence])) { _ = try await source.create(recurring, in: "cal", notify: .none) }
+    let created = try await source.create(draft(), in: "cal", notify: .none)
+    await expectWriteError(.unsupported(fields: [.recurrence])) {
+        _ = try await source.update(EventRef(created), EventPatch(recurrence: .set(RecurrenceRule(frequency: .daily))), scope: .thisInstance, notify: .none)
+    }
+    #expect(source.writeCount == 1)   // only the plain create
+}
+
 @Test func aStaleVersionMergesWhenFieldsDoNotOverlap() async throws {
     let source = FakeWritableSource()
     let created = try await source.create(draft(), in: "cal", notify: .none)

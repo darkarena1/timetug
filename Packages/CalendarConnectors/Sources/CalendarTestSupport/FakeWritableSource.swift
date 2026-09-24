@@ -1,8 +1,9 @@
 import CalendarCore
 import Foundation
 
-/// An in-memory `WritableCalendarSource` for tests. Non-recurring events only: the scope is ignored and a draft's
-/// recurrence is not stored. It never has a self attendee of its own; a test that needs one adds it with
+/// An in-memory `WritableCalendarSource` for tests. Non-recurring events only: the scope is ignored and recurrence is
+/// not modelled, so by default `.recurrence` is not among the writable fields and a draft or patch that sets it throws
+/// `.unsupported(fields: [.recurrence])`. It never has a self attendee of its own; a test that needs one adds it with
 /// `simulateExternalEdit`.
 public final class FakeWritableSource: WritableCalendarSource, @unchecked Sendable {
     public let id = "fake-writable"
@@ -15,7 +16,7 @@ public final class FakeWritableSource: WritableCalendarSource, @unchecked Sendab
     private var counter = 0
     private var writes = 0
 
-    public init(calendarIDs: [String] = ["cal"], writableFields: Set<EventField> = Set(EventField.allCases), canRespond: Bool = true) {
+    public init(calendarIDs: [String] = ["cal"], writableFields: Set<EventField> = Set(EventField.allCases).subtracting([.recurrence]), canRespond: Bool = true) {
         self.calendarIDs = Set(calendarIDs)
         self.capabilities = SourceCapabilities(
             canWrite: true, canEditAttendees: writableFields.contains(.attendees), canRespondToInvite: canRespond,
@@ -25,15 +26,18 @@ public final class FakeWritableSource: WritableCalendarSource, @unchecked Sendab
     /// Number of successful writes; lets tests assert that a call wrote nothing.
     public var writeCount: Int { lock.withLock { writes } }
 
-    /// Simulates another writer: applies `mutate` and bumps the version.
-    public func simulateExternalEdit(calendarID: String, eventID: String, _ mutate: (inout CalendarEvent) -> Void) {
+    /// Simulates another writer: applies `mutate` and bumps the version. Returns false (and does nothing) when there is
+    /// no such event, so a test that asserts the result notices a mistyped id.
+    @discardableResult
+    public func simulateExternalEdit(calendarID: String, eventID: String, _ mutate: (inout CalendarEvent) -> Void) -> Bool {
         lock.withLock {
             let key = "\(calendarID)/\(eventID)"
-            guard var event = events[key] else { return }
+            guard var event = events[key] else { return false }
             mutate(&event)
             counter += 1
             event.version = "v\(counter)"
             events[key] = event
+            return true
         }
     }
 
