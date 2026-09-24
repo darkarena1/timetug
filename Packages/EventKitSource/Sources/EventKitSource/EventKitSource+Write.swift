@@ -34,6 +34,9 @@ extension EventKitSource: WritableCalendarSource {
     public func update(_ ref: EventRef, _ patch: EventPatch, scope: RecurrenceScope, notify: NotifyPolicy) async throws -> CalendarEvent {
         try WriteValidation.requireWritable(patch.touchedFields, capabilities)
         try Self.validate(patch)
+        // A rule belongs to the whole series: on one occurrence the store would take it as a change to the series or drop
+        // it, so it is refused up front (Google refuses it too).
+        if scope == .thisInstance, ref.seriesID != nil, patch.recurrence != .keep { throw WriteError.unsupported(fields: [.recurrence]) }
         try requireAccess()
         let target = try locateTarget(ref, scope: scope)
         if patch.isEmpty { return patch.base ?? map(target.event) }

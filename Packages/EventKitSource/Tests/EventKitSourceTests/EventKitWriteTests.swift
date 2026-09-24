@@ -40,6 +40,18 @@ private let ref = EventRef(calendarID: "cal", eventID: "event")
     }
 }
 
+@Test func aRecurrenceChangeOnASingleOccurrenceIsRefusedBeforeTouchingTheStore() async {
+    let source = EventKitSource()
+    let occurrence = EventRef(calendarID: "cal", eventID: "event", seriesID: "series", originalStart: start)
+    for change in [FieldUpdate<RecurrenceRule>.clear, .set(RecurrenceRule(frequency: .weekly, end: .count(4)))] {
+        await expectWriteError(.unsupported(fields: [.recurrence])) {
+            _ = try await source.update(occurrence, EventPatch(recurrence: change), scope: .thisInstance, notify: .none)
+        }
+    }
+    // An empty series id is no series (see `EventRef`), and other scopes are left to the store.
+    #expect(EventRef(calendarID: "cal", eventID: "event", seriesID: "").seriesID == nil)
+}
+
 @Test func updateRefusesBadTimingAndNegativeRemindersBeforeTouchingTheStore() async {
     let source = EventKitSource()
     let backwards = EventTiming(start: timing.end, end: timing.start, timeZone: nil, isAllDay: false)
