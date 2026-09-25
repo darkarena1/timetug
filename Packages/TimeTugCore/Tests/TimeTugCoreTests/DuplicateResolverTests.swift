@@ -528,3 +528,14 @@ private let teamsLink = URL(string: "https://teams.microsoft.com/l/meetup-join/a
     #expect(byCalendar["fake/b"]?.start == date("2026-09-18T12:45:00Z"))
     #expect(byCalendar["fake/b"]?.end == date("2026-09-18T13:45:00Z"))
 }
+
+@Test func sameTitleCopiesMergeByRuleAndShowTheLongerTimes() {
+    let short = makeEvent("1", title: "Dance Party", start: "2026-09-18T19:15:00Z", minutes: 45, calendarID: "shared")
+    let long = makeEvent("2", title: "Dance Party", start: "2026-09-18T19:15:00Z", minutes: 60, calendarID: "blackout")
+    let result = resolve([short, long], verdicts: nil)
+    #expect(result.events.count == 1)
+    #expect(result.events[0].end == long.end)
+    #expect(result.events[0].start == short.start)
+    #expect(result.events[0].mergeProvenance == .rule)
+    #expect(result.events[0].mergedMembers.count == 2)
+}

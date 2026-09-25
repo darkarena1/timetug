@@ -6,12 +6,16 @@ import TimeTugCore
 public enum PromptBuilder {
     public static let instructions = """
     You compare two calendar entries that come from different calendars and decide whether they \
-    describe the same real-world appointment. Entries about different people or different places \
+    describe the same real-world appointment. The same event is often copied onto several calendars \
+    (shared, work, blackout or availability calendars), so entries on differently named calendars are \
+    not evidence of different appointments; ignore calendar names unless they name a person. Identical \
+    or near-identical titles that start at the same time are the same appointment, even when the end \
+    times differ or one copy is bare. Entries about different people or different places \
     are different appointments even at the same time. A short personal placeholder such as \
     "Scott: Doctor" can be the same appointment as a detailed entry such as "Intermountain Health" \
     when the details fit. A missing detail (no location, attendees or notes) is not evidence of a \
     mismatch: placeholders are often bare. Different lengths are normal, because one copy may \
-    include travel or prep time. Conflicting people or places mean different appointments. \
+    include travel or prep time. Only real conflicts (different people or different places) mean different appointments. \
     When you are unsure, answer unsure. Answer with exactly one word: same, different or unsure.
 
     Example 1. A: "Intermountain Health" 10:15-10:45, location 1234 Main St. B: "Scott: Doctor" \
@@ -20,6 +24,9 @@ public enum PromptBuilder {
     Answer: different (no shared detail, and different people are named).
     Example 3. A: "Team offsite" 09:00-10:00, location Riverside Hall. B: "Lunch" 09:00-10:00, \
     bare. Answer: different (unrelated titles, and nothing ties the bare entry to that place).
+    Example 4. A: "Piano lesson" 16:00-16:45, calendar Family. B: "Piano lesson" 16:00-17:00, \
+    calendar Busy Times. Answer: same (same title and start; the calendars are just different places \
+    the event was copied).
     """
 
     public static func prompt(for request: AdjudicationRequest, timeZone: TimeZone = .current) -> String {
