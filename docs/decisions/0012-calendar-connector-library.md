@@ -69,3 +69,14 @@ Adds an optional write API to the library, implemented for Google and EventKit. 
 - **EventKit restrictions.** No attendee edits, no RSVP, no `visibility` or generated conference, no notification control (a `NotifyPolicy` other than `.all` is refused when other attendees exist), read-only calendars are `.forbidden`, and no calendar-default reminders (a nil draft list means no alarms). EventKit reads now fill `version`, `sourceID`, `seriesID` and `originalStart`. Several EventKit behaviors (shared `eventIdentifier`, `.futureEvents` on the first occurrence, `refresh()`, `lastModifiedDate` granularity) are unverified until the live spike is run.
 - **Links stay local.** Provider-side metadata (Google `extendedProperties`, iCalendar `X-` properties, Graph extensions) is deferred; cross-calendar links, when TimeTug needs them, live in TimeTug's local store. A `metadata` field and capability can be added later without breaking this API.
 - **Testing.** `WritableSourceConformance` runs against `FakeWritableSource` and, live and opt-in, against the real EventKit source; Google is covered by request-shape tests with the fake transport plus an opt-in live smoke test on the primary calendar. Live tests never run in CI.
+
+## Provided fields
+
+Fields a source cannot read used to be filled with defaults that looked like real answers (`kind` `.standard`, `reminders` `[]`, `availability` busy). Now:
+
+- `kind`, `visibility`, `availability` and `reminders` on `CalendarEvent` are optional, and `series` (`SeriesInfo`) and `participation` (`Participation`) replace `seriesID`/`originalStart`/`myResponse` (still available as get-only accessors).
+- **The rule:** a field a source lists in `SourceCapabilities.providedFields` is never nil on its events; a field that is not listed may be nil or partly filled. `nil` always means "this source does not say", never "none". A real "none" has its own value: `[]` for lists, `.notRecurring`, `.notInvited`.
+- The rule covers capability fields only. Content fields every source supports (`notes`, `location`, `url`, `uid`, `organizer`) use nil for "empty".
+- `providedFields` (reads) is separate from `writableFields` (writes); some names overlap (reminders, availability) with different meanings. `ProvidedFieldsConformance` (in `CalendarTestSupport`) checks every connector's fixtures against its declaration.
+- Google declares kind, visibility, availability, reminders (`useDefault` resolves to the calendar's `defaultReminders`), series, participation, structured conference and version. EventKit declares reminders, series and participation; it maps availability (`.notSupported` gives nil) but cannot promise it, and says nothing about kind or visibility.
+- Writes: a nil `availability`/`visibility`/`reminders` on an edited copy is "unknown", never a change; `PatchMerge` never reports a conflict on a value that is nil on either side.

@@ -101,9 +101,38 @@ private func iso(_ s: String) -> Date { ISO8601DateFormatter().date(from: s)! }
     let slot = iso("2026-09-18T10:00:00Z")
     let event = CalendarEvent(
         eventID: EventKitMapping.eventID(identifier: "abc", occurrenceDate: slot, isOccurrence: true), calendarID: "cal",
-        title: "Weekly", start: slot, end: slot.addingTimeInterval(1800), seriesID: "abc", originalStart: slot)
+        title: "Weekly", start: slot, end: slot.addingTimeInterval(1800), series: .occurrence(seriesID: "abc", originalStart: slot))
     let ref = EventRef(event)
     #expect(EventKitWriteMapping.isOccurrence(ref, eventIdentifier: "abc", occurrenceDate: slot))
     #expect(!EventKitWriteMapping.isOccurrence(ref, eventIdentifier: "abc", occurrenceDate: slot.addingTimeInterval(7 * 86_400)))
     #expect(!EventKitWriteMapping.isOccurrence(ref, eventIdentifier: "other", occurrenceDate: slot))
+}
+
+// Provided fields (Issue 2).
+
+@Test func availabilityMapsEveryValueAndNotSupportedIsNil() {
+    #expect(EventKitMapping.availability(.busy) == .busy)
+    #expect(EventKitMapping.availability(.free) == .free)
+    #expect(EventKitMapping.availability(.tentative) == .tentative)
+    #expect(EventKitMapping.availability(.unavailable) == .unavailable)
+    #expect(EventKitMapping.availability(.notSupported) == nil)
+}
+
+@Test func seriesSeparatesOccurrencesFromSingleEvents() {
+    let slot = iso("2026-09-18T10:00:00Z")
+    #expect(EventKitMapping.series(isOccurrence: true, identifier: "abc", occurrenceDate: slot) == .occurrence(seriesID: "abc", originalStart: slot))
+    #expect(EventKitMapping.series(isOccurrence: false, identifier: "abc", occurrenceDate: slot) == .notRecurring)
+}
+
+@Test func participationCoversSelfAttendeeOrganizerOnlyAndNotInvited() {
+    #expect(EventKitMapping.participation(selfStatus: .accepted, organizerIsCurrentUser: false) == .invited(.accepted))
+    #expect(EventKitMapping.participation(selfStatus: .delegated, organizerIsCurrentUser: false) == .invited(.needsAction))   // unknown status: awaiting a reply
+    #expect(EventKitMapping.participation(selfStatus: nil, organizerIsCurrentUser: true) == .invited(.accepted))
+    #expect(EventKitMapping.participation(selfStatus: nil, organizerIsCurrentUser: false) == .notInvited)
+}
+
+@Test func onlyAlarmsRelativeToTheStartAreReadForNow() {
+    #expect(EventKitMapping.reminder(EKAlarm(relativeOffset: -600)) == Reminder(minutesBefore: 10))
+    #expect(EventKitMapping.reminder(EKAlarm(relativeOffset: 0)) == Reminder(minutesBefore: 0))
+    #expect(EventKitMapping.reminder(EKAlarm(absoluteDate: iso("2026-09-18T09:00:00Z"))) == nil)
 }

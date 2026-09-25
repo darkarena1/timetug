@@ -28,6 +28,36 @@ enum EventKitMapping {
         return (first, max(after, nextDay))
     }
 
+    /// `.notSupported` (birthday and subscribed calendars) is nil: EventKit does not say.
+    static func availability(_ availability: EKEventAvailability) -> Availability? {
+        switch availability {
+        case .busy: .busy
+        case .free: .free
+        case .tentative: .tentative
+        case .unavailable: .unavailable
+        default: nil
+        }
+    }
+
+    /// Instances of a series (and a detached, moved one) are occurrences; the series id is the raw shared identifier.
+    static func series(isOccurrence: Bool, identifier: String, occurrenceDate: Date?) -> SeriesInfo {
+        isOccurrence ? .occurrence(seriesID: identifier, originalStart: occurrenceDate) : .notRecurring
+    }
+
+    /// `selfStatus` is the current user's attendee status, nil when they are not among the attendees. An unknown
+    /// status (delegated, in process) still means invited and awaiting a reply. An organizer who is the user with no
+    /// attendee entry (an event with no guests) counts as accepted.
+    static func participation(selfStatus: EKParticipantStatus?, organizerIsCurrentUser: Bool) -> Participation {
+        if let selfStatus { return .invited(response(selfStatus) ?? .needsAction) }
+        return organizerIsCurrentUser ? .invited(.accepted) : .notInvited
+    }
+
+    /// Only alarms relative to the start are read for now (the rich reminder model arrives with the next commit).
+    static func reminder(_ alarm: EKAlarm) -> Reminder? {
+        guard alarm.absoluteDate == nil, alarm.relativeOffset <= 0 else { return nil }
+        return Reminder(minutesBefore: Int((-alarm.relativeOffset / 60).rounded()))
+    }
+
     /// EventKit's own status. `.canceled` must not read as confirmed: a cancelled invite can stay in Apple Calendar.
     static func status(_ status: EKEventStatus) -> EventStatus {
         switch status {

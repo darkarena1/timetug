@@ -11,7 +11,7 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
     public let displayName = "Apple Calendar"
     public var capabilities: SourceCapabilities {
         SourceCapabilities(
-            canWrite: true, providesConference: false, syncKind: .notification,
+            canWrite: true, providedFields: [.reminders, .series, .participation], syncKind: .notification,
             writableFields: [.title, .notes, .location, .timing, .availability, .reminders, .recurrence],
             controlsNotifications: false, recurrenceScopes: Set(RecurrenceScope.allCases))
     }
@@ -83,11 +83,13 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
             title: event.title ?? "(No title)",
             notes: event.notes, location: event.location, start: start, end: end, timeZone: zone,
             isAllDay: event.isAllDay, status: EventKitMapping.status(event.status),
-            availability: event.availability == .free ? .free : .busy,
-            seriesID: isSeries ? identifier : nil, originalStart: isSeries ? event.occurrenceDate : nil,
+            availability: EventKitMapping.availability(event.availability),
+            series: EventKitMapping.series(isOccurrence: isSeries, identifier: identifier, occurrenceDate: event.occurrenceDate),
             attendees: attendees, organizer: event.organizer.map { attendee($0, isOrganizer: true) },
             conferences: ConferenceDetector.conferences(location: event.location, url: event.url, notes: event.notes),
+            reminders: (event.alarms ?? []).compactMap(EventKitMapping.reminder),
             url: event.url, version: EventKitWriteMapping.version(event.lastModifiedDate),
-            myResponse: me.flatMap { EventKitMapping.response($0.participantStatus) }, sourceID: EventKitSource.sourceID)
+            participation: EventKitMapping.participation(selfStatus: me?.participantStatus, organizerIsCurrentUser: event.organizer?.isCurrentUser ?? false),
+            sourceID: EventKitSource.sourceID)
     }
 }
