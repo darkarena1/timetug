@@ -23,7 +23,7 @@ final class PopupLogicTests: XCTestCase {
                 eventID: id, calendarID: calendarID, title: title, start: start, end: end,
                 timeZone: allDay ? utc : nil, isAllDay: allDay),
             sourceID: "src")
-        event.conferenceURL = conference.flatMap(URL.init(string:))
+        event.conferences = conference.flatMap(URL.init(string:)).map { [ConferenceInfo(url: $0, provider: ConferenceDetector.provider(of: $0) ?? .other)] } ?? []
         return event
     }
 

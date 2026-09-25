@@ -86,6 +86,7 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
             availability: event.availability == .free ? .free : .busy,
             seriesID: isSeries ? identifier : nil, originalStart: isSeries ? event.occurrenceDate : nil,
             attendees: attendees, organizer: event.organizer.map { attendee($0, isOrganizer: true) },
+            conferences: ConferenceDetector.conferences(location: event.location, url: event.url, notes: event.notes),
             url: event.url, version: EventKitWriteMapping.version(event.lastModifiedDate),
             myResponse: me.flatMap { EventKitMapping.response($0.participantStatus) }, sourceID: EventKitSource.sourceID)
     }

@@ -1,5 +1,7 @@
 # ADR 0004: Conference Link Provider Allowlist
 
+> Partly superseded by [ADR 0013](0013-conference-links-in-connector-library.md): the detector now lives in the connector library as `ConferenceDetector` and every connector fills a ranked list of links.
+
 **Status:** Accepted
 
 ## Context
@@ -14,7 +16,7 @@ Use a known-provider allowlist, not any URL:
 - **Unwrapping:** Strip Outlook SafeLinks and Google redirects (up to 3 layers deep) to expose the real link.
 - **Out of scope (v1):** Dial-in numbers are ignored; structured conference fields (Google `conferenceData`, Exchange `onlineMeetingUrl`) are not read yet. `EventKitSource` leaves `conferenceURL` empty and `CalendarStore` fills it from the text scan; future Google and Exchange sources can set `conferenceURL` directly.
 
-Provider list lives in `ConferenceLinkDetector.providers` as data, not logic, so it is easy to extend and document.
+Provider list lives in `ConferenceDetector.providers` as data, not logic, so it is easy to extend and document.
 
 Rejected alternative: "any URL" would sometimes make the Join button open a Google Doc or a shared screenshot, which defeats its purpose.
 

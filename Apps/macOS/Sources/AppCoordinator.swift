@@ -366,7 +366,7 @@ final class AppCoordinator {
                 end: now.addingTimeInterval(settings.takeover.leadTime + 1800)),
             sourceID: "test")
         sample.otherAttendeeCount = 1
-        sample.conferenceURL = URL(string: "https://meet.google.com/aaa-bbbb-ccc")
+        sample.conferences = [ConferenceInfo(url: URL(string: "https://meet.google.com/aaa-bbbb-ccc")!, provider: .meet)]
         overlay.show(TakeoverRequest.make(for: sample, now: now), calendarTitle: "Sample calendar", actions: .init(
             join: { [weak self] in self?.overlay.hide() },
             snooze: { [weak self] _ in self?.overlay.hide() },
