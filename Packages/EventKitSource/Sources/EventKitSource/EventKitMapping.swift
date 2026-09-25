@@ -60,6 +60,47 @@ enum EventKitMapping {
         return provider == .microsoft ? .provider : .global
     }
 
+    /// EventKit's weekday numbers run from Sunday (1) to Saturday (7).
+    static func weekday(_ day: EKWeekday) -> RecurrenceRule.Weekday? {
+        switch day {
+        case .sunday: .sunday
+        case .monday: .monday
+        case .tuesday: .tuesday
+        case .wednesday: .wednesday
+        case .thursday: .thursday
+        case .friday: .friday
+        case .saturday: .saturday
+        @unknown default: nil
+        }
+    }
+
+    /// One `EKRecurrenceRule` in the library's rule. `weekNumber` 0 means no position ("every Tuesday", not "the
+    /// second Tuesday"); `firstDayOfTheWeek` 0 is the iCalendar default (Monday); the end is a date or a count.
+    static func rule(_ rule: EKRecurrenceRule) -> RecurrenceRule {
+        let frequency: RecurrenceRule.Frequency
+        switch rule.frequency {
+        case .daily: frequency = .daily
+        case .weekly: frequency = .weekly
+        case .monthly: frequency = .monthly
+        case .yearly: frequency = .yearly
+        @unknown default: frequency = .daily
+        }
+        var end = RecurrenceRule.End.never
+        if let recurrenceEnd = rule.recurrenceEnd {
+            if let date = recurrenceEnd.endDate { end = .until(date) }
+            else if recurrenceEnd.occurrenceCount > 0 { end = .count(recurrenceEnd.occurrenceCount) }
+        }
+        func ints(_ numbers: [NSNumber]?) -> [Int] { (numbers ?? []).map(\.intValue) }
+        return RecurrenceRule(
+            frequency: frequency, interval: max(rule.interval, 1),
+            weekdays: (rule.daysOfTheWeek ?? []).compactMap { day in
+                weekday(day.dayOfTheWeek).map { RecurrenceRule.WeekdayOccurrence($0, ordinal: day.weekNumber == 0 ? nil : day.weekNumber) }
+            },
+            monthDays: ints(rule.daysOfTheMonth), months: ints(rule.monthsOfTheYear), end: end,
+            weekStart: rule.firstDayOfTheWeek == 0 ? .monday : (EKWeekday(rawValue: rule.firstDayOfTheWeek).flatMap(weekday) ?? .monday),
+            yearDays: ints(rule.daysOfTheYear), weekNumbers: ints(rule.weeksOfTheYear), setPositions: ints(rule.setPositions))
+    }
+
     /// The availability values a calendar accepts; an empty mask means it does not track availability.
     static func supportedAvailabilities(_ mask: EKCalendarEventAvailabilityMask) -> Set<Availability> {
         var result: Set<Availability> = []

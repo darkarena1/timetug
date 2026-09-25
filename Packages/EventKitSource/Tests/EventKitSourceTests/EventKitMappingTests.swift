@@ -213,3 +213,43 @@ private func iso(_ s: String) -> Date { ISO8601DateFormatter().date(from: s)! }
     let window = EventKitWriteMapping.duplicateSearchWindow(for: timing)
     #expect(window.start == iso("2026-09-20T10:00:00Z") && window.end == iso("2026-09-22T11:00:00Z"))
 }
+
+// Recurrence rules (Issue 3).
+
+private func ekRule(_ frequency: EKRecurrenceFrequency, interval: Int = 1, days: [EKRecurrenceDayOfWeek]? = nil, monthDays: [Int]? = nil,
+                    months: [Int]? = nil, end: EKRecurrenceEnd? = nil, firstDay: Int = 0) -> EKRecurrenceRule {
+    let rule = EKRecurrenceRule(recurrenceWith: frequency, interval: interval, daysOfTheWeek: days,
+                                daysOfTheMonth: monthDays?.map { NSNumber(value: $0) }, monthsOfTheYear: months?.map { NSNumber(value: $0) },
+                                weeksOfTheYear: nil, daysOfTheYear: nil, setPositions: nil, end: end)
+    return rule
+}
+
+@Test func aWeeklyRuleOnSeveralDaysIsMapped() {
+    let rule = EventKitMapping.rule(ekRule(.weekly, interval: 2, days: [EKRecurrenceDayOfWeek(.monday), EKRecurrenceDayOfWeek(.wednesday)]))
+    #expect(rule.frequency == .weekly && rule.interval == 2 && rule.weekdays == [.init(.monday), .init(.wednesday)] && rule.end == .never)
+}
+
+@Test func theLastFridayOfTheMonthKeepsItsPosition() {
+    let rule = EventKitMapping.rule(ekRule(.monthly, days: [EKRecurrenceDayOfWeek(.friday, weekNumber: -1)]))
+    #expect(rule.weekdays == [.init(.friday, ordinal: -1)])
+}
+
+@Test func aYearlyRuleKeepsItsMonthsAndDays() {
+    let rule = EventKitMapping.rule(ekRule(.yearly, monthDays: [15], months: [3, 9]))
+    #expect(rule.frequency == .yearly && rule.months == [3, 9] && rule.monthDays == [15])
+}
+
+@Test func theEndIsACountOrADate() {
+    #expect(EventKitMapping.rule(ekRule(.daily, end: EKRecurrenceEnd(occurrenceCount: 5))).end == .count(5))
+    let date = iso("2026-12-31T00:00:00Z")
+    #expect(EventKitMapping.rule(ekRule(.daily, end: EKRecurrenceEnd(end: date))).end == .until(date))
+}
+
+@Test func aFirstDayOfTheWeekOfZeroIsTheICalendarDefault() {
+    #expect(EventKitMapping.rule(ekRule(.weekly)).weekStart == .monday)
+}
+
+@Test func writtenRulesReadBackTheSame() {
+    let rule = RecurrenceRule(frequency: .monthly, interval: 2, weekdays: [.init(.tuesday, ordinal: 2)], monthDays: [], end: .count(6))
+    #expect(EventKitMapping.rule(EventKitWriteMapping.recurrenceRule(rule)) == rule)
+}

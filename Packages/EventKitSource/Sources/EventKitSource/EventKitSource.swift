@@ -11,7 +11,7 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
     public let displayName = "Apple Calendar"
     public var capabilities: SourceCapabilities {
         SourceCapabilities(
-            canWrite: true, providedFields: [.reminders, .series, .participation, .supportedAvailabilities], syncKind: .notification,
+            canWrite: true, providedFields: [.reminders, .series, .participation, .supportedAvailabilities, .recurrenceRules], syncKind: .notification,
             writableFields: [.title, .notes, .location, .timing, .availability, .reminders, .recurrence],
             controlsNotifications: false, recurrenceScopes: Set(RecurrenceScope.allCases))
     }

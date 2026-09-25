@@ -88,3 +88,5 @@ Fields a source cannot read used to be filled with defaults that looked like rea
 - `EventDraft(copying:)` fills missing values with the draft defaults (busy, default visibility, the calendar's default reminders) and the write returns the target's stored copy, so the result is as complete as the target can make it.
 - `EventDraft.uid` carries a `.global` uid only. A create with a `uid` first looks for that event on the target calendar (Google: `events.list?iCalUID=`; EventKit: the events around the draft's time, compared on `calendarItemExternalIdentifier`). Found: it writes nothing and throws `WriteError.alreadyExists(storedCopy)`, so the caller decides whether to update it (no silent return, no automatic patch that could write to someone else's meeting and notify its attendees). Not found: Google stores the uid as `iCalUID`; EventKit cannot set a UID.
 - **Unverified live:** that Google accepts a caller-supplied `iCalUID` on `events.insert`; add it to the live write smoke test.
+
+- **Recurrence:** the series owns its rule, fetched on demand through `SeriesSource` (ADR 0015).

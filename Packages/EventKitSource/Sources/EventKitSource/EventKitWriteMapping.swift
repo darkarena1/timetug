@@ -7,7 +7,7 @@ import Foundation
 enum EventKitWriteMapping {
     static func frequency(_ frequency: RecurrenceRule.Frequency) -> EKRecurrenceFrequency {
         switch frequency {
-        case .daily: .daily
+        case .daily, .secondly, .minutely, .hourly: .daily   // sub-daily rules are refused by `validate()` before this
         case .weekly: .weekly
         case .monthly: .monthly
         case .yearly: .yearly
