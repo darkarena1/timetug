@@ -97,7 +97,7 @@ private func detachedCleanUp(_ cleaner: SmokeCleaner, created: [CalendarEvent] =
     let source = try kind.makeSource(for: connection, credentials: credentials, syncState: InMemorySyncStateStore())
     let writable = try #require(source as? WritableCalendarSource)
     let calendars = try await source.calendars()
-    let primaryCalendar = calendars.first { $0.isPrimary }
+    let primaryCalendar = calendars.first { $0.isDefault == true }
     let primary = try #require(primaryCalendar)
     print("LIVE signed in; writing to the primary calendar")
 
@@ -245,7 +245,7 @@ private func detachedCleanUp(_ cleaner: SmokeCleaner, created: [CalendarEvent] =
                            recurrence: RecurrenceRule(frequency: .weekly, end: .count(2))), in: primary.id, notify: .none)
             created.append(utcEvent)
             let utcList = titled(try await poll { titled($0, utcTitle).count == 2 }, utcTitle)
-            print("LIVE UTC event: \(utcList.count) instances (expected 2), zone \(utcList.map { $0.timeZone?.identifier ?? "-" }), "
+            print("LIVE UTC event: \(utcList.count) instances (expected 2), zone \(utcList.map { $0.timeZone.identifier }), "
                 + "starts \(utcList.map { iso.string(from: $0.start) }) (first expected \(iso.string(from: utcStart)))")
             for event in utcList { try await cleaner.remove(event) }
         } catch {

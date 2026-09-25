@@ -21,6 +21,7 @@ Build `Packages/CalendarConnectors` in this repository, extract it to its own re
 
 - OAuth for desktop apps uses a loopback redirect. Calendar scopes are "sensitive": while the Google Cloud project is in Testing only listed test users can sign in and refresh tokens expire after 7 days; a public release needs Google's OAuth verification.
 - `syncToken` cannot be combined with `timeMin`/`timeMax` and requires `showDeleted=true`, so change detection lists whole calendars (field-minimal) only to obtain and advance tokens.
+- The calendar list is remembered by the source: `calendars()` and each poll fetch it, `events(in:)` reuses it (one `calendarList` request per refresh instead of two). A calendar removed in between answers 404 or 403 and is skipped. A follow-up could poll `calendarList` with its own sync token to make polls cheaper still.
 
 ## Consequences
 
@@ -68,3 +69,25 @@ Adds an optional write API to the library, implemented for Google and EventKit. 
 - **EventKit restrictions.** No attendee edits, no RSVP, no `visibility` or generated conference, no notification control (a `NotifyPolicy` other than `.all` is refused when other attendees exist), read-only calendars are `.forbidden`, and no calendar-default reminders (a nil draft list means no alarms). EventKit reads now fill `version`, `sourceID`, `seriesID` and `originalStart`. Several EventKit behaviors (shared `eventIdentifier`, `.futureEvents` on the first occurrence, `refresh()`, `lastModifiedDate` granularity) are unverified until the live spike is run.
 - **Links stay local.** Provider-side metadata (Google `extendedProperties`, iCalendar `X-` properties, Graph extensions) is deferred; cross-calendar links, when TimeTug needs them, live in TimeTug's local store. A `metadata` field and capability can be added later without breaking this API.
 - **Testing.** `WritableSourceConformance` runs against `FakeWritableSource` and, live and opt-in, against the real EventKit source; Google is covered by request-shape tests with the fake transport plus an opt-in live smoke test on the primary calendar. Live tests never run in CI.
+
+## Provided fields
+
+Fields a source cannot read used to be filled with defaults that looked like real answers (`kind` `.standard`, `reminders` `[]`, `availability` busy). Now:
+
+- `kind`, `visibility`, `availability` and `reminders` on `CalendarEvent` are optional, and `series` (`SeriesInfo`) and `participation` (`Participation`) replace `seriesID`/`originalStart`/`myResponse` (still available as get-only accessors).
+- **The rule:** a field a source lists in `SourceCapabilities.providedFields` is never nil on its events; a field that is not listed may be nil or partly filled. `nil` always means "this source does not say", never "none". A real "none" has its own value: `[]` for lists, `.notRecurring`, `.notInvited`.
+- The rule covers capability fields only. Content fields every source supports (`notes`, `location`, `url`, `uid`, `organizer`) use nil for "empty".
+- `providedFields` (reads) is separate from `writableFields` (writes); some names overlap (reminders, availability) with different meanings. `ProvidedFieldsConformance` (in `CalendarTestSupport`) checks every connector's fixtures against its declaration.
+- Google declares kind, visibility, availability, reminders (`useDefault` resolves to the calendar's `defaultReminders`), series, participation, structured conference and version. EventKit declares reminders, series and participation; it maps availability (`.notSupported` gives nil) but cannot promise it, and says nothing about kind or visibility.
+- Writes: a nil `availability`/`visibility`/`reminders` on an edited copy is "unknown", never a change; `PatchMerge` never reports a conflict on a value that is nil on either side.
+- **Calendar identity:** every calendar says how it is read (`service`) and, when it can, who hosts it (`provider`); EventKit derives the provider from the account type only. `isDefault` replaces `isPrimary`; `permissions` (Graph-style flags) replace the ranked `accessRole`, which stays as a read-only summary; `supportedAvailabilities` lets writes map to the closest supported value and report the change.
+- **`uid` scope:** `CalendarEvent.uidScope` says whether `uid` is an iCalendar UID (`.global`: Google, and EventKit iCloud/CalDAV/local/subscription calendars) or a provider id (`.provider`: EventKit Exchange calendars, whose `calendarItemExternalIdentifier` is an Exchange object id). TimeTug matches `.global` uids across sources and compares provider or unknown ones only between events of the same service and provider (`TimeTugCalendarEvent.uidMatchKey`).
+
+## Copying between sources
+
+- `EventDraft(copying:)` fills missing values with the draft defaults (busy, default visibility, the calendar's default reminders) and the write returns the target's stored copy, so the result is as complete as the target can make it.
+- `EventDraft.uid` carries a `.global` uid only. A create with a `uid` first looks for that event on the target calendar (Google: `events.list?iCalUID=`; EventKit: the events around the draft's time, compared on `calendarItemExternalIdentifier`). Found: it writes nothing and throws `WriteError.alreadyExists(storedCopy)`, so the caller decides whether to update it (no silent return, no automatic patch that could write to someone else's meeting and notify its attendees). Not found: Google stores the uid as `iCalUID`; EventKit cannot set a UID.
+- **Unverified live:** that Google accepts a caller-supplied `iCalUID` on `events.insert`; add it to the live write smoke test.
+
+- **Recurrence:** the series owns its rule, fetched on demand through `SeriesSource` (ADR 0015).
+- **Attendees are identified by email.** `CalendarUserAddress.email(from:)` is the one shared parser (mailto with a query and percent-encoding, a bare address, a URN whose last part is an email). A connector resolves anything else itself, inside the connector: EventKit looks the participant up in Contacts (`EKParticipant.contactPredicate`), preferring an email whose domain the event's other people use. Access is requested automatically but never blocks a read: with access undecided the request starts in the background, the read returns at once with those emails nil, and a grant makes `changes()` send `.eventsChanged(nil)` so the host fetches again. Denied access skips the lookup and never asks again. Results are cached per participant address and cleared when Contacts changes. Writes turn emails back into the provider's participant form where the API needs it; EventKit cannot write attendees, and a later CalDAV connector resolves principal URLs through the server.

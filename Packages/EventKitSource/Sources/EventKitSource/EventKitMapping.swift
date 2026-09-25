@@ -28,6 +28,167 @@ enum EventKitMapping {
         return (first, max(after, nextDay))
     }
 
+    /// `.notSupported` (birthday and subscribed calendars) is nil: EventKit does not say.
+    static func availability(_ availability: EKEventAvailability) -> Availability? {
+        switch availability {
+        case .busy: .busy
+        case .free: .free
+        case .tentative: .tentative
+        case .unavailable: .unavailable
+        default: nil
+        }
+    }
+
+    /// The account type gives the provider; the account title is user-editable and is never read. A `.calDAV`
+    /// account may really be iCloud, Google or another host: EventKit presents it as CalDAV and so do we.
+    static func provider(sourceType: EKSourceType?, calendarType: EKCalendarType) -> CalendarProvider? {
+        if calendarType == .birthday || calendarType == .subscription { return .subscription }
+        switch sourceType {
+        case .local?: return .local
+        case .exchange?: return .microsoft
+        case .mobileMe?: return .iCloud
+        case .calDAV?: return .calDAV
+        case .subscribed?, .birthdays?: return .subscription
+        default: return nil
+        }
+    }
+
+    /// Exchange's object id is not an iCalendar UID (it only matches copies from the same store); everything else that
+    /// EventKit carries keeps the real UID. nil when the provider is unknown.
+    static func uidScope(provider: CalendarProvider?) -> UIDScope? {
+        guard let provider else { return nil }
+        return provider == .microsoft ? .provider : .global
+    }
+
+    /// EventKit's weekday numbers run from Sunday (1) to Saturday (7).
+    static func weekday(_ day: EKWeekday) -> RecurrenceRule.Weekday? {
+        switch day {
+        case .sunday: .sunday
+        case .monday: .monday
+        case .tuesday: .tuesday
+        case .wednesday: .wednesday
+        case .thursday: .thursday
+        case .friday: .friday
+        case .saturday: .saturday
+        @unknown default: nil
+        }
+    }
+
+    /// One `EKRecurrenceRule` in the library's rule. `weekNumber` 0 means no position ("every Tuesday", not "the
+    /// second Tuesday"); `firstDayOfTheWeek` 0 is the iCalendar default (Monday); the end is a date or a count.
+    static func rule(_ rule: EKRecurrenceRule) -> RecurrenceRule {
+        let frequency: RecurrenceRule.Frequency
+        switch rule.frequency {
+        case .daily: frequency = .daily
+        case .weekly: frequency = .weekly
+        case .monthly: frequency = .monthly
+        case .yearly: frequency = .yearly
+        @unknown default: frequency = .daily
+        }
+        var end = RecurrenceRule.End.never
+        if let recurrenceEnd = rule.recurrenceEnd {
+            if let date = recurrenceEnd.endDate { end = .until(date) }
+            else if recurrenceEnd.occurrenceCount > 0 { end = .count(recurrenceEnd.occurrenceCount) }
+        }
+        func ints(_ numbers: [NSNumber]?) -> [Int] { (numbers ?? []).map(\.intValue) }
+        return RecurrenceRule(
+            frequency: frequency, interval: max(rule.interval, 1),
+            weekdays: (rule.daysOfTheWeek ?? []).compactMap { day in
+                weekday(day.dayOfTheWeek).map { RecurrenceRule.WeekdayOccurrence($0, ordinal: day.weekNumber == 0 ? nil : day.weekNumber) }
+            },
+            monthDays: ints(rule.daysOfTheMonth), months: ints(rule.monthsOfTheYear), end: end,
+            weekStart: rule.firstDayOfTheWeek == 0 ? .monday : (EKWeekday(rawValue: rule.firstDayOfTheWeek).flatMap(weekday) ?? .monday),
+            yearDays: ints(rule.daysOfTheYear), weekNumbers: ints(rule.weeksOfTheYear), setPositions: ints(rule.setPositions))
+    }
+
+    /// The availability values a calendar accepts; an empty mask means it does not track availability.
+    static func supportedAvailabilities(_ mask: EKCalendarEventAvailabilityMask) -> Set<Availability> {
+        var result: Set<Availability> = []
+        if mask.contains(.busy) { result.insert(.busy) }
+        if mask.contains(.free) { result.insert(.free) }
+        if mask.contains(.tentative) { result.insert(.tentative) }
+        if mask.contains(.unavailable) { result.insert(.unavailable) }
+        return result
+    }
+
+    static func eventAvailability(_ availability: Availability) -> EKEventAvailability {
+        switch availability {
+        case .busy: .busy
+        case .free: .free
+        case .tentative: .tentative
+        case .unavailable: .unavailable
+        }
+    }
+
+    /// EventKit has one default calendar across all accounts: true for it, false for its siblings in the same
+    /// account, nil for calendars in other accounts (they have a default EventKit does not tell us).
+    static func isDefault(calendarID: String, calendarSourceID: String?, defaultCalendarID: String?, defaultSourceID: String?) -> Bool? {
+        guard let defaultCalendarID else { return nil }
+        if calendarID == defaultCalendarID { return true }
+        if let calendarSourceID, calendarSourceID == defaultSourceID { return false }
+        return nil
+    }
+
+    /// Instances of a series (and a detached, moved one) are occurrences; the series id is the raw shared identifier.
+    static func series(isOccurrence: Bool, identifier: String, occurrenceDate: Date?) -> SeriesInfo {
+        isOccurrence ? .occurrence(seriesID: identifier, originalStart: occurrenceDate) : .notRecurring
+    }
+
+    /// `selfStatus` is the current user's attendee status, nil when they are not among the attendees. An unknown
+    /// status (delegated, in process) still means invited and awaiting a reply. An organizer who is the user with no
+    /// attendee entry (an event with no guests) counts as accepted.
+    static func participation(selfStatus: EKParticipantStatus?, organizerIsCurrentUser: Bool) -> Participation {
+        if let selfStatus { return .invited(response(selfStatus) ?? .needsAction) }
+        return organizerIsCurrentUser ? .invited(.accepted) : .notInvited
+    }
+
+    /// One alarm as a reminder, in the library's shape. The trigger: an absolute date, a place (a `structuredLocation`
+    /// with a proximity of enter or leave), else seconds from the start. The type comes from EventKit's own `type` with
+    /// its related value. EventKit does not say whether an alarm is the calendar's default, so that stays nil.
+    static func reminder(_ alarm: EKAlarm) -> Reminder {
+        let trigger: ReminderTrigger
+        if let date = alarm.absoluteDate {
+            trigger = .absolute(date)
+        } else if let place = alarm.structuredLocation, alarm.proximity != .none {
+            let coordinate = place.geoLocation?.coordinate
+            trigger = .location(
+                StructuredLocation(
+                    title: place.title, latitude: coordinate?.latitude, longitude: coordinate?.longitude,
+                    radius: place.radius > 0 ? place.radius : nil),   // 0 is EventKit's "use the default"
+                alarm.proximity == .enter ? .enter : .leave)
+        } else {
+            trigger = .relative(offset: alarm.relativeOffset, to: .start)
+        }
+        let type: ReminderType
+        switch alarm.type {
+        case .audio: type = .audio(soundName: alarm.soundName)
+        case .email: type = .email(address: alarm.emailAddress)
+        case .procedure: type = .procedure(url: nil)   // `EKAlarm.url` is unavailable from Swift
+        default:
+            // A detached alarm may not have derived its type yet: EventKit sets the type from which related value is set.
+            if let sound = alarm.soundName, !sound.isEmpty { type = .audio(soundName: sound) }
+            else if let address = alarm.emailAddress, !address.isEmpty { type = .email(address: address) }
+            else { type = .display }
+        }
+        return Reminder(trigger: trigger, type: type)
+    }
+
+    /// EventKit's own status. `.canceled` must not read as confirmed: a cancelled invite can stay in Apple Calendar.
+    static func status(_ status: EKEventStatus) -> EventStatus {
+        switch status {
+        case .canceled: .cancelled
+        case .tentative: .tentative
+        default: .confirmed
+        }
+    }
+
+    /// `eventIdentifier` is shared by every occurrence of a repeating event, so an occurrence's `eventID` adds the
+    /// original slot (`occurrenceDate`, which stays put when one occurrence is moved). Other events keep the plain
+    /// identifier. Writes find occurrences through `seriesID` (the raw shared identifier) and `originalStart`.
+    static func eventID(identifier: String, occurrenceDate: Date, isOccurrence: Bool) -> String {
+        isOccurrence ? "\(identifier)#\(Int(occurrenceDate.timeIntervalSince1970))" : identifier
+    }
+
     /// nil for statuses the library has no value for (unknown, delegated, in process, ...).
     static func response(_ status: EKParticipantStatus) -> ResponseStatus? {
         switch status {
@@ -42,14 +203,6 @@ enum EventKitMapping {
     static func role(_ participant: EKParticipant) -> AttendeeRole {
         if participant.participantType == .resource || participant.participantType == .room { return .resource }
         return participant.participantRole == .optional ? .optional : .required
-    }
-
-    static func email(fromMailto urlString: String?) -> String? {
-        guard let urlString, urlString.lowercased().hasPrefix("mailto:") else { return nil }
-        let rest = String(urlString.dropFirst("mailto:".count))
-        let address = rest.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init)
-        let trimmed = address?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return (trimmed?.isEmpty ?? true) ? nil : trimmed
     }
 
     static func hex(from color: CGColor?) -> String? {

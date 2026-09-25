@@ -12,17 +12,25 @@ extension EventKitSource: WritableCalendarSource {
         // NSException, so it must never reach the mapping.
         try draft.validate()
         try WriteValidation.requireWritable(draft.usedFields, capabilities)
+        let alarms = try draft.reminders.map(EventKitWriteMapping.alarms)   // before the store is touched
         try requireAccess()
         try EventKitWriteMapping.checkNotify(notify, hasOtherAttendees: false)
         let calendar = try writableCalendar(calendarID)
+        if let uid = draft.uid, !uid.isEmpty {
+            let window = EventKitWriteMapping.duplicateSearchWindow(for: draft.timing)
+            let candidates = store.events(matching: store.predicateForEvents(withStart: window.start, end: window.end, calendars: [calendar]))
+            if let index = EventKitWriteMapping.matchingIndex(uid: uid, candidates: candidates.map { ($0.calendarItemExternalIdentifier, $0.status == .canceled) }) {
+                throw WriteError.alreadyExists(map(candidates[index]))
+            }
+        }
         let event = EKEvent(eventStore: store)
         event.calendar = calendar
         event.title = draft.title
         event.notes = draft.notes
         event.location = draft.location
         applyTiming(draft.timing, to: event)
-        event.availability = draft.availability == .free ? .free : .busy
-        if let reminders = draft.reminders { event.alarms = EventKitWriteMapping.alarms(reminders) }
+        setAvailability(draft.availability, on: event, in: calendar)
+        if let alarms { event.alarms = alarms }
         if let rule = draft.recurrence { event.addRecurrenceRule(EventKitWriteMapping.recurrenceRule(rule)) }
         try save(event, span: .thisEvent)
         return map(reload(event, isSeries: draft.recurrence != nil))
@@ -58,7 +66,7 @@ extension EventKitSource: WritableCalendarSource {
                 let current = try self.locateTarget(ref, scope: scope)
                 // Unverified: `lastModifiedDate` changes on every save, and `refresh()` (in `locate`) makes it current.
                 if let expected, expected != EventKitWriteMapping.version(current.event.lastModifiedDate) { return .stale }
-                self.apply(patch, to: current.event)
+                try self.apply(patch, to: current.event)
                 do { try self.save(current.event, span: current.span) }
                 catch {
                     // The in-memory event already carries the edit; discard it so a failed save leaves nothing
@@ -92,8 +100,11 @@ extension EventKitSource: WritableCalendarSource {
     private static func validate(_ patch: EventPatch) throws {
         try patch.timing?.validate()
         if case .set(let rule) = patch.recurrence { try rule.validate() }
-        if case .set(let reminders) = patch.reminders, reminders.contains(where: { $0.minutesBefore < 0 }) {
-            throw WriteError.invalid("reminder minutes must not be negative")
+        if case .set(let reminders) = patch.reminders {
+            if reminders.contains(where: { if case .relative(let offset, _) = $0.trigger { offset > 0 } else { false } }) {
+                throw WriteError.invalid("reminder minutes must not be negative")
+            }
+            _ = try EventKitWriteMapping.alarms(reminders)   // refuses what EventKit cannot write before the store is touched
         }
     }
 
@@ -119,14 +130,20 @@ extension EventKitSource: WritableCalendarSource {
         catch { throw WriteError.invalid(error.localizedDescription) }
     }
 
+    /// The closest value the calendar accepts (`Availability.closest`); a calendar that tracks none is left alone.
+    private func setAvailability(_ availability: Availability, on event: EKEvent, in calendar: EKCalendar) {
+        let supported = EventKitMapping.supportedAvailabilities(calendar.supportedEventAvailabilities)
+        if let value = availability.closest(in: supported) { event.availability = EventKitMapping.eventAvailability(value) }
+    }
+
     private func requireModifiable(_ event: EKEvent) throws {
         guard event.calendar?.allowsContentModifications == true else { throw WriteError.forbidden("read-only calendar") }
     }
 
     /// The occurrence a ref designates, in the ref's calendar. A recurring occurrence is found through a date-range
     /// predicate around its `originalStart` (wide, because the predicate matches an occurrence's actual dates and
-    /// it may have been moved) and matched on `eventIdentifier` and `occurrenceDate` (Unverified: occurrences share
-    /// an identifier). A deleted event, one in another calendar, or one `refresh()` reports as gone (Unverified) is
+    /// it may have been moved) and matched on `seriesID` (the shared `eventIdentifier`) and `occurrenceDate` (Unverified: occurrences share
+    /// an identifier; `eventID` carries a per-occurrence suffix). A deleted event, one in another calendar, or one `refresh()` reports as gone (Unverified) is
     /// `.notFound`.
     private func locate(_ ref: EventRef) throws -> EKEvent {
         var found: EKEvent?
@@ -136,8 +153,7 @@ extension EventKitSource: WritableCalendarSource {
             let window = EventKitWriteMapping.occurrenceSearchWindow(around: original)
             let predicate = store.predicateForEvents(withStart: window.start, end: window.end, calendars: [calendar])
             found = store.events(matching: predicate).first { event in
-                guard event.eventIdentifier == ref.eventID, let slot = event.occurrenceDate else { return false }
-                return abs(slot.timeIntervalSince(original)) < 1
+                EventKitWriteMapping.isOccurrence(ref, eventIdentifier: event.eventIdentifier, occurrenceDate: event.occurrenceDate)
             }
         } else {
             found = store.event(withIdentifier: ref.eventID)
@@ -151,7 +167,7 @@ extension EventKitSource: WritableCalendarSource {
     private func locateTarget(_ ref: EventRef, scope: RecurrenceScope) throws -> (event: EKEvent, span: EKSpan) {
         guard ref.seriesID != nil else { return (try locate(ref), .thisEvent) }
         if scope == .allInSeries {
-            guard let first = store.event(withIdentifier: ref.eventID), first.calendar?.calendarIdentifier == ref.calendarID,
+            guard let seriesID = ref.seriesID, let first = store.event(withIdentifier: seriesID), first.calendar?.calendarIdentifier == ref.calendarID,
                   first.refresh() else { throw WriteError.notFound }
             return (first, .futureEvents)
         }
@@ -171,15 +187,15 @@ extension EventKitSource: WritableCalendarSource {
         }
     }
 
-    private func apply(_ patch: EventPatch, to event: EKEvent) {
+    private func apply(_ patch: EventPatch, to event: EKEvent) throws {
         if let title = patch.title { event.title = title }
         switch patch.notes { case .keep: break; case .set(let value): event.notes = value; case .clear: event.notes = nil }
         switch patch.location { case .keep: break; case .set(let value): event.location = value; case .clear: event.location = nil }
         if let timing = patch.timing { applyTiming(timing, to: event) }
-        if let availability = patch.availability { event.availability = availability == .free ? .free : .busy }
+        if let availability = patch.availability, let calendar = event.calendar { setAvailability(availability, on: event, in: calendar) }
         switch patch.reminders {
         case .keep: break
-        case .set(let list): event.alarms = EventKitWriteMapping.alarms(list)
+        case .set(let list): event.alarms = try EventKitWriteMapping.alarms(list)
         case .clear: event.alarms = nil
         }
         switch patch.recurrence {

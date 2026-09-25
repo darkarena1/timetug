@@ -1,9 +1,9 @@
 import Foundation
 import Testing
-@testable import TimeTugCore
+@testable import CalendarCore
 
 private func detect(location: String? = nil, url: String? = nil, notes: String? = nil) -> URL? {
-    ConferenceLinkDetector.detect(location: location, url: url.flatMap(URL.init(string:)), notes: notes)
+    ConferenceDetector.detect(location: location, url: url.flatMap(URL.init(string:)), notes: notes)
 }
 
 @Test func findsZoomInLocation() {
@@ -111,4 +111,57 @@ private func detect(location: String? = nil, url: String? = nil, notes: String? 
     let result = detect(notes: "HTTPS://MEET.GOOGLE.COM/abc-defg-hij")
     #expect(result != nil)
     #expect(result?.host?.lowercased() == "meet.google.com")
+}
+
+// The list API.
+
+private func list(structured: [ConferenceInfo] = [], location: String? = nil, url: String? = nil, notes: String? = nil) -> [ConferenceInfo] {
+    ConferenceDetector.conferences(structured: structured, location: location, url: url.flatMap(URL.init(string:)), notes: notes)
+}
+
+@Test func keepsEveryProviderLinkInOrderWithItsOrigin() {
+    let result = list(location: "https://meet.google.com/aaa-bbbb-ccc", notes: "or https://acme.zoom.us/j/9 and https://acme.webex.com/meet/x")
+    #expect(result.map(\.provider) == [.meet, .zoom, .webex])
+    #expect(result.map(\.origin) == [.location, .notes, .notes])
+}
+
+@Test func duplicatesAcrossFieldsAreRemovedFirstWins() {
+    let result = list(location: "https://acme.zoom.us/j/9", notes: "https://ACME.zoom.us/j/9/ again")
+    #expect(result.count == 1 && result[0].origin == .location)
+}
+
+@Test func structuredLinksComeFirstAndAreNotRepeatedByTheTextScan() {
+    let structured = ConferenceInfo(url: URL(string: "https://acme.zoom.us/j/1")!, provider: .zoom)
+    let result = list(structured: [structured], notes: "https://acme.zoom.us/j/1 and https://meet.google.com/aaa-bbbb-ccc")
+    #expect(result.map(\.provider) == [.zoom, .meet])
+    #expect(result[0].origin == .structured && result[1].origin == .notes)
+}
+
+@Test func theEventURLIsAddedOnlyWhenNothingElseIsFound() {
+    let alone = list(url: "https://example.com/meeting/42")
+    #expect(alone.count == 1 && alone[0].origin == .eventURL && alone[0].provider == .other)
+    #expect(list(url: "https://example.com/meeting/42", notes: "https://meet.google.com/aaa-bbbb-ccc").map(\.origin) == [.notes])
+}
+
+@Test func aProviderEventURLIsAnOrdinaryUrlOriginLink() {
+    let result = list(url: "https://acme.zoom.us/j/1")
+    #expect(result.count == 1 && result[0].origin == .url && result[0].provider == .zoom)
+}
+
+@Test func everyAllowlistedHostNamesItsProvider() {
+    let cases: [(String, ConferenceProvider)] = [
+        ("https://acme.zoom.us/j/1", .zoom), ("https://meet.google.com/a-b-c", .meet),
+        ("https://teams.microsoft.com/l/meetup-join/1", .teams), ("https://teams.live.com/meet/1", .teams),
+        ("https://acme.webex.com/meet/x", .webex), ("https://gotomeet.me/x", .goToMeeting),
+        ("https://global.gotomeeting.com/join/1", .goToMeeting), ("https://whereby.com/room", .whereby),
+        ("https://meet.jit.si/room", .jitsi), ("https://app.slack.com/huddle/T1/C1", .slack),
+    ]
+    for (link, provider) in cases { #expect(ConferenceDetector.provider(of: URL(string: link)!) == provider) }
+    #expect(ConferenceDetector.provider(of: URL(string: "https://example.com/x")!) == nil)
+}
+
+@Test func webexIdentityKeepsTheMeetingID() {
+    let a = ConferenceInfo(url: URL(string: "https://acme.webex.com/acme/j.php?MTID=m111")!, provider: .webex)
+    let b = ConferenceInfo(url: URL(string: "https://acme.webex.com/acme/j.php?MTID=m222")!, provider: .webex)
+    #expect(a.identity != b.identity)
 }

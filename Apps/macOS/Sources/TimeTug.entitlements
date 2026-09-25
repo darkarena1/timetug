@@ -6,6 +6,8 @@
 	<array>
 		<string>YYA6ZKMD36.com.timetug.shared</string>
 	</array>
+	<key>com.apple.security.personal-information.addressbook</key>
+	<true/>
 	<key>com.apple.security.personal-information.calendars</key>
 	<true/>
 </dict>

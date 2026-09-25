@@ -22,6 +22,8 @@
 	<true/>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>TimeTug reads your calendars to alert you before meetings start.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>TimeTug looks up meeting attendees in Contacts to recognize the same meeting across your calendars.</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUFeedURL</key>
