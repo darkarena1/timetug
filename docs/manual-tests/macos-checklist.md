@@ -68,6 +68,7 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] With it on and Apple Intelligence available, the pair merges and shows "Merged with Apple Intelligence".
 - [ ] "Unmerge all" (card menu or right-click) splits it, and it stays split after relaunch.
 - [ ] "Merge with..." on a separate look-alike merges it and shows "Merged manually".
+- [ ] Right-clicking anywhere on a card, including its empty space and in the glass style, opens the menu; two events that overlap in time offer "Merge with..." on both cards, even on the same calendar or when they start hours apart. Two back-to-back events (one ends as the other starts) do not. After merging, the pair stays merged after relaunch, and a same-calendar merge does not merge other days' events with the same titles.
 - [ ] On a Mac without Apple Intelligence, the status line says rules only and nothing is merged by the model.
 - [ ] A merged meeting takes over exactly once.
 - [ ] A merged meeting with a longer placeholder copy: the list shows the longer time range; the takeover fires at the appointment's start when a copy has a conference link, otherwise at the longer copy's start.

@@ -46,6 +46,7 @@ final class AppCoordinator {
     private var widgetReloadTask: Task<Void, Never>?
     private var settingsSignal: SettingsChangeSignal.Observer?
     private static let widgetLog = Logger(subsystem: "com.timetug.app", category: "widgets")
+    private static let dedupLog = Logger(subsystem: "com.timetug.app", category: "dedup")
     private let overlay = OverlayController()
     private lazy var googleOAuthConfig = GoogleOAuthSettings.config()
     private lazy var registry = AppConnectors.makeRegistry(google: googleOAuthConfig, eventKit: eventKit)
@@ -241,7 +242,10 @@ final class AppCoordinator {
 
     func merge(_ a: TimeTugCalendarEvent, _ b: TimeTugCalendarEvent) {
         Task { @MainActor in
-            apply(await store.merge(a, b, now: Date()))
+            // Titles are not logged, as with takeovers.
+            let snapshot = await store.merge(a, b, now: Date())
+            Self.dedupLog.info("Manual merge of \(a.participants.count + b.participants.count, privacy: .public) copies; \(snapshot.events.count, privacy: .public) events now shown")
+            apply(snapshot)
             await persistDedup()
         }
     }

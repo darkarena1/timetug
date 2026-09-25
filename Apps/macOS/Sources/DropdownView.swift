@@ -302,6 +302,9 @@ private struct EventCard: View {
         }
         .padding(12)
         .modifier(CardSurface(style: style, isNext: isNext, palette: palette, strongBorder: strongBorder))
+        // The glass style's background isn't hit-testable, so without this a right-click only reaches the menu
+        // when it lands on text or an icon.
+        .contentShape(RoundedRectangle(cornerRadius: CardSurface.radius, style: .continuous))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityText)
         .contextMenu {
@@ -428,7 +431,7 @@ struct CardSurface: ViewModifier {
     let strongBorder: Bool
     @Environment(\.colorScheme) private var scheme
 
-    private static let radius: CGFloat = 20
+    static let radius: CGFloat = 20
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: Self.radius, style: .continuous) }
 
     @ViewBuilder func body(content: Content) -> some View {
