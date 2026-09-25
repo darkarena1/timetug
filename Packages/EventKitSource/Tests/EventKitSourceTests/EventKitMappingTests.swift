@@ -47,9 +47,7 @@ private func iso(_ s: String) -> Date { ISO8601DateFormatter().date(from: s)! }
     #expect(EventKitMapping.response(.unknown) == nil)
 }
 
-@Test func mailtoAndHexHelpers() {
-    #expect(EventKitMapping.email(fromMailto: "mailto:Bo@X.test?subject=hi") == "bo@x.test")
-    #expect(EventKitMapping.email(fromMailto: "https://x.test") == nil)
+@Test func hexHelper() {
     #expect(EventKitMapping.hex(from: CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1)) == "#FF0000")
 }
 

@@ -205,14 +205,6 @@ enum EventKitMapping {
         return participant.participantRole == .optional ? .optional : .required
     }
 
-    static func email(fromMailto urlString: String?) -> String? {
-        guard let urlString, urlString.lowercased().hasPrefix("mailto:") else { return nil }
-        let rest = String(urlString.dropFirst("mailto:".count))
-        let address = rest.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init)
-        let trimmed = address?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return (trimmed?.isEmpty ?? true) ? nil : trimmed
-    }
-
     static func hex(from color: CGColor?) -> String? {
         guard let color, let space = CGColorSpace(name: CGColorSpace.sRGB),
               let c = color.converted(to: space, intent: .defaultIntent, options: nil),

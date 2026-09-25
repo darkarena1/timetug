@@ -100,5 +100,6 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] Edit an event's title in Google Calendar: the popup shows the new title within about a minute.
 - [ ] An all-day event created in Google in another time zone (for example a Tokyo calendar) appears on the same calendar date in the popup here, and an Apple all-day event created in another zone still appears on its date.
 - [ ] A meeting cancelled in Apple Calendar (an Exchange or iCloud invite the organizer cancelled, still shown struck through there) is gone from the popup and never takes over.
+- [ ] An Exchange or iCloud invite whose attendee has no mailto address (a `urn:uuid:` or principal URL) prompts for Contacts once, without delaying the popup; after allowing, the attendee's email appears and copies of the meeting merge on the shared attendee. Denying Contacts leaves the popup working and never asks again.
 - [ ] A meeting present in both Apple Calendar and a direct Google account merges into one popup entry.
 - [ ] Calendar write smoke (before releasing a change to the write API): `TIMETUG_LIVE_EVENTKIT=1 swift test --package-path Packages/EventKitSource --filter eventKit` passes (the filter is `eventKit`, not `Live`), and the Google smoke test (see `AGENTS.md`, Gotchas) passes and leaves no "TimeTug write smoke" events behind.
