@@ -9,10 +9,17 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
     public static let sourceID = "eventkit"
     public let id = EventKitSource.sourceID
     public let displayName = "Apple Calendar"
-    public var capabilities: SourceCapabilities { SourceCapabilities(providesConference: false, syncKind: .notification) }
-    private let store = EKEventStore()
+    public var capabilities: SourceCapabilities {
+        SourceCapabilities(
+            canWrite: true, providesConference: false, syncKind: .notification,
+            writableFields: [.title, .notes, .location, .timing, .availability, .reminders, .recurrence],
+            controlsNotifications: false, recurrenceScopes: Set(RecurrenceScope.allCases))
+    }
+    let store: EKEventStore
 
-    public init() {}
+    public init(store: EKEventStore = EKEventStore()) {
+        self.store = store
+    }
 
     /// Prompts for calendar access if undetermined. Returns whether access is granted.
     public func requestAccess() async -> Bool {
@@ -45,7 +52,7 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
         }
     }
 
-    private func requireAccess() throws {
+    func requireAccess() throws {
         guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else { throw SourceError.needsPermission }
     }
 
@@ -55,7 +62,7 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
                  isSelf: p.isCurrentUser, isOrganizer: isOrganizer)
     }
 
-    private func map(_ event: EKEvent) -> CalendarEvent {
+    func map(_ event: EKEvent) -> CalendarEvent {
         let attendees = (event.attendees ?? []).map { attendee($0, isOrganizer: false) }
         let me = (event.attendees ?? []).first { $0.isCurrentUser }
         var start = event.startDate ?? Date(), end = event.endDate ?? start
@@ -66,6 +73,7 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
             (start, end) = EventKitMapping.canonicalAllDay(start: start, end: end, calendar: calendar)
             zone = calendar.timeZone
         }
+        let isSeries = event.hasRecurrenceRules || event.isDetached
         return CalendarEvent(
             eventID: event.eventIdentifier ?? event.calendarItemIdentifier,
             uid: event.calendarItemExternalIdentifier,
@@ -74,7 +82,9 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
             notes: event.notes, location: event.location, start: start, end: end, timeZone: zone,
             isAllDay: event.isAllDay, status: event.status == .tentative ? .tentative : .confirmed,
             availability: event.availability == .free ? .free : .busy,
+            seriesID: isSeries ? event.eventIdentifier : nil, originalStart: isSeries ? event.occurrenceDate : nil,
             attendees: attendees, organizer: event.organizer.map { attendee($0, isOrganizer: true) },
-            url: event.url, myResponse: me.flatMap { EventKitMapping.response($0.participantStatus) })
+            url: event.url, version: EventKitWriteMapping.version(event.lastModifiedDate),
+            myResponse: me.flatMap { EventKitMapping.response($0.participantStatus) }, sourceID: EventKitSource.sourceID)
     }
 }
