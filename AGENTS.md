@@ -14,7 +14,7 @@ TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
 - `Apps/macOS/Sources/UpdateController.swift`, `UpdatesSection.swift`: Sparkle in the app layer only (never Core). Beta opt-in is `updates.includeBetas.v1` in UserDefaults.
 - `Apps/macOS/Widgets`: WidgetKit extension `TimeTugWidgets` (Next Up, Today, and macOS 26 Control Center controls). Reads the snapshot; no EventKit.
 - `Apps/macOS/Shared`: AppGroup, SharedSettings, SettingsChangeSignal, WidgetSnapshotStore. Compiled into both the app and the extension.
-- `artwork/`: brand images (see `docs/ARTWORK_USAGE.md`); the app's asset catalog is `Apps/macOS/Resources/Assets.xcassets`. Do not use the app icon for the menu bar; use the `MenuBarTemplate` template image.
+- `artwork/`: brand images (see `docs/ARTWORK_USAGE.md`); the app's asset catalog is `Apps/macOS/Resources/Assets.xcassets`. Do not use the app icon for the menu bar; the menu bar icon is the puppy set (`MenuBarPuppyLight`/`MenuBarPuppyDark` idle, chosen by the menu bar's appearance, and `MenuBarPuppyColor` while a meeting is near), picked by `MenuBarIconState.assetName(darkMenuBar:)`.
 
 ## Rules
 - Core answers "what and when". The app answers "how it looks and where it lives". If code needs a window, tray or pixel, it belongs in the app.

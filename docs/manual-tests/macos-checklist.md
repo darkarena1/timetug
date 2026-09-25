@@ -33,7 +33,7 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] With VoiceOver on, each calendar checkbox is announced with the calendar name ("Tug for <name>", "Show <name> in list") and Space toggles it; checkboxes are reachable with Tab/keyboard navigation.
 - [ ] Tug Rules "Lead time" is a menu picker ("At start", "1 minute", ... "30 minutes"); a previously saved odd value (e.g. 7 minutes) still appears and is selected.
 - [ ] Turning on "Require a video link" shows the orange "Meetings without a link won't tug you." note; turning it off hides it.
-- [ ] Menu bar icon turns to the color puppy within 10 minutes of a tug-worthy meeting and returns to the template icon after Join/Dismiss or when the meeting ends (works in light and dark menu bars).
+- [ ] Menu bar icon turns to the blue-tile color puppy within 10 minutes of a tug-worthy meeting and returns to the idle puppy after Join/Dismiss or when the meeting ends. The idle puppy is the light version on a light menu bar and the dark version on a dark one, and switches when the menu bar appearance changes (change the wallpaper or Light/Dark setting to check). Settings > Appearance > Menu Bar Text tiles show the same puppy.
 - [ ] With Xcode (or any app) frontmost on the same display, right-click the icon: Settings and About open in front of it.
 - [ ] With Xcode full-screen on a display, invoke Settings/About from that display: they appear over it in the current Space.
 - [ ] With two displays, Settings/About open on the display whose menu bar icon you clicked.

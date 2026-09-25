@@ -12,6 +12,7 @@ final class StatusItemController: NSObject {
     private let idleImage: NSImage?
     private let soonImage: NSImage?
     private var iconState = MenuBarIconState.idle
+    private var appearanceObservation: NSKeyValueObservation?
     private var lastClickedScreen: NSScreen?
 
     /// The display of the last menu bar click (fallbacks: the item's own screen, then the main screen).
@@ -25,19 +26,24 @@ final class StatusItemController: NSObject {
         self.onOpenSettings = onOpenSettings
         self.onCheckForUpdates = onCheckForUpdates
         self.onOpenAbout = onOpenAbout
-        idleImage = NSImage(systemSymbolName: "clock", accessibilityDescription: "TimeTug")
-        idleImage?.isTemplate = true            // the OS tints it for light/dark menu bars
-        soonImage = Self.tinted(symbolName: "clock.fill", color: Self.soonColor) ?? idleImage
+        // Fall back to the clock symbols if the puppy assets are ever missing from the bundle.
+        idleImage = Self.puppy(.idle, darkMenuBar: false) ?? Self.clockImage
+        soonImage = Self.puppy(.soon, darkMenuBar: false)
+            ?? Self.tinted(symbolName: "clock.fill", color: Self.soonColor) ?? idleImage
         soonImage?.accessibilityDescription = "TimeTug: meeting soon"
         super.init()
         popover.behavior = .transient
         popover.contentViewController = popoverContent
         if let button = item.button {
-            button.image = idleImage
             button.imagePosition = .imageLeading
             button.target = self
             button.action = #selector(clicked)
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            refreshIcon()
+            // The idle puppy has a light and a dark variant; follow the menu bar's appearance.
+            appearanceObservation = button.observe(\.effectiveAppearance) { [weak self] _, _ in
+                Task { @MainActor in self?.refreshIcon() }
+            }
         }
     }
 
@@ -47,12 +53,25 @@ final class StatusItemController: NSObject {
         popover.performClose(nil)
     }
 
-    /// Swaps between the template icon and the color icon; a no-op when the state is unchanged.
+    /// Swaps between the idle puppy and the color puppy; a no-op when the state is unchanged.
     func setIconState(_ state: MenuBarIconState) {
-        guard state != iconState, let button = item.button else { return }
+        guard state != iconState else { return }
         iconState = state
-        button.image = state == .soon ? soonImage : idleImage
-        button.toolTip = state == .soon ? "Meeting soon" : nil
+        refreshIcon()
+    }
+
+    /// Shows the image for the current state and the menu bar's current light/dark appearance.
+    private func refreshIcon() {
+        guard let button = item.button else { return }
+        switch iconState {
+        case .soon:
+            button.image = soonImage
+            button.toolTip = "Meeting soon"
+        case .idle:
+            let dark = button.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            button.image = Self.puppy(.idle, darkMenuBar: dark) ?? idleImage
+            button.toolTip = nil
+        }
     }
 
     /// nil shows the icon only.
@@ -105,6 +124,21 @@ final class StatusItemController: NSObject {
     @objc private func checkForUpdates() { onCheckForUpdates() }
     @objc private func openAbout() { onOpenAbout() }
     @objc private func openSettings() { onOpenSettings() }
+
+    private static var clockImage: NSImage? {
+        let image = NSImage(systemSymbolName: "clock", accessibilityDescription: "TimeTug")
+        image?.isTemplate = true                // the OS tints it for light/dark menu bars
+        return image
+    }
+
+    /// A puppy image from the asset catalog, drawn as-is (not an OS-tinted template) at menu bar size.
+    private static func puppy(_ state: MenuBarIconState, darkMenuBar: Bool) -> NSImage? {
+        guard let image = NSImage(named: state.assetName(darkMenuBar: darkMenuBar)) else { return nil }
+        image.isTemplate = false
+        image.size = NSSize(width: 18, height: 18)
+        image.accessibilityDescription = state == .soon ? "TimeTug: meeting soon" : "TimeTug"
+        return image
+    }
 
     /// An SF Symbol rendered in a fixed color rather than as an OS-tinted template.
     private static func tinted(symbolName: String, color: NSColor) -> NSImage? {

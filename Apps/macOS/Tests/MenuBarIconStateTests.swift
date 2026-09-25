@@ -62,4 +62,23 @@ final class MenuBarIconStateTests: XCTestCase {
         XCTAssertNotNil(NSImage(named: "MenuBarColor"))
         XCTAssertNotNil(NSImage(named: "MenuBarTemplate"))
     }
+
+    func testIdleUsesTheLightOrDarkPuppyForTheMenuBarAppearance() {
+        XCTAssertEqual(MenuBarIconState.idle.assetName(darkMenuBar: false), "MenuBarPuppyLight")
+        XCTAssertEqual(MenuBarIconState.idle.assetName(darkMenuBar: true), "MenuBarPuppyDark")
+    }
+
+    func testSoonUsesTheColorPuppyInEitherAppearance() {
+        XCTAssertEqual(MenuBarIconState.soon.assetName(darkMenuBar: false), "MenuBarPuppyColor")
+        XCTAssertEqual(MenuBarIconState.soon.assetName(darkMenuBar: true), "MenuBarPuppyColor")
+    }
+
+    func testPuppyIconAssetsExistInBundle() {
+        for state in [MenuBarIconState.idle, .soon] {
+            for dark in [false, true] {
+                let name = state.assetName(darkMenuBar: dark)
+                XCTAssertNotNil(NSImage(named: name), name)
+            }
+        }
+    }
 }

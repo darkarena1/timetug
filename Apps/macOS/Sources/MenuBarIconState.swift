@@ -1,10 +1,19 @@
 import Foundation
 import TimeTugCore
 
-/// Which menu bar icon to show: the template clock, or the color clock while a tug-worthy meeting is near.
+/// Which menu bar icon to show: the light/dark puppy, or the color puppy while a tug-worthy meeting is near.
 enum MenuBarIconState: Equatable {
     case idle
     case soon
+
+    /// The asset-catalog image for this state. The idle puppy has a light and a dark variant that keep their
+    /// detail on light and dark menu bars; the color puppy reads on either, so `darkMenuBar` is ignored.
+    func assetName(darkMenuBar: Bool) -> String {
+        switch self {
+        case .idle: darkMenuBar ? "MenuBarPuppyDark" : "MenuBarPuppyLight"
+        case .soon: "MenuBarPuppyColor"
+        }
+    }
 
     /// How far ahead of the start the icon turns color.
     static let soonWindow: TimeInterval = 10 * 60

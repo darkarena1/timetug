@@ -420,3 +420,6 @@ For this package, the existing `macOS/TimeTugAssets.xcassets` directory can be c
 ## Core positioning
 
 **Never hyperfocus through another meeting.**
+
+## Menu bar puppy (in use)
+The app's menu bar icon is the puppy set in `artwork/Branding/timetug-menubar-puppy-*`: `light` and `dark` (transparent, detail kept on light and dark menu bars, 18 and 36 px) for the idle state, and `color` (the blue-tile puppy, rendered from `timetug-puppy-favicon.svg` at 18 and 36 px) while a meeting is near. They live in the app's asset catalog as `MenuBarPuppyLight`, `MenuBarPuppyDark` and `MenuBarPuppyColor`; the older `MenuBarTemplate` and `MenuBarColor` clock assets are no longer used by the status item. The website favicon is the same puppy (`timetug-puppy-favicon.*`).
