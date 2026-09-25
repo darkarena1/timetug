@@ -283,5 +283,8 @@ private struct CalendarCheckbox: View {
                 }
             }
             .frame(width: 16, height: 16)
+            // The hollow (hidden) state has a clear fill, which SwiftUI does not hit-test; without this only
+            // the thin outline would respond and a hidden calendar would be hard to check again.
+            .contentShape(Rectangle())
     }
 }
