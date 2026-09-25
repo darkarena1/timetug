@@ -66,7 +66,8 @@ final class AppCoordinator {
         credentials: credentials, syncState: syncState,
         interaction: LoopbackAuthorizationInteraction(
             openURL: { url in await MainActor.run { NSWorkspace.shared.open(url) } },
-            presenter: WebAuthenticationSessionPresenter(anchor: { [weak self] in self?.settingsWindow.currentWindow ?? NSApp.keyWindow })),
+            presenter: BrowserPreferringPresenter(
+                sheet: WebAuthenticationSessionPresenter(anchor: { [weak self] in self?.settingsWindow.currentWindow ?? NSApp.keyWindow }))),
         settings: settings, reconciler: reconciler,
         applySources: { [weak self] sources in
             await self?.store.setSources(sources)
