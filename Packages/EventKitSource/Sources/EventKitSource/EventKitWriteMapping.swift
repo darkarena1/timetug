@@ -59,6 +59,14 @@ enum EventKitWriteMapping {
         DateInterval(start: slot.addingTimeInterval(-366 * 86_400), end: slot.addingTimeInterval(367 * 86_400))
     }
 
+    /// Whether a fetched event is the occurrence `ref` designates: same shared identifier (`seriesID`) and the same
+    /// original slot.
+    static func isOccurrence(_ ref: EventRef, eventIdentifier: String?, occurrenceDate: Date?) -> Bool {
+        guard let seriesID = ref.seriesID, eventIdentifier == seriesID, let slot = occurrenceDate,
+              let original = ref.originalStart else { return false }
+        return abs(slot.timeIntervalSince(original)) < 1
+    }
+
     /// EventKit has no etag; the modification date is the version.
     static func version(_ modified: Date?) -> String? {
         modified.map { String($0.timeIntervalSince1970) }

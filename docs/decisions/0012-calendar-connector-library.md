@@ -21,6 +21,7 @@ Build `Packages/CalendarConnectors` in this repository, extract it to its own re
 
 - OAuth for desktop apps uses a loopback redirect. Calendar scopes are "sensitive": while the Google Cloud project is in Testing only listed test users can sign in and refresh tokens expire after 7 days; a public release needs Google's OAuth verification.
 - `syncToken` cannot be combined with `timeMin`/`timeMax` and requires `showDeleted=true`, so change detection lists whole calendars (field-minimal) only to obtain and advance tokens.
+- The calendar list is remembered by the source: `calendars()` and each poll fetch it, `events(in:)` reuses it (one `calendarList` request per refresh instead of two). A calendar removed in between answers 404 or 403 and is skipped. A follow-up could poll `calendarList` with its own sync token to make polls cheaper still.
 
 ## Consequences
 

@@ -28,6 +28,22 @@ enum EventKitMapping {
         return (first, max(after, nextDay))
     }
 
+    /// EventKit's own status. `.canceled` must not read as confirmed: a cancelled invite can stay in Apple Calendar.
+    static func status(_ status: EKEventStatus) -> EventStatus {
+        switch status {
+        case .canceled: .cancelled
+        case .tentative: .tentative
+        default: .confirmed
+        }
+    }
+
+    /// `eventIdentifier` is shared by every occurrence of a repeating event, so an occurrence's `eventID` adds the
+    /// original slot (`occurrenceDate`, which stays put when one occurrence is moved). Other events keep the plain
+    /// identifier. Writes find occurrences through `seriesID` (the raw shared identifier) and `originalStart`.
+    static func eventID(identifier: String, occurrenceDate: Date, isOccurrence: Bool) -> String {
+        isOccurrence ? "\(identifier)#\(Int(occurrenceDate.timeIntervalSince1970))" : identifier
+    }
+
     /// nil for statuses the library has no value for (unknown, delegated, in process, ...).
     static func response(_ status: EKParticipantStatus) -> ResponseStatus? {
         switch status {

@@ -70,3 +70,40 @@ private func iso(_ s: String) -> Date { ISO8601DateFormatter().date(from: s)! }
         #expect(EventKitMapping.kind(type) == .standard)
     }
 }
+
+@Test func everyEventKitStatusMapsAndCancelledStaysCancelled() {
+    #expect(EventKitMapping.status(.canceled) == .cancelled)
+    #expect(EventKitMapping.status(.tentative) == .tentative)
+    #expect(EventKitMapping.status(.confirmed) == .confirmed)
+    #expect(EventKitMapping.status(.none) == .confirmed)
+}
+
+@Test func aPlainEventKeepsItsIdentifierAsEventID() {
+    #expect(EventKitMapping.eventID(identifier: "abc", occurrenceDate: iso("2026-09-18T10:00:00Z"), isOccurrence: false) == "abc")
+}
+
+@Test func occurrencesOfOneSeriesGetDifferentEventIDs() {
+    let first = EventKitMapping.eventID(identifier: "abc", occurrenceDate: iso("2026-09-18T10:00:00Z"), isOccurrence: true)
+    let second = EventKitMapping.eventID(identifier: "abc", occurrenceDate: iso("2026-09-25T10:00:00Z"), isOccurrence: true)
+    #expect(first != second)
+    #expect(first.hasPrefix("abc#"))
+}
+
+@Test func aMovedOccurrenceKeepsTheIDOfItsOriginalSlot() {
+    // `occurrenceDate` is the original slot, so moving the occurrence (which changes `startDate`) does not change the id.
+    let slot = iso("2026-09-18T10:00:00Z")
+    #expect(EventKitMapping.eventID(identifier: "abc", occurrenceDate: slot, isOccurrence: true)
+            == EventKitMapping.eventID(identifier: "abc", occurrenceDate: slot, isOccurrence: true))
+}
+
+@Test func aWriteRefBuiltFromAnOccurrenceStillMatchesItsOccurrence() {
+    // The event's `eventID` carries a suffix, the ref's `seriesID` is the raw shared identifier.
+    let slot = iso("2026-09-18T10:00:00Z")
+    let event = CalendarEvent(
+        eventID: EventKitMapping.eventID(identifier: "abc", occurrenceDate: slot, isOccurrence: true), calendarID: "cal",
+        title: "Weekly", start: slot, end: slot.addingTimeInterval(1800), seriesID: "abc", originalStart: slot)
+    let ref = EventRef(event)
+    #expect(EventKitWriteMapping.isOccurrence(ref, eventIdentifier: "abc", occurrenceDate: slot))
+    #expect(!EventKitWriteMapping.isOccurrence(ref, eventIdentifier: "abc", occurrenceDate: slot.addingTimeInterval(7 * 86_400)))
+    #expect(!EventKitWriteMapping.isOccurrence(ref, eventIdentifier: "other", occurrenceDate: slot))
+}

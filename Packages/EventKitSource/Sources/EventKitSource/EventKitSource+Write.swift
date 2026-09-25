@@ -125,8 +125,8 @@ extension EventKitSource: WritableCalendarSource {
 
     /// The occurrence a ref designates, in the ref's calendar. A recurring occurrence is found through a date-range
     /// predicate around its `originalStart` (wide, because the predicate matches an occurrence's actual dates and
-    /// it may have been moved) and matched on `eventIdentifier` and `occurrenceDate` (Unverified: occurrences share
-    /// an identifier). A deleted event, one in another calendar, or one `refresh()` reports as gone (Unverified) is
+    /// it may have been moved) and matched on `seriesID` (the shared `eventIdentifier`) and `occurrenceDate` (Unverified: occurrences share
+    /// an identifier; `eventID` carries a per-occurrence suffix). A deleted event, one in another calendar, or one `refresh()` reports as gone (Unverified) is
     /// `.notFound`.
     private func locate(_ ref: EventRef) throws -> EKEvent {
         var found: EKEvent?
@@ -136,8 +136,7 @@ extension EventKitSource: WritableCalendarSource {
             let window = EventKitWriteMapping.occurrenceSearchWindow(around: original)
             let predicate = store.predicateForEvents(withStart: window.start, end: window.end, calendars: [calendar])
             found = store.events(matching: predicate).first { event in
-                guard event.eventIdentifier == ref.eventID, let slot = event.occurrenceDate else { return false }
-                return abs(slot.timeIntervalSince(original)) < 1
+                EventKitWriteMapping.isOccurrence(ref, eventIdentifier: event.eventIdentifier, occurrenceDate: event.occurrenceDate)
             }
         } else {
             found = store.event(withIdentifier: ref.eventID)
@@ -151,7 +150,7 @@ extension EventKitSource: WritableCalendarSource {
     private func locateTarget(_ ref: EventRef, scope: RecurrenceScope) throws -> (event: EKEvent, span: EKSpan) {
         guard ref.seriesID != nil else { return (try locate(ref), .thisEvent) }
         if scope == .allInSeries {
-            guard let first = store.event(withIdentifier: ref.eventID), first.calendar?.calendarIdentifier == ref.calendarID,
+            guard let seriesID = ref.seriesID, let first = store.event(withIdentifier: seriesID), first.calendar?.calendarIdentifier == ref.calendarID,
                   first.refresh() else { throw WriteError.notFound }
             return (first, .futureEvents)
         }

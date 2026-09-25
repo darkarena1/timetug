@@ -74,15 +74,17 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
             zone = calendar.timeZone
         }
         let isSeries = event.hasRecurrenceRules || event.isDetached
+        // One value feeds both ids, so a ref never has an occurrence `eventID` with a nil `seriesID`.
+        let identifier = event.eventIdentifier ?? event.calendarItemIdentifier
         return CalendarEvent(
-            eventID: event.eventIdentifier ?? event.calendarItemIdentifier,
+            eventID: EventKitMapping.eventID(identifier: identifier, occurrenceDate: event.occurrenceDate ?? start, isOccurrence: isSeries),
             uid: event.calendarItemExternalIdentifier,
             calendarID: event.calendar.calendarIdentifier,
             title: event.title ?? "(No title)",
             notes: event.notes, location: event.location, start: start, end: end, timeZone: zone,
-            isAllDay: event.isAllDay, status: event.status == .tentative ? .tentative : .confirmed,
+            isAllDay: event.isAllDay, status: EventKitMapping.status(event.status),
             availability: event.availability == .free ? .free : .busy,
-            seriesID: isSeries ? event.eventIdentifier : nil, originalStart: isSeries ? event.occurrenceDate : nil,
+            seriesID: isSeries ? identifier : nil, originalStart: isSeries ? event.occurrenceDate : nil,
             attendees: attendees, organizer: event.organizer.map { attendee($0, isOrganizer: true) },
             url: event.url, version: EventKitWriteMapping.version(event.lastModifiedDate),
             myResponse: me.flatMap { EventKitMapping.response($0.participantStatus) }, sourceID: EventKitSource.sourceID)
