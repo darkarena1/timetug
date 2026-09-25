@@ -192,9 +192,13 @@ p { margin: 0 0 1em; max-width: 62ch; }
   .mac-status, .mac-popover, .demo-members, .demo-disclosure, .demo-pointer,
   .takeover-alert { animation: none; }
   .demo-pointer { display: none; }
-  .mac-popover { opacity: 0; }
+  .mac-popover { left: 11px; right: auto; width: calc(50% - 22px); opacity: 1; }
   .demo-members { max-height: 80px; opacity: 1; }
   .demo-disclosure { transform: rotate(90deg); }
+  .takeover-alert { inset: 41px 11px 11px auto; width: calc(50% - 11px); border-radius: 14px; opacity: 1; }
+  .takeover-alert img { width: min(220px, 55%); }
+  .takeover-countdown { font-size: 34px; }
+  .takeover-title { font-size: 19px; }
 }
 
 /* --- feature grid --- */
@@ -275,4 +279,10 @@ footer a:hover { color: var(--ink); }
   .takeover-alert img { width: min(220px, 65%); }
   .takeover-countdown { font-size: 34px; }
   .takeover-title { font-size: 19px; }
+}
+
+@media (prefers-reduced-motion: reduce) and (max-width: 900px) {
+  .menu-demo { height: 720px; }
+  .mac-popover { left: 11px; right: 11px; width: auto; }
+  .takeover-alert { inset: auto 11px 11px; width: auto; height: 290px; }
 }
