@@ -15,6 +15,13 @@ extension EventKitSource: WritableCalendarSource {
         try requireAccess()
         try EventKitWriteMapping.checkNotify(notify, hasOtherAttendees: false)
         let calendar = try writableCalendar(calendarID)
+        if let uid = draft.uid, !uid.isEmpty {
+            let window = EventKitWriteMapping.duplicateSearchWindow(for: draft.timing)
+            let candidates = store.events(matching: store.predicateForEvents(withStart: window.start, end: window.end, calendars: [calendar]))
+            if let index = EventKitWriteMapping.matchingIndex(uid: uid, candidates: candidates.map(\.calendarItemExternalIdentifier)) {
+                throw WriteError.alreadyExists(map(candidates[index]))
+            }
+        }
         let event = EKEvent(eventStore: store)
         event.calendar = calendar
         event.title = draft.title

@@ -21,7 +21,7 @@ final class PopupLogicTests: XCTestCase {
         var event = TimeTugCalendarEvent(
             event: CalendarCore.CalendarEvent(
                 eventID: id, calendarID: calendarID, title: title, start: start, end: end,
-                timeZone: allDay ? utc : nil, isAllDay: allDay),
+                timeZone: utc, isAllDay: allDay),
             sourceID: "src")
         event.conferences = conference.flatMap(URL.init(string:)).map { [ConferenceInfo(url: $0, provider: ConferenceDetector.provider(of: $0) ?? .other)] } ?? []
         return event

@@ -59,6 +59,17 @@ enum EventKitWriteMapping {
         DateInterval(start: slot.addingTimeInterval(-366 * 86_400), end: slot.addingTimeInterval(367 * 86_400))
     }
 
+    /// The first candidate whose external identifier is `uid`; EventKit cannot search by it, so a create looks through
+    /// the events around the draft's time.
+    static func matchingIndex(uid: String, candidates: [String?]) -> Int? {
+        candidates.firstIndex { $0 == uid }
+    }
+
+    /// The window to search for a copy of a meeting: its own time, widened by a day either way (all-day events float).
+    static func duplicateSearchWindow(for timing: EventTiming) -> DateInterval {
+        DateInterval(start: timing.start.addingTimeInterval(-86_400), end: max(timing.end, timing.start.addingTimeInterval(1)).addingTimeInterval(86_400))
+    }
+
     /// Whether a fetched event is the occurrence `ref` designates: same shared identifier (`seriesID`) and the same
     /// original slot.
     static func isOccurrence(_ ref: EventRef, eventIdentifier: String?, occurrenceDate: Date?) -> Bool {

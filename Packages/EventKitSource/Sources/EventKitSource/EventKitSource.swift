@@ -85,6 +85,7 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
         return CalendarEvent(
             eventID: EventKitMapping.eventID(identifier: identifier, occurrenceDate: event.occurrenceDate ?? start, isOccurrence: isSeries),
             uid: event.calendarItemExternalIdentifier,
+            uidScope: EventKitMapping.uidScope(provider: EventKitMapping.provider(sourceType: event.calendar.source?.sourceType, calendarType: event.calendar.type)),
             calendarID: event.calendar.calendarIdentifier,
             title: event.title ?? "(No title)",
             notes: event.notes, location: event.location, start: start, end: end, timeZone: zone,

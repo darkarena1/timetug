@@ -167,3 +167,19 @@ private func iso(_ s: String) -> Date { ISO8601DateFormatter().date(from: s)! }
         #expect(EventKitMapping.availability(EventKitMapping.eventAvailability(value)) == value)
     }
 }
+
+// UID scope and duplicate lookup (Issues 9 and 11).
+
+@Test func uidScopeIsProviderOnlyForExchange() {
+    #expect(EventKitMapping.uidScope(provider: .microsoft) == .provider)
+    for provider in [CalendarProvider.iCloud, .local, .subscription, .calDAV, .google] { #expect(EventKitMapping.uidScope(provider: provider) == .global) }
+    #expect(EventKitMapping.uidScope(provider: nil) == nil)
+}
+
+@Test func aCreateLooksForTheUIDAmongTheEventsAroundTheDraft() {
+    #expect(EventKitWriteMapping.matchingIndex(uid: "u-2", candidates: ["u-1", nil, "u-2"]) == 2)
+    #expect(EventKitWriteMapping.matchingIndex(uid: "u-9", candidates: ["u-1", nil]) == nil)
+    let timing = EventTiming(start: iso("2026-09-21T10:00:00Z"), end: iso("2026-09-21T11:00:00Z"), timeZone: nil, isAllDay: false)
+    let window = EventKitWriteMapping.duplicateSearchWindow(for: timing)
+    #expect(window.start == iso("2026-09-20T10:00:00Z") && window.end == iso("2026-09-22T11:00:00Z"))
+}

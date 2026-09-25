@@ -53,6 +53,13 @@ enum EventKitMapping {
         }
     }
 
+    /// Exchange's object id is not an iCalendar UID (it only matches copies from the same store); everything else that
+    /// EventKit carries keeps the real UID. nil when the provider is unknown.
+    static func uidScope(provider: CalendarProvider?) -> UIDScope? {
+        guard let provider else { return nil }
+        return provider == .microsoft ? .provider : .global
+    }
+
     /// The availability values a calendar accepts; an empty mask means it does not track availability.
     static func supportedAvailabilities(_ mask: EKCalendarEventAvailabilityMask) -> Set<Availability> {
         var result: Set<Availability> = []

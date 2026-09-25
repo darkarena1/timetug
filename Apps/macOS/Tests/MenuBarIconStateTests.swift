@@ -21,7 +21,7 @@ final class MenuBarIconStateTests: XCTestCase {
             event: CalendarCore.CalendarEvent(
                 eventID: "e1", calendarID: calendarID, title: "Sync",
                 start: now.addingTimeInterval(offset), end: now.addingTimeInterval(offset + duration),
-                timeZone: isAllDay ? TimeZone(identifier: "UTC") : nil, isAllDay: isAllDay),
+                timeZone: TimeZone(identifier: "UTC")!, isAllDay: isAllDay),
             sourceID: "src")
         event.otherAttendeeCount = 1
         event.responseStatus = response
