@@ -245,7 +245,7 @@ private func detachedCleanUp(_ cleaner: SmokeCleaner, created: [CalendarEvent] =
                            recurrence: RecurrenceRule(frequency: .weekly, end: .count(2))), in: primary.id, notify: .none)
             created.append(utcEvent)
             let utcList = titled(try await poll { titled($0, utcTitle).count == 2 }, utcTitle)
-            print("LIVE UTC event: \(utcList.count) instances (expected 2), zone \(utcList.map { $0.timeZone?.identifier ?? "-" }), "
+            print("LIVE UTC event: \(utcList.count) instances (expected 2), zone \(utcList.map { $0.timeZone.identifier }), "
                 + "starts \(utcList.map { iso.string(from: $0.start) }) (first expected \(iso.string(from: utcStart)))")
             for event in utcList { try await cleaner.remove(event) }
         } catch {
