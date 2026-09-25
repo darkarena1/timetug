@@ -9,6 +9,8 @@ marketing/legal site, unrelated to the Xcode project). Plain static HTML, no bui
 - `public/style.css` — shared styles. Colors are taken from the app's own palette
   (`Apps/macOS/Sources/BlurBackdrop.swift` `TakeoverColors`, `Apps/macOS/Sources/AboutView.swift`), not
   invented for the web; keep them in sync if the app's palette changes.
+- `public/download.js` — resolves the versioned DMG attached to GitHub's latest stable release. If the
+  lookup fails or the release has no signed DMG yet, the button opens the latest release page.
 - `public/img/` — resized copies of `artwork/Branding/timetug-app-icon-1024.png`. Regenerate with
   `sips -Z <size> artwork/Branding/timetug-app-icon-1024.png --out site/public/img/<name>.png` if the source
   icon changes.

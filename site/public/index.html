@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TimeTug — a tug when time needs your attention</title>
+  <title>TimeTug — never miss a meeting</title>
   <meta name="description" content="TimeTug lives in your Mac's menu bar, lists today's meetings, and takes over every screen shortly before one starts.">
   <meta property="og:title" content="TimeTug">
-  <meta property="og:description" content="A tug when time needs your attention.">
+  <meta property="og:description" content="A friendly nudge from your Mac's menu bar before meetings begin.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://timetug.obryan.cloud/">
   <meta property="og:image" content="https://timetug.obryan.cloud/img/social-preview.jpg">
@@ -21,6 +21,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
   <link rel="stylesheet" href="/style.css">
+  <script src="/download.js" defer></script>
 </head>
 <body data-page="home">
 <div class="container">
@@ -36,20 +37,55 @@
   </nav>
 
   <header class="hero">
-    <span class="statusbar-mock"><span class="dot"></span> <strong>10:56</strong> · Standup in 4 min</span>
-    <h1>A tug when time needs your attention.</h1>
-    <p class="tagline">TimeTug lives in your Mac's menu bar, lists today's meetings, and takes over every
-      screen shortly before one starts — so you don't hyperfocus straight through it.</p>
-    <div class="cta-row">
-      <a class="btn btn-primary" href="https://github.com/darkarena1/timetug/releases">Download for macOS</a>
-      <a class="btn btn-secondary" href="https://github.com/darkarena1/timetug">View on GitHub</a>
-    </div>
+    <h1 class="visually-hidden">TimeTug keeps meetings in view</h1>
     <picture class="banner">
       <source srcset="/img/banner-1200.webp" type="image/webp">
       <img src="/img/banner-1200.jpg" width="1200" height="547"
         alt="TimeTug: a Bernese mountain dog tugs a meeting reminder onto the screen. A tug when time needs your attention.">
     </picture>
+    <p class="tagline">TimeTug lives in your Mac's menu bar, lists today's meetings, and takes over every
+      screen shortly before one starts — so you don't hyperfocus straight through it.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/darkarena1/timetug/releases/latest" data-latest-dmg>Download for macOS</a>
+      <a class="btn btn-secondary" href="https://github.com/darkarena1/timetug">View on GitHub</a>
+    </div>
   </header>
+
+  <section class="showcase" aria-labelledby="showcase-title">
+    <span class="eyebrow">TimeTug in action</span>
+    <h2 id="showcase-title">From your menu bar to your next meeting</h2>
+    <figure class="showcase-scene">
+      <div class="menu-demo" role="img" aria-label="Animated sample: the TimeTug menu bar icon opens an agenda, a merged Standup with Engineering expands to show two events and their Split off actions, the icon closes the agenda, then a full-screen takeover alert appears.">
+        <div class="demo-desktop" aria-hidden="true"><div class="takeover-window takeover-window-back"></div><div class="takeover-window takeover-window-front"></div></div>
+        <div class="mac-menubar" aria-hidden="true">
+          <span class="mac-app-name">Finder</span>
+          <span class="mac-menu-items">File&nbsp;&nbsp; Edit&nbsp;&nbsp; View</span>
+          <span class="mac-menu-spacer"></span>
+          <span class="mac-status"><img src="/img/menubar-puppy-light.png" width="18" height="18" alt=""><span>Standup · 5 min</span></span>
+          <span class="mac-clock">9:56 AM</span>
+        </div>
+        <div class="mac-popover" aria-hidden="true">
+          <div class="demo-heading"><img src="/img/app-icon-120.png" width="28" height="28" alt=""><span><strong>Friday</strong><small>2 meetings left</small></span><span class="demo-gear">⚙</span></div>
+          <div class="demo-events">
+            <div class="demo-event demo-event-first"><span class="demo-time">10:00</span><span class="demo-color blue"></span><span class="demo-event-copy"><strong>Standup with Engineering</strong><small>10:00 – 10:30 · Work</small><em class="demo-merge"><span class="demo-disclosure">›</span> ✦ Merged by on-device intelligence · 2 events</em><span class="demo-members"><span class="demo-member"><span><b>Standup with Engineering</b><small>Work · 10:00 – 10:30</small></span><span class="demo-split">Split off</span></span><span class="demo-member"><span><b>Engineering standup</b><small>Personal · 10:00 – 10:30</small></span><span class="demo-split">Split off</span></span></span></span><span class="demo-join">Join</span></div>
+            <div class="demo-event demo-event-next"><span class="demo-time">2:00</span><span class="demo-color orange"></span><span class="demo-event-copy"><strong>Project check-in</strong><small>2:00 – 2:30 · Work</small></span></div>
+          </div>
+          <div class="demo-footer">Tug 5 minutes before meetings</div>
+        </div>
+        <svg class="demo-pointer demo-pointer-open" viewBox="0 0 24 28" aria-hidden="true"><path d="M2 2v21l5-5 4 8 4-2-4-8h8z" fill="#fff" stroke="#1c2954" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        <svg class="demo-pointer demo-pointer-close" viewBox="0 0 24 28" aria-hidden="true"><path d="M2 2v21l5-5 4 8 4-2-4-8h8z" fill="#fff" stroke="#1c2954" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        <div class="takeover-alert" aria-hidden="true">
+          <img src="/img/takeover-puppy.jpg" alt="" width="464" height="222">
+          <strong class="takeover-countdown">Starting now</strong>
+          <span class="takeover-title">Standup with Engineering</span>
+          <span class="takeover-meta">10:00 – 10:30 AM · Work · 4 people</span>
+          <span class="takeover-actions"><span class="takeover-join">▣&nbsp; Join</span><span class="takeover-snooze">Snooze</span><span class="takeover-dismiss">Dismiss</span></span>
+          <span class="takeover-hint">Return joins · Esc dismisses</span>
+        </div>
+      </div>
+      <figcaption>Sample sequence: menu bar → merged events → close popover → takeover alert</figcaption>
+    </figure>
+  </section>
 
   <section class="section">
     <span class="eyebrow">What it does</span>
