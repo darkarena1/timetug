@@ -136,3 +136,34 @@ private func iso(_ s: String) -> Date { ISO8601DateFormatter().date(from: s)! }
     #expect(EventKitMapping.reminder(EKAlarm(relativeOffset: 0)) == Reminder(minutesBefore: 0))
     #expect(EventKitMapping.reminder(EKAlarm(absoluteDate: iso("2026-09-18T09:00:00Z"))) == nil)
 }
+
+// Calendar identity (Issue 6).
+
+@Test func providerComesFromTheSourceTypeOnly() {
+    #expect(EventKitMapping.provider(sourceType: .local, calendarType: .local) == .local)
+    #expect(EventKitMapping.provider(sourceType: .exchange, calendarType: .exchange) == .microsoft)
+    #expect(EventKitMapping.provider(sourceType: .mobileMe, calendarType: .calDAV) == .iCloud)
+    #expect(EventKitMapping.provider(sourceType: .calDAV, calendarType: .calDAV) == .calDAV)   // iCloud, Google or other: EventKit says CalDAV
+    #expect(EventKitMapping.provider(sourceType: .subscribed, calendarType: .subscription) == .subscription)
+    #expect(EventKitMapping.provider(sourceType: .local, calendarType: .birthday) == .subscription)
+    #expect(EventKitMapping.provider(sourceType: nil, calendarType: .local) == nil)
+}
+
+@Test func supportedAvailabilitiesFollowTheMask() {
+    #expect(EventKitMapping.supportedAvailabilities([.busy, .free]) == [.busy, .free])
+    #expect(EventKitMapping.supportedAvailabilities([.busy, .free, .tentative, .unavailable]) == [.busy, .free, .tentative, .unavailable])
+    #expect(EventKitMapping.supportedAvailabilities([]) == [])
+}
+
+@Test func theDefaultCalendarIsTrueSiblingsFalseAndOtherAccountsUnknown() {
+    #expect(EventKitMapping.isDefault(calendarID: "a", calendarSourceID: "s1", defaultCalendarID: "a", defaultSourceID: "s1") == true)
+    #expect(EventKitMapping.isDefault(calendarID: "b", calendarSourceID: "s1", defaultCalendarID: "a", defaultSourceID: "s1") == false)
+    #expect(EventKitMapping.isDefault(calendarID: "c", calendarSourceID: "s2", defaultCalendarID: "a", defaultSourceID: "s1") == nil)
+    #expect(EventKitMapping.isDefault(calendarID: "a", calendarSourceID: "s1", defaultCalendarID: nil, defaultSourceID: nil) == nil)
+}
+
+@Test func eventAvailabilityRoundTrips() {
+    for value in [Availability.busy, .free, .tentative, .unavailable] {
+        #expect(EventKitMapping.availability(EventKitMapping.eventAvailability(value)) == value)
+    }
+}

@@ -21,7 +21,7 @@ extension EventKitSource: WritableCalendarSource {
         event.notes = draft.notes
         event.location = draft.location
         applyTiming(draft.timing, to: event)
-        event.availability = draft.availability == .free ? .free : .busy
+        setAvailability(draft.availability, on: event, in: calendar)
         if let reminders = draft.reminders { event.alarms = EventKitWriteMapping.alarms(reminders) }
         if let rule = draft.recurrence { event.addRecurrenceRule(EventKitWriteMapping.recurrenceRule(rule)) }
         try save(event, span: .thisEvent)
@@ -119,6 +119,12 @@ extension EventKitSource: WritableCalendarSource {
         catch { throw WriteError.invalid(error.localizedDescription) }
     }
 
+    /// The closest value the calendar accepts (`Availability.closest`); a calendar that tracks none is left alone.
+    private func setAvailability(_ availability: Availability, on event: EKEvent, in calendar: EKCalendar) {
+        let supported = EventKitMapping.supportedAvailabilities(calendar.supportedEventAvailabilities)
+        if let value = availability.closest(in: supported) { event.availability = EventKitMapping.eventAvailability(value) }
+    }
+
     private func requireModifiable(_ event: EKEvent) throws {
         guard event.calendar?.allowsContentModifications == true else { throw WriteError.forbidden("read-only calendar") }
     }
@@ -175,7 +181,7 @@ extension EventKitSource: WritableCalendarSource {
         switch patch.notes { case .keep: break; case .set(let value): event.notes = value; case .clear: event.notes = nil }
         switch patch.location { case .keep: break; case .set(let value): event.location = value; case .clear: event.location = nil }
         if let timing = patch.timing { applyTiming(timing, to: event) }
-        if let availability = patch.availability { event.availability = availability == .free ? .free : .busy }
+        if let availability = patch.availability, let calendar = event.calendar { setAvailability(availability, on: event, in: calendar) }
         switch patch.reminders {
         case .keep: break
         case .set(let list): event.alarms = EventKitWriteMapping.alarms(list)

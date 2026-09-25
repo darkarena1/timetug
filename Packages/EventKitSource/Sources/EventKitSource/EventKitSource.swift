@@ -11,7 +11,7 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
     public let displayName = "Apple Calendar"
     public var capabilities: SourceCapabilities {
         SourceCapabilities(
-            canWrite: true, providedFields: [.reminders, .series, .participation], syncKind: .notification,
+            canWrite: true, providedFields: [.reminders, .series, .participation, .supportedAvailabilities], syncKind: .notification,
             writableFields: [.title, .notes, .location, .timing, .availability, .reminders, .recurrence],
             controlsNotifications: false, recurrenceScopes: Set(RecurrenceScope.allCases))
     }
@@ -28,12 +28,18 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
 
     public func calendars() async throws -> [CalendarDescriptor] {
         try requireAccess()
+        let defaultCalendar = store.defaultCalendarForNewEvents
         return store.calendars(for: .event).map {
             let account = $0.source?.title.trimmingCharacters(in: .whitespacesAndNewlines)
             return CalendarDescriptor(
-                id: $0.calendarIdentifier, title: $0.title, colorHex: EventKitMapping.hex(from: $0.cgColor),
-                accessRole: $0.allowsContentModifications ? .writer : .reader,
-                accountName: (account?.isEmpty ?? true) ? nil : account, kind: EventKitMapping.kind($0.type))
+                id: $0.calendarIdentifier, title: $0.title, service: .eventKit, colorHex: EventKitMapping.hex(from: $0.cgColor),
+                permissions: CalendarPermissions(canViewDetails: true, canEdit: $0.allowsContentModifications),
+                isDefault: EventKitMapping.isDefault(
+                    calendarID: $0.calendarIdentifier, calendarSourceID: $0.source?.sourceIdentifier,
+                    defaultCalendarID: defaultCalendar?.calendarIdentifier, defaultSourceID: defaultCalendar?.source?.sourceIdentifier),
+                accountName: (account?.isEmpty ?? true) ? nil : account, kind: EventKitMapping.kind($0.type),
+                provider: EventKitMapping.provider(sourceType: $0.source?.sourceType, calendarType: $0.type),
+                supportedAvailabilities: EventKitMapping.supportedAvailabilities($0.supportedEventAvailabilities))
         }
     }
 
@@ -89,6 +95,7 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
             conferences: ConferenceDetector.conferences(location: event.location, url: event.url, notes: event.notes),
             reminders: (event.alarms ?? []).compactMap(EventKitMapping.reminder),
             url: event.url, version: EventKitWriteMapping.version(event.lastModifiedDate),
+            lastModified: event.lastModifiedDate, created: event.creationDate,
             participation: EventKitMapping.participation(selfStatus: me?.participantStatus, organizerIsCurrentUser: event.organizer?.isCurrentUser ?? false),
             sourceID: EventKitSource.sourceID)
     }

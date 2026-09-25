@@ -97,7 +97,7 @@ private func detachedCleanUp(_ cleaner: SmokeCleaner, created: [CalendarEvent] =
     let source = try kind.makeSource(for: connection, credentials: credentials, syncState: InMemorySyncStateStore())
     let writable = try #require(source as? WritableCalendarSource)
     let calendars = try await source.calendars()
-    let primaryCalendar = calendars.first { $0.isPrimary }
+    let primaryCalendar = calendars.first { $0.isDefault == true }
     let primary = try #require(primaryCalendar)
     print("LIVE signed in; writing to the primary calendar")
 

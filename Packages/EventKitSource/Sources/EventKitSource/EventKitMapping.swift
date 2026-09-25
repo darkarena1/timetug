@@ -39,6 +39,48 @@ enum EventKitMapping {
         }
     }
 
+    /// The account type gives the provider; the account title is user-editable and is never read. A `.calDAV`
+    /// account may really be iCloud, Google or another host: EventKit presents it as CalDAV and so do we.
+    static func provider(sourceType: EKSourceType?, calendarType: EKCalendarType) -> CalendarProvider? {
+        if calendarType == .birthday || calendarType == .subscription { return .subscription }
+        switch sourceType {
+        case .local?: return .local
+        case .exchange?: return .microsoft
+        case .mobileMe?: return .iCloud
+        case .calDAV?: return .calDAV
+        case .subscribed?, .birthdays?: return .subscription
+        default: return nil
+        }
+    }
+
+    /// The availability values a calendar accepts; an empty mask means it does not track availability.
+    static func supportedAvailabilities(_ mask: EKCalendarEventAvailabilityMask) -> Set<Availability> {
+        var result: Set<Availability> = []
+        if mask.contains(.busy) { result.insert(.busy) }
+        if mask.contains(.free) { result.insert(.free) }
+        if mask.contains(.tentative) { result.insert(.tentative) }
+        if mask.contains(.unavailable) { result.insert(.unavailable) }
+        return result
+    }
+
+    static func eventAvailability(_ availability: Availability) -> EKEventAvailability {
+        switch availability {
+        case .busy: .busy
+        case .free: .free
+        case .tentative: .tentative
+        case .unavailable: .unavailable
+        }
+    }
+
+    /// EventKit has one default calendar across all accounts: true for it, false for its siblings in the same
+    /// account, nil for calendars in other accounts (they have a default EventKit does not tell us).
+    static func isDefault(calendarID: String, calendarSourceID: String?, defaultCalendarID: String?, defaultSourceID: String?) -> Bool? {
+        guard let defaultCalendarID else { return nil }
+        if calendarID == defaultCalendarID { return true }
+        if let calendarSourceID, calendarSourceID == defaultSourceID { return false }
+        return nil
+    }
+
     /// Instances of a series (and a detached, moved one) are occurrences; the series id is the raw shared identifier.
     static func series(isOccurrence: Bool, identifier: String, occurrenceDate: Date?) -> SeriesInfo {
         isOccurrence ? .occurrence(seriesID: identifier, originalStart: occurrenceDate) : .notRecurring
