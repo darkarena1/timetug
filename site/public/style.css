@@ -57,6 +57,7 @@ body {
 body[data-page] { padding-inline: 20px; }
 
 img { max-width: 100%; display: block; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 a { color: var(--blue); }
 h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.1; margin: 0; }
 p { margin: 0 0 1em; max-width: 62ch; }
@@ -80,9 +81,8 @@ p { margin: 0 0 1em; max-width: 62ch; }
 .nav .links a:hover { color: var(--ink); }
 
 /* --- hero --- */
-.hero { padding-block: 64px 48px; display: grid; gap: 28px; }
-.hero h1 { font-size: clamp(2.1rem, 5vw, 3.2rem); font-weight: 650; }
-.hero .tagline { font-size: 1.2rem; color: var(--ink-secondary); max-width: 46ch; }
+.hero { padding-block: 32px 48px; display: grid; gap: 24px; }
+.hero .tagline { font-size: 1.2rem; color: var(--ink-secondary); max-width: 46ch; margin: 0; }
 .banner img {
   display: block; width: 100%; height: auto; border-radius: var(--radius);
   border: 1px solid var(--hairline); box-shadow: var(--shadow);
@@ -97,14 +97,105 @@ p { margin: 0 0 1em; max-width: 62ch; }
 .btn-primary:hover { filter: brightness(1.04); }
 .btn-secondary:hover { border-color: var(--ink-secondary); }
 
-/* mock status-bar strip, echoes the real menu bar icon states */
-.statusbar-mock {
-  display: inline-flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 999px;
-  background: var(--cream-raised); border: 1px solid var(--hairline); box-shadow: var(--shadow);
-  font-family: var(--mono); font-size: 0.82rem; color: var(--ink-secondary); width: fit-content;
+/* One sample sequence follows the app's menu bar popover and takeover layouts. */
+.showcase { padding-block: 48px; border-top: 1px solid var(--hairline); }
+.showcase > .eyebrow { display: block; margin-bottom: 10px; }
+.showcase h2 { font-size: clamp(1.5rem, 3vw, 1.9rem); margin-bottom: 24px; }
+.showcase-scene { min-width: 0; margin: 0; }
+.showcase-scene figcaption { margin: 8px 2px 0; color: var(--ink-secondary); font-size: 0.76rem; }
+.menu-demo {
+  position: relative; height: 400px; overflow: hidden;
+  border: 1px solid rgba(28, 41, 84, 0.15); border-radius: var(--radius);
+  background: radial-gradient(circle at 80% 110%, #3d537b 0, transparent 55%),
+              linear-gradient(140deg, #11192d, #29364c);
+  box-shadow: var(--shadow); color: #f0f5ff;
 }
-.statusbar-mock .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); }
-.statusbar-mock strong { color: var(--ink); font-weight: 600; }
+.mac-menubar {
+  position: relative; z-index: 1; height: 30px; display: flex; align-items: center; gap: 13px; padding: 0 12px;
+  background: rgba(5,10,18,0.92); border-bottom: 1px solid rgba(255,255,255,0.12);
+  font: 600 11px/1 var(--body); white-space: nowrap;
+}
+.mac-menu-items { font-weight: 400; }
+.mac-menu-spacer { flex: 1; }
+.mac-status { display: flex; align-items: center; gap: 6px; max-width: 190px; padding: 3px 8px; border-radius: 999px; background: #55677e; overflow: hidden; animation: status-click 16s infinite; }
+.mac-status img { width: 18px; height: 18px; flex: none; }
+.mac-status span { overflow: hidden; text-overflow: ellipsis; }
+.mac-clock { font-size: 10px; }
+.mac-popover {
+  position: absolute; z-index: 2; top: 41px; right: 11px; width: min(430px, calc(100% - 22px));
+  border-radius: 18px; border: 1px solid rgba(196,207,226,0.4);
+  background: rgba(45,51,61,0.96); box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  animation: popover-open 16s infinite;
+}
+.mac-popover::before { content: ""; position: absolute; top: -10px; right: 28%; width: 18px; height: 18px; transform: rotate(45deg); border-left: 1px solid rgba(196,207,226,0.4); border-top: 1px solid rgba(196,207,226,0.4); background: #2d333d; }
+.demo-heading { display: flex; align-items: center; gap: 9px; padding: 10px 12px 7px; }
+.demo-heading img { width: 28px; height: 28px; border-radius: 8px; }
+.demo-heading strong { display: block; font-size: 12px; line-height: 1.2; }
+.demo-heading small { display: block; font-size: 10px; color: #a6b5d3; line-height: 1.4; }
+.demo-gear { margin-left: auto; color: #f0f5ff; font-size: 15px; }
+.demo-events { display: grid; gap: 5px; padding: 0 9px; }
+.demo-event {
+  display: flex; align-items: flex-start; gap: 6px; min-height: 46px; padding: 8px;
+  border: 1px solid rgba(196,207,226,0.24); border-radius: 12px; background: rgba(109,116,128,0.56);
+  font-size: 10px; line-height: 1.3;
+}
+.demo-event-first { min-height: 66px; border-color: rgba(141,184,250,0.52); background: rgba(79,119,167,0.76); }
+.demo-time { width: 33px; flex: none; color: #d5dce9; font-variant-numeric: tabular-nums; }
+.demo-color { width: 3px; align-self: stretch; border-radius: 3px; flex: none; }
+.demo-color.blue { background: #2e7af5; }
+.demo-color.orange { background: #ffb03b; }
+.demo-event-copy { display: grid; min-width: 0; flex: 1; }
+.demo-event-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.demo-event-copy small { color: #c5d0e0; font-size: 9px; }
+.demo-join { margin-left: auto; padding: 3px 8px; border-radius: 999px; background: #5d9fff; color: #101a2e; font-weight: 600; }
+.demo-merge { display: block; margin-top: 4px; color: #d1e4ff; font-size: 9px; font-style: normal; font-weight: 600; white-space: nowrap; }
+.demo-disclosure { display: inline-block; font-size: 14px; line-height: 7px; vertical-align: -1px; animation: disclosure-open 16s infinite; }
+.demo-members { display: block; max-height: 0; overflow: hidden; opacity: 0; animation: members-expand 16s infinite; }
+.demo-member { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding-top: 5px; }
+.demo-member b { display: block; font-size: 9px; font-weight: 600; }
+.demo-member small { display: block; font-size: 8px; white-space: nowrap; }
+.demo-split { flex: none; padding: 2px 6px; border: 1px solid rgba(220,231,246,0.5); border-radius: 5px; color: #f0f5ff; font-size: 8px; }
+.demo-footer { padding: 7px 14px 9px; color: #c5d0e0; font-size: 9px; }
+
+.demo-desktop { position: absolute; inset: 0; background: linear-gradient(145deg, #9fbbe5, #e7b6b3); }
+.takeover-window { position: absolute; border-radius: 10px; background: rgba(255,255,255,0.75); border: 1px solid rgba(38,55,90,0.15); box-shadow: 0 8px 24px rgba(28,41,84,0.14); }
+.takeover-window-back { top: 105px; left: 10%; width: 40%; height: 230px; }
+.takeover-window-front { top: 75px; right: 8%; width: 50%; height: 260px; }
+.demo-pointer { position: absolute; z-index: 3; width: 20px; height: 24px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.45)); }
+.demo-pointer-open { animation: pointer-open-click 16s infinite; }
+.demo-pointer-close { animation: pointer-close-click 16s infinite; }
+.takeover-alert {
+  position: absolute; z-index: 4; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px 14px 24px; text-align: center; color: white;
+  background: rgba(13, 20, 41, 0.94); animation: takeover-appear 16s infinite;
+}
+.takeover-alert img { width: min(280px, 55%); height: auto; aspect-ratio: 464 / 222; object-fit: cover; border-radius: 14px; box-shadow: 0 6px 16px rgba(0,0,0,0.35); }
+.takeover-countdown { display: block; margin-top: 6px; color: var(--orange); font-size: 46px; line-height: 1.1; font-weight: 600; text-align: center; }
+.takeover-title { font-size: 23px; font-weight: 600; line-height: 1.1; }
+.takeover-meta { color: #a6b5d3; font-size: 12px; }
+.takeover-actions { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 7px; font-size: 12px; font-weight: 600; }
+.takeover-actions > span { padding: 5px 10px; border-radius: 999px; }
+.takeover-join { background: #4d94ff; color: #091329; }
+.takeover-snooze { border: 1px solid #7d8ca8; color: #f0f5ff; }
+.takeover-dismiss { color: #a6b5d3; }
+.takeover-hint { color: #8090ad; font-size: 10px; }
+
+@keyframes status-click { 0%, 5%, 70%, 100% { background: #3a404b; } 8%, 58% { background: #55677e; } 62%, 66% { background: #7faaff; } }
+@keyframes popover-open { 0%, 7%, 68%, 100% { opacity: 0; transform: translateY(-7px) scale(.98); } 12%, 60% { opacity: 1; transform: none; } }
+@keyframes members-expand { 0%, 23%, 67%, 100% { max-height: 0; opacity: 0; } 32%, 60% { max-height: 80px; opacity: 1; } }
+@keyframes disclosure-open { 0%, 23%, 67%, 100% { transform: rotate(0); } 32%, 60% { transform: rotate(90deg); } }
+@keyframes pointer-open-click { 0%, 2%, 14%, 100% { opacity: 0; top: 110px; right: 95px; transform: scale(1); } 4% { opacity: 1; top: 75px; right: 125px; } 8% { opacity: 1; top: 15px; right: 190px; transform: scale(1); } 10% { opacity: 1; top: 15px; right: 190px; transform: scale(.78); } }
+@keyframes pointer-close-click { 0%, 51%, 69%, 100% { opacity: 0; top: 150px; right: 75px; transform: scale(1); } 55% { opacity: 1; top: 90px; right: 120px; } 62% { opacity: 1; top: 15px; right: 190px; transform: scale(1); } 65% { opacity: 1; top: 15px; right: 190px; transform: scale(.78); } }
+@keyframes takeover-appear { 0%, 69%, 100% { opacity: 0; } 75%, 95% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .mac-status, .mac-popover, .demo-members, .demo-disclosure, .demo-pointer,
+  .takeover-alert { animation: none; }
+  .demo-pointer { display: none; }
+  .mac-popover { opacity: 0; }
+  .demo-members { max-height: 80px; opacity: 1; }
+  .demo-disclosure { transform: rotate(90deg); }
+}
 
 /* --- feature grid --- */
 .section { padding-block: 48px; border-top: 1px solid var(--hairline); }
@@ -175,5 +266,13 @@ footer a:hover { color: var(--ink); }
 
 @media (max-width: 640px) {
   .nav .links { gap: 1rem; font-size: 0.85rem; }
-  .hero { padding-block: 40px 32px; }
+  .hero { padding-block: 24px 32px; gap: 25px; }
+  .showcase { padding-block: 32px; }
+  .menu-demo { width: 100%; height: 400px; }
+  .mac-menu-items { display: none; }
+  .mac-popover::before { right: 38%; }
+  .demo-merge { white-space: normal; }
+  .takeover-alert img { width: min(220px, 65%); }
+  .takeover-countdown { font-size: 34px; }
+  .takeover-title { font-size: 19px; }
 }
