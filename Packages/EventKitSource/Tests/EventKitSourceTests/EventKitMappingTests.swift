@@ -1,5 +1,6 @@
 import CalendarCore
 import CalendarTestSupport
+import CoreLocation
 import EventKit
 import Foundation
 import Testing
@@ -131,10 +132,39 @@ private func iso(_ s: String) -> Date { ISO8601DateFormatter().date(from: s)! }
     #expect(EventKitMapping.participation(selfStatus: nil, organizerIsCurrentUser: false) == .notInvited)
 }
 
-@Test func onlyAlarmsRelativeToTheStartAreReadForNow() {
+@Test func relativeAndAbsoluteAlarmsAreRead() {
     #expect(EventKitMapping.reminder(EKAlarm(relativeOffset: -600)) == Reminder(minutesBefore: 10))
     #expect(EventKitMapping.reminder(EKAlarm(relativeOffset: 0)) == Reminder(minutesBefore: 0))
-    #expect(EventKitMapping.reminder(EKAlarm(absoluteDate: iso("2026-09-18T09:00:00Z"))) == nil)
+    let at = iso("2026-09-18T09:00:00Z")
+    #expect(EventKitMapping.reminder(EKAlarm(absoluteDate: at)).trigger == .absolute(at))
+}
+
+@Test func locationAlarmsKeepTheirPlaceAndProximity() {
+    func alarm(_ proximity: EKAlarmProximity, radius: Double, geo: Bool) -> EKAlarm {
+        let a = EKAlarm(relativeOffset: 0)
+        let place = EKStructuredLocation(title: "Office")
+        if geo { place.geoLocation = CLLocation(latitude: 40.5, longitude: -111.9) }
+        place.radius = radius
+        a.structuredLocation = place
+        a.proximity = proximity
+        return a
+    }
+    #expect(EventKitMapping.reminder(alarm(.enter, radius: 150, geo: true)).trigger
+            == .location(StructuredLocation(title: "Office", latitude: 40.5, longitude: -111.9, radius: 150), .enter))
+    // No coordinates keeps the title only, and radius 0 (EventKit's "use the default") is nil.
+    #expect(EventKitMapping.reminder(alarm(.leave, radius: 0, geo: false)).trigger
+            == .location(StructuredLocation(title: "Office"), .leave))
+}
+
+@Test func alarmTypesKeepTheirRelatedValue() {
+    let sound = EKAlarm(relativeOffset: -60)
+    sound.soundName = "Glass"
+    #expect(EventKitMapping.reminder(sound).type == .audio(soundName: "Glass"))
+    let mail = EKAlarm(relativeOffset: -60)
+    mail.emailAddress = "me@x.test"
+    #expect(EventKitMapping.reminder(mail).type == .email(address: "me@x.test"))
+    #expect(EventKitMapping.reminder(EKAlarm(relativeOffset: -60)).type == .display)
+    #expect(EventKitMapping.reminder(EKAlarm(relativeOffset: -60)).isCalendarDefault == nil)
 }
 
 // Calendar identity (Issue 6).

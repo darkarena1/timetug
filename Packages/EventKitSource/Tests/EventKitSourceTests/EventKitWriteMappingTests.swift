@@ -34,13 +34,13 @@ private func newYork() -> Calendar {
     #expect(EventKitWriteMapping.recurrenceRule(RecurrenceRule(frequency: .daily)).recurrenceEnd == nil)
 }
 
-@Test func remindersBecomeNegativeRelativeOffsets() {
-    let alarms = EventKitWriteMapping.alarms([Reminder(minutesBefore: 10), Reminder(minutesBefore: 60)])
+@Test func remindersBecomeNegativeRelativeOffsets() throws {
+    let alarms = try EventKitWriteMapping.alarms([Reminder(minutesBefore: 10), Reminder(minutesBefore: 60)])
     #expect(alarms.map(\.relativeOffset) == [-600, -3600])
 }
 
-@Test func hugeReminderOffsetsDoNotOverflow() {
-    let alarms = EventKitWriteMapping.alarms([Reminder(minutesBefore: Int.max), Reminder(minutesBefore: Int.min)])
+@Test func hugeReminderOffsetsDoNotOverflow() throws {
+    let alarms = try EventKitWriteMapping.alarms([Reminder(minutesBefore: Int.max), Reminder(minutesBefore: Int.min)])
     #expect(alarms.count == 2)
     #expect(alarms[0].relativeOffset < 0 && alarms[1].relativeOffset > 0)
 }
@@ -123,4 +123,27 @@ private func newYork() -> Calendar {
     #expect(window.contains(slot))
     // EventKit only searches up to four years at a time.
     #expect(window.duration < 4 * 365 * 86_400)
+}
+
+@Test func remindersRoundTripThroughAlarms() throws {
+    let at = Date(timeIntervalSince1970: 1_800_000_000)
+    let list = [
+        Reminder(minutesBefore: 15),
+        Reminder(trigger: .absolute(at)),
+        Reminder(trigger: .location(StructuredLocation(title: "Home", latitude: 40.5, longitude: -111.9, radius: 200), .leave)),
+        Reminder(trigger: .relative(offset: -300, to: .start), type: .audio(soundName: "Glass")),
+    ]
+    #expect(try EventKitWriteMapping.alarms(list).map(EventKitMapping.reminder) == list)
+}
+
+@Test func alarmsEventKitCannotWriteAreRefused() {
+    let unsupported: [Reminder] = [
+        Reminder(trigger: .relative(offset: 600, to: .end)),
+        Reminder(trigger: .relative(offset: -60, to: .start), repeatCount: 2, repeatInterval: 300),
+        Reminder(trigger: .relative(offset: -60, to: .start), type: .email(address: "a@x.test")),
+        Reminder(trigger: .relative(offset: -60, to: .start), type: .procedure(url: nil)),
+    ]
+    for reminder in unsupported {
+        #expect(throws: WriteError.unsupported(fields: [.reminders])) { _ = try EventKitWriteMapping.alarms([reminder]) }
+    }
 }

@@ -12,6 +12,7 @@ extension EventKitSource: WritableCalendarSource {
         // NSException, so it must never reach the mapping.
         try draft.validate()
         try WriteValidation.requireWritable(draft.usedFields, capabilities)
+        let alarms = try draft.reminders.map(EventKitWriteMapping.alarms)   // before the store is touched
         try requireAccess()
         try EventKitWriteMapping.checkNotify(notify, hasOtherAttendees: false)
         let calendar = try writableCalendar(calendarID)
@@ -29,7 +30,7 @@ extension EventKitSource: WritableCalendarSource {
         event.location = draft.location
         applyTiming(draft.timing, to: event)
         setAvailability(draft.availability, on: event, in: calendar)
-        if let reminders = draft.reminders { event.alarms = EventKitWriteMapping.alarms(reminders) }
+        if let alarms { event.alarms = alarms }
         if let rule = draft.recurrence { event.addRecurrenceRule(EventKitWriteMapping.recurrenceRule(rule)) }
         try save(event, span: .thisEvent)
         return map(reload(event, isSeries: draft.recurrence != nil))
@@ -65,7 +66,7 @@ extension EventKitSource: WritableCalendarSource {
                 let current = try self.locateTarget(ref, scope: scope)
                 // Unverified: `lastModifiedDate` changes on every save, and `refresh()` (in `locate`) makes it current.
                 if let expected, expected != EventKitWriteMapping.version(current.event.lastModifiedDate) { return .stale }
-                self.apply(patch, to: current.event)
+                try self.apply(patch, to: current.event)
                 do { try self.save(current.event, span: current.span) }
                 catch {
                     // The in-memory event already carries the edit; discard it so a failed save leaves nothing
@@ -99,8 +100,11 @@ extension EventKitSource: WritableCalendarSource {
     private static func validate(_ patch: EventPatch) throws {
         try patch.timing?.validate()
         if case .set(let rule) = patch.recurrence { try rule.validate() }
-        if case .set(let reminders) = patch.reminders, reminders.contains(where: { $0.minutesBefore < 0 }) {
-            throw WriteError.invalid("reminder minutes must not be negative")
+        if case .set(let reminders) = patch.reminders {
+            if reminders.contains(where: { if case .relative(let offset, _) = $0.trigger { offset > 0 } else { false } }) {
+                throw WriteError.invalid("reminder minutes must not be negative")
+            }
+            _ = try EventKitWriteMapping.alarms(reminders)   // refuses what EventKit cannot write before the store is touched
         }
     }
 
@@ -183,7 +187,7 @@ extension EventKitSource: WritableCalendarSource {
         }
     }
 
-    private func apply(_ patch: EventPatch, to event: EKEvent) {
+    private func apply(_ patch: EventPatch, to event: EKEvent) throws {
         if let title = patch.title { event.title = title }
         switch patch.notes { case .keep: break; case .set(let value): event.notes = value; case .clear: event.notes = nil }
         switch patch.location { case .keep: break; case .set(let value): event.location = value; case .clear: event.location = nil }
@@ -191,7 +195,7 @@ extension EventKitSource: WritableCalendarSource {
         if let availability = patch.availability, let calendar = event.calendar { setAvailability(availability, on: event, in: calendar) }
         switch patch.reminders {
         case .keep: break
-        case .set(let list): event.alarms = EventKitWriteMapping.alarms(list)
+        case .set(let list): event.alarms = try EventKitWriteMapping.alarms(list)
         case .clear: event.alarms = nil
         }
         switch patch.recurrence {

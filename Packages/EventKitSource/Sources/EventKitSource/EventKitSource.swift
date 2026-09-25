@@ -94,7 +94,7 @@ public final class EventKitSource: CalendarCore.CalendarSource, @unchecked Senda
             series: EventKitMapping.series(isOccurrence: isSeries, identifier: identifier, occurrenceDate: event.occurrenceDate),
             attendees: attendees, organizer: event.organizer.map { attendee($0, isOrganizer: true) },
             conferences: ConferenceDetector.conferences(location: event.location, url: event.url, notes: event.notes),
-            reminders: (event.alarms ?? []).compactMap(EventKitMapping.reminder),
+            reminders: (event.alarms ?? []).map(EventKitMapping.reminder),
             url: event.url, version: EventKitWriteMapping.version(event.lastModifiedDate),
             lastModified: event.lastModifiedDate, created: event.creationDate,
             participation: EventKitMapping.participation(selfStatus: me?.participantStatus, organizerIsCurrentUser: event.organizer?.isCurrentUser ?? false),

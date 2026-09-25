@@ -101,10 +101,35 @@ enum EventKitMapping {
         return organizerIsCurrentUser ? .invited(.accepted) : .notInvited
     }
 
-    /// Only alarms relative to the start are read for now (the rich reminder model arrives with the next commit).
-    static func reminder(_ alarm: EKAlarm) -> Reminder? {
-        guard alarm.absoluteDate == nil, alarm.relativeOffset <= 0 else { return nil }
-        return Reminder(minutesBefore: Int((-alarm.relativeOffset / 60).rounded()))
+    /// One alarm as a reminder, in the library's shape. The trigger: an absolute date, a place (a `structuredLocation`
+    /// with a proximity of enter or leave), else seconds from the start. The type comes from EventKit's own `type` with
+    /// its related value. EventKit does not say whether an alarm is the calendar's default, so that stays nil.
+    static func reminder(_ alarm: EKAlarm) -> Reminder {
+        let trigger: ReminderTrigger
+        if let date = alarm.absoluteDate {
+            trigger = .absolute(date)
+        } else if let place = alarm.structuredLocation, alarm.proximity != .none {
+            let coordinate = place.geoLocation?.coordinate
+            trigger = .location(
+                StructuredLocation(
+                    title: place.title, latitude: coordinate?.latitude, longitude: coordinate?.longitude,
+                    radius: place.radius > 0 ? place.radius : nil),   // 0 is EventKit's "use the default"
+                alarm.proximity == .enter ? .enter : .leave)
+        } else {
+            trigger = .relative(offset: alarm.relativeOffset, to: .start)
+        }
+        let type: ReminderType
+        switch alarm.type {
+        case .audio: type = .audio(soundName: alarm.soundName)
+        case .email: type = .email(address: alarm.emailAddress)
+        case .procedure: type = .procedure(url: nil)   // `EKAlarm.url` is unavailable from Swift
+        default:
+            // A detached alarm may not have derived its type yet: EventKit sets the type from which related value is set.
+            if let sound = alarm.soundName, !sound.isEmpty { type = .audio(soundName: sound) }
+            else if let address = alarm.emailAddress, !address.isEmpty { type = .email(address: address) }
+            else { type = .display }
+        }
+        return Reminder(trigger: trigger, type: type)
     }
 
     /// EventKit's own status. `.canceled` must not read as confirmed: a cancelled invite can stay in Apple Calendar.
