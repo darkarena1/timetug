@@ -19,7 +19,7 @@ extension EventKitSource: WritableCalendarSource {
         if let uid = draft.uid, !uid.isEmpty {
             let window = EventKitWriteMapping.duplicateSearchWindow(for: draft.timing)
             let candidates = store.events(matching: store.predicateForEvents(withStart: window.start, end: window.end, calendars: [calendar]))
-            if let index = EventKitWriteMapping.matchingIndex(uid: uid, candidates: candidates.map(\.calendarItemExternalIdentifier)) {
+            if let index = EventKitWriteMapping.matchingIndex(uid: uid, candidates: candidates.map { ($0.calendarItemExternalIdentifier, $0.status == .canceled) }) {
                 throw WriteError.alreadyExists(map(candidates[index]))
             }
         }

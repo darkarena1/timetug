@@ -88,8 +88,9 @@ enum EventKitWriteMapping {
 
     /// The first candidate whose external identifier is `uid`; EventKit cannot search by it, so a create looks through
     /// the events around the draft's time.
-    static func matchingIndex(uid: String, candidates: [String?]) -> Int? {
-        candidates.firstIndex { $0 == uid }
+    /// A cancelled copy stays in the store but is not a meeting the caller can see, so it never counts (as on Google).
+    static func matchingIndex(uid: String, candidates: [(uid: String?, isCancelled: Bool)]) -> Int? {
+        candidates.firstIndex { $0.uid == uid && !$0.isCancelled }
     }
 
     /// The window to search for a copy of a meeting: its own time, widened by a day either way (all-day events float).

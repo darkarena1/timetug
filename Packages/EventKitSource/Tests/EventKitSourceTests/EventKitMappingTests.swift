@@ -205,8 +205,10 @@ private func iso(_ s: String) -> Date { ISO8601DateFormatter().date(from: s)! }
 }
 
 @Test func aCreateLooksForTheUIDAmongTheEventsAroundTheDraft() {
-    #expect(EventKitWriteMapping.matchingIndex(uid: "u-2", candidates: ["u-1", nil, "u-2"]) == 2)
-    #expect(EventKitWriteMapping.matchingIndex(uid: "u-9", candidates: ["u-1", nil]) == nil)
+    #expect(EventKitWriteMapping.matchingIndex(uid: "u-2", candidates: [("u-1", false), (nil, false), ("u-2", false)]) == 2)
+    #expect(EventKitWriteMapping.matchingIndex(uid: "u-9", candidates: [("u-1", false), (nil, false)]) == nil)
+    #expect(EventKitWriteMapping.matchingIndex(uid: "u-2", candidates: [("u-2", true), ("u-2", false)]) == 1)   // a cancelled copy is ignored
+    #expect(EventKitWriteMapping.matchingIndex(uid: "u-2", candidates: [("u-2", true)]) == nil)
     let timing = EventTiming(start: iso("2026-09-21T10:00:00Z"), end: iso("2026-09-21T11:00:00Z"), timeZone: nil, isAllDay: false)
     let window = EventKitWriteMapping.duplicateSearchWindow(for: timing)
     #expect(window.start == iso("2026-09-20T10:00:00Z") && window.end == iso("2026-09-22T11:00:00Z"))
