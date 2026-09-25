@@ -61,8 +61,8 @@ struct AppearancePane: View {
     }
 }
 
-/// A selectable miniature menu bar preview: the `clock` SF Symbol (as `StatusItemController` draws
-/// it) plus sample text for `mode`, so people can see what each Menu Bar Text option actually looks
+/// A selectable miniature menu bar preview: the idle puppy (light or dark, as `StatusItemController`
+/// draws it) plus sample text for `mode`, so people can see what each Menu Bar Text option actually looks
 /// like before picking it.
 private struct MenuBarModeTile: View {
     let mode: MenuBarDisplayMode
@@ -114,8 +114,9 @@ private struct MenuBarModeTile: View {
             HStack(spacing: 10) {
                 Spacer(minLength: 0)
                 HStack(spacing: 5) {
-                    Image(systemName: "clock")
-                        .font(.system(size: 14, weight: .medium))
+                    Image(MenuBarIconState.idle.assetName(darkMenuBar: isDark))
+                        .resizable()
+                        .frame(width: 14, height: 14)
                     if let text = sampleText {
                         Text(text).font(.system(size: 12, weight: .medium))
                     }
