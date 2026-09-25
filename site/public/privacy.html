@@ -7,10 +7,10 @@
   <meta name="description" content="What TimeTug reads, where it's stored, and how to disconnect at any time.">
   <meta property="og:title" content="TimeTug Privacy Policy">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://timetug.obryan.cloud/privacy.html">
+  <meta property="og:url" content="https://timetug.obryan.cloud/privacy">
   <link rel="icon" href="/img/favicon-32.png" sizes="32x32">
   <link rel="apple-touch-icon" href="/img/app-icon-256.png">
-  <link rel="canonical" href="https://timetug.obryan.cloud/privacy.html">
+  <link rel="canonical" href="https://timetug.obryan.cloud/privacy">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
@@ -49,17 +49,15 @@
         sign-in and requests two scopes:
         <div class="scope-list">
           <ul>
-            <li><code>calendar.events</code> — view and edit events on your calendars, so TimeTug can show
-              them in your agenda and trigger a takeover before they start. TimeTug's current release only
-              reads events; it does not create, edit or delete them.</li>
+            <li><code>calendar.events.readonly</code> — view events on your calendars, so TimeTug can show
+              them in your agenda and trigger a takeover before they start. TimeTug only reads events; it
+              does not create, edit or delete them.</li>
             <li><code>calendar.calendarlist.readonly</code> — see the list of calendars you're subscribed to,
               so you can choose which ones TimeTug pays attention to.</li>
           </ul>
         </div>
         Your Mac calls Google's Calendar API directly with a token Google issues to you; the events it
-        returns are shown in TimeTug and never relayed anywhere else. Google Calendar support is in beta
-        while we complete Google's verification review, and access is limited to accounts we've listed as
-        testers until that's done.</li>
+        returns are shown in TimeTug and never relayed anywhere else. Google Calendar support is currently in beta.</li>
       <li><strong>An on-device Apple Intelligence model, only if you turn it on.</strong> Settings › Calendars
         has an opt-in, off-by-default, Beta feature that asks your Mac's own on-device model whether two
         ambiguous events are the same meeting, to avoid double-tugging you. It requires macOS 26 on a
@@ -127,7 +125,7 @@
     <span>© 2026 Scott O'Bryan. TimeTug's source is available under MIT with the Commons Clause.</span>
     <div class="links">
       <a href="/">Home</a>
-      <a href="/terms.html">Terms</a>
+      <a href="/terms">Terms</a>
       <a href="https://github.com/darkarena1/timetug">GitHub</a>
     </div>
   </footer>
