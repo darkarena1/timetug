@@ -47,6 +47,8 @@ targets:
         product: CalendarCore
       - package: CalendarConnectors
         product: GoogleCalendar
+      - package: CalendarConnectors
+        product: MicrosoftCalendar
       - package: CalendarBridge
         product: CalendarBridge
       - package: CalendarApple
@@ -69,6 +71,7 @@ targets:
         NSContactsUsageDescription: TimeTug looks up meeting attendees in Contacts to recognize the same meeting across your calendars.
         TimeTugGoogleClientID: $(GOOGLE_OAUTH_CLIENT_ID)
         TimeTugGoogleClientSecret: $(GOOGLE_OAUTH_CLIENT_SECRET)
+        TimeTugMicrosoftClientID: $(MICROSOFT_OAUTH_CLIENT_ID)
     entitlements:
       path: Sources/TimeTug.entitlements
       properties:
@@ -115,6 +118,8 @@ targets:
         product: CalendarCore
       - package: CalendarConnectors
         product: GoogleCalendar
+      - package: CalendarConnectors
+        product: MicrosoftCalendar
       - package: CalendarBridge
         product: CalendarBridge
       - package: CalendarApple

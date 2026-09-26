@@ -37,7 +37,7 @@ enum SettingsSearch {
 
     static let catalog: [SettingsSearchItem] = [
         .init(id: "accounts", title: SettingsText.accounts,
-              keywords: ["google", "account", "accounts", "sign in", "add account", "remove account", "apple calendar", "eventkit", "icloud", "connect"], pane: .accounts),
+              keywords: ["google", "microsoft", "outlook", "office 365", "exchange", "account", "accounts", "sign in", "add account", "remove account", "apple calendar", "eventkit", "icloud", "connect"], pane: .accounts),
         .init(id: "software-update", title: SettingsText.checkForUpdates,
               keywords: ["update", "updates", "upgrade", "version", "software update", "sparkle"], pane: .general),
         .init(id: "automatic-updates", title: SettingsText.automaticUpdates,

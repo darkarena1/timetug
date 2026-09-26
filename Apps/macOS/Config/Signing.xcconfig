@@ -14,3 +14,8 @@ CODE_SIGN_IDENTITY = -
 // project.yml injects into Info.plist. scripts/dev/link-signing.sh links it from ~/.config/timetug/google-oauth.xcconfig.
 // A missing file leaves both empty and Google is not offered.
 #include? "GoogleOAuth.xcconfig"
+
+// Microsoft Entra app registration (git-ignored). Defines MICROSOFT_OAUTH_CLIENT_ID, which project.yml injects into
+// Info.plist. scripts/dev/link-signing.sh links it from ~/.config/timetug/microsoft-oauth.xcconfig.
+// A missing file leaves it empty and Microsoft is not offered.
+#include? "MicrosoftOAuth.xcconfig"

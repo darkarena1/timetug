@@ -3,10 +3,14 @@ import SwiftUI
 /// The small mark shown beside an internet account. Drawn here (no bundled brand artwork); unknown providers get a person icon.
 struct ProviderIcon: View {
     enum Style: Equatable {
-        case google, generic
+        case google, microsoft, generic
 
         static func forKind(_ kindID: String) -> Style {
-            kindID == "google" ? .google : .generic
+            switch kindID {
+            case "google": .google
+            case "microsoft": .microsoft
+            default: .generic
+            }
         }
     }
 
@@ -22,13 +26,14 @@ struct ProviderIcon: View {
         Group {
             switch Style.forKind(kindID) {
             case .google: GoogleMark().padding(size * 0.2)
+            case .microsoft: MicrosoftMark().padding(size * 0.22)
             case .generic:
                 Image(systemName: "person.crop.circle")
                     .resizable().scaledToFit().foregroundStyle(.secondary).padding(size * 0.1)
             }
         }
         .frame(width: size, height: size)
-        .background(Style.forKind(kindID) == .google ? AnyShapeStyle(.white) : AnyShapeStyle(.clear),
+        .background(Style.forKind(kindID) == .generic ? AnyShapeStyle(.clear) : AnyShapeStyle(.white),
                     in: RoundedRectangle(cornerRadius: size * 0.22))
         .accessibilityHidden(true)
     }
@@ -63,5 +68,28 @@ private struct GoogleMark: View {
         Circle().trim(from: from, to: to)
             .stroke(color, style: StrokeStyle(lineWidth: line, lineCap: .butt))
             .padding(line / 2)
+    }
+}
+
+/// Four coloured squares in a two by two grid.
+private struct MicrosoftMark: View {
+    var body: some View {
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height)
+            let gap = side * 0.07
+            let cell = (side - gap) / 2
+            ZStack(alignment: .topLeading) {
+                square(Color(red: 0.95, green: 0.31, blue: 0.13), cell).offset(x: 0, y: 0)
+                square(Color(red: 0.50, green: 0.73, blue: 0.00), cell).offset(x: cell + gap, y: 0)
+                square(Color(red: 0.00, green: 0.64, blue: 0.94), cell).offset(x: 0, y: cell + gap)
+                square(Color(red: 1.00, green: 0.73, blue: 0.00), cell).offset(x: cell + gap, y: cell + gap)
+            }
+            .frame(width: side, height: side, alignment: .topLeading)
+            .position(x: geo.size.width / 2, y: geo.size.height / 2)
+        }
+    }
+
+    private func square(_ color: Color, _ side: CGFloat) -> some View {
+        Rectangle().fill(color).frame(width: side, height: side)
     }
 }

@@ -13,6 +13,8 @@
 #   APP_VERSION   display version; overrides the tag and project.yml
 #   GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET  Google Desktop OAuth client baked into the app (both or
 #              neither; without them Google is not offered). Never printed; see scripts/ci/google-oauth-config.sh.
+#   MICROSOFT_OAUTH_CLIENT_ID  Microsoft Entra client id baked into the app (optional; without it Microsoft is not
+#              offered). Never printed; see scripts/ci/microsoft-oauth-config.sh.
 #
 # Version: from the tag (v1.2.3 -> 1.2.3), else CFBundleShortVersionString in Apps/macOS/project.yml.
 # Outputs: dist/TimeTug.app and dist/version.txt (the resolved version).
@@ -45,6 +47,9 @@ echo "Building TimeTug $VERSION"
 # shellcheck source=scripts/ci/google-oauth-config.sh
 source "$ROOT/scripts/ci/google-oauth-config.sh"
 prepare_google_oauth_xcconfig "${RUNNER_TEMP:-$BUILD_DIR}"
+# shellcheck source=scripts/ci/microsoft-oauth-config.sh
+source "$ROOT/scripts/ci/microsoft-oauth-config.sh"
+prepare_microsoft_oauth_xcconfig "${RUNNER_TEMP:-$BUILD_DIR}"
 xcodegen generate --spec "$SPEC"
 
 rm -rf "$DIST_DIR" "$BUILD_DIR/TimeTug.xcarchive"
@@ -100,6 +105,18 @@ if [ -n "${TIMETUG_GOOGLE_XCCONFIG:-}" ]; then
   echo "Google OAuth client: configured"
 else
   echo "Google OAuth client: absent"
+fi
+
+# Verify the Microsoft client id landed in the app without printing it.
+microsoft_id="$(/usr/libexec/PlistBuddy -c 'Print :TimeTugMicrosoftClientID' "$PLIST" 2>/dev/null || true)"
+if [ -n "${TIMETUG_MICROSOFT_XCCONFIG:-}" ]; then
+  if [ -z "$microsoft_id" ] || [[ "$microsoft_id" == *'$('* ]]; then
+    echo "error: Microsoft client id was provided but is missing from the built Info.plist" >&2
+    exit 1
+  fi
+  echo "Microsoft client id: configured"
+else
+  echo "Microsoft client id: absent"
 fi
 
 codesign --verify --strict --deep "$APP"

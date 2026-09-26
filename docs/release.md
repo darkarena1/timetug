@@ -146,6 +146,8 @@ Add these under Settings > Secrets and variables > Actions. Signing and notarizi
 
 Two optional secrets, `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET`, hold the Google "Desktop app" OAuth client that `beta.yml` and `release.yml` bake into the app (only their `Build Release app` step reads them; `ci.yml` never does). Without them the build still succeeds but Google is not offered in Settings > Accounts. Set both or neither: one alone fails the build. Google treats a Desktop-app client secret as non-confidential because it ships inside the app, but keep both values out of git and out of logs.
 
+One more optional secret, `MICROSOFT_OAUTH_CLIENT_ID`, holds the client (application) id of the Microsoft Entra app registration that `beta.yml` and `release.yml` bake into the app the same way (only the `Build Release app` step reads it). It is a public client id, not a secret in the cryptographic sense (it appears in the sign-in URL), but keep it out of git and logs. Without it the build still succeeds but Microsoft shows as unavailable in Settings > Accounts. Set it with `gh secret set MICROSOFT_OAUTH_CLIENT_ID` (paste the value at the prompt). The registration must list `http://localhost` as a "Mobile and desktop applications" redirect URI and allow personal and work accounts; work accounts outside the registering tenant need an admin's approval until the app's publisher is verified (see the Phase 4 spec).
+
 `SPARKLE_PRIVATE_KEY` (see "One-time setup") is separate: it is needed to publish updates, not to sign the app.
 
 Create the certificate at developer.apple.com > Certificates > "Developer ID Application" (needs a certificate signing request from Keychain Access).
