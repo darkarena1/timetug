@@ -48,7 +48,7 @@ Everything in `MicrosoftCalendar` uses only Foundation and the library, like `Go
 
 - `kindID = "microsoft"`, `displayName = "Microsoft"` (the Accounts tab may show "Outlook" as the subtitle), `authorization = .oauth`, all four platforms.
 - Endpoints: `https://login.microsoftonline.com/common/oauth2/v2.0/authorize` and `.../token`.
-- Scopes: `offline_access`, `User.Read`, `Calendars.ReadWrite`, `Calendars.ReadWrite.Shared`. `.Shared` gives parity with Google's calendar list (shared and delegated calendars). All are user-consentable.
+- Scopes: `offline_access`, `User.Read`, `MailboxSettings.Read`, `Calendars.ReadWrite`, `Calendars.ReadWrite.Shared`. `.Shared` gives parity with Google's calendar list (shared and delegated calendars); `MailboxSettings.Read` is for the account's time zone (see Time zones). All are user-consentable.
 - `MicrosoftOAuthConfig` holds the client id only. Extra auth parameter: `prompt=select_account`, so a user with several Microsoft accounts is not silently signed in as the wrong one.
 - After the code exchange, `GET /me?$select=mail,userPrincipalName,displayName` gives the account identity. The connection's `config["email"]` is `mail` if present, else `userPrincipalName`, lowercased, and `displayName` is that address. `reauthorize` throws `SourceError.invalidResponse("signed in as a different account")` when the identity differs, exactly like Google, and stores secrets only after sign-in succeeds.
 - Secrets: `["refresh_token": ...]` through `AccessTokenProvider`. Microsoft rotates refresh tokens; `AccessTokenProvider` already writes a rotated one back to the store, so no change is needed there. `invalid_grant` becomes `SourceError.authExpired`; work tenants may also return `interaction_required`, which maps to `authExpired` too.
@@ -57,9 +57,16 @@ Everything in `MicrosoftCalendar` uses only Foundation and the library, like `Go
 
 Base URL `https://graph.microsoft.com/v1.0`. `GraphAPIClient` mirrors `GoogleAPIClient`: bearer token from `AccessTokenProvider`, paging through `@odata.nextLink`, `429` and `503` retry honoring `Retry-After` (through the injected sleeper), and a typed `GraphAPIError` (`notFound`, `forbidden`, `gone`, `badRequest`, `conflict`, `precondition`, `throttled`, `server`) with a `sourceError` translation.
 
-Every request sends `Prefer: IdType="ImmutableId"` so ids survive folder moves. Event reads do not send `Prefer: outlook.timezone`; a forced zone shifts all-day dates.
+Every request sends `Prefer: IdType="ImmutableId"` so ids survive folder moves. Event reads also send `Prefer: outlook.timezone="<account zone>"` (see Time zones).
 
-**Calendars.** `GET /me/calendars` (owned and shared). Mapping: `id`, `name`, `hexColor` (Graph's `color` enum is the fallback), `isDefaultCalendar` to `isDefault`, `canEdit`, `canShare`, `canViewPrivateItems` to `CalendarPermissions`, `owner.address` or the account email to `accountName`, `provider = .microsoft`, `service = .microsoft`, `supportedAvailabilities = [.busy, .free, .tentative, .unavailable]` (Graph's `showAs`: free, tentative, busy, oof, workingElsewhere; `workingElsewhere` reads as `.free`). `defaultReminders` and `timeZone` are nil: Graph's calendar resource exposes neither (reminder settings live on events; the mailbox time zone needs `MailboxSettings.Read`, which is not requested).
+**Time zones.** Graph reports times as a `dateTime` plus a `timeZone`, and returns UTC unless the request names a zone with `Prefer: outlook.timezone`. The zone an event was scheduled in is only available as `originalStartTimeZone`. The library needs a zone at two levels: per event (`CalendarEvent.timeZone`) and per calendar (`CalendarDescriptor.timeZone`, which anchors all-day dates). The connector uses the account's mailbox zone as the calendar zone:
+
+- `GET /me/mailboxSettings/timeZone` (scope `MailboxSettings.Read`) gives the account's default zone, a Windows name such as `Pacific Standard Time` or an IANA name. `WindowsTimeZones` (a bidirectional table, Windows to IANA and back, pure Swift, no ICU dependency) turns it into a `TimeZone`. A missing scope, a 403, a failed request or a name not in the table falls back to `UTC`, so `CalendarDescriptor.timeZone` is never nil. The zone is read on each `calendars()` call (one small request), since the user can change it, and the source remembers it for `events(in:)`.
+- Every calendar in the account gets that zone. A shared calendar owned by someone in another zone is still described in the account's zone; that only affects where an all-day event falls on the calendar grid, not any timed instant.
+- Reads send `Prefer: outlook.timezone` set to the account zone's raw name (or `UTC` after a fallback), so `dateTime` values are in the account zone and an all-day event falls on the date the user sees in Outlook. Instants are computed from `dateTime` plus that zone, never from a bare local string.
+- `CalendarEvent.timeZone`: for a timed event, `originalStartTimeZone` mapped through the table (the zone it was scheduled in, so the event displays as its organizer meant it), else the account zone; for an all-day event, the account zone.
+
+**Calendars.** `GET /me/calendars` (owned and shared). Mapping: `id`, `name`, `hexColor` (Graph's `color` enum is the fallback), `isDefaultCalendar` to `isDefault`, `canEdit`, `canShare`, `canViewPrivateItems` to `CalendarPermissions`, `owner.address` or the account email to `accountName`, `provider = .microsoft`, `service = .microsoft`, `supportedAvailabilities = [.busy, .free, .tentative, .unavailable]` (Graph's `showAs`: free, tentative, busy, oof, workingElsewhere; `workingElsewhere` reads as `.free`). `timeZone` is the account's mailbox zone (see Time zones). `defaultReminders` is nil: Graph's calendar resource has no reminder defaults (reminders live on events).
 
 **Events.** `GET /me/calendars/{id}/calendarView?startDateTime&endDateTime&$top=100`, paged. Occurrences come expanded. One task per calendar, results merged and sorted like Google. A calendar that answers 404 or 403 is skipped. Items with `isCancelled == true` are dropped.
 
@@ -70,7 +77,7 @@ Every request sends `Prefer: IdType="ImmutableId"` so ids survive folder moves. 
 | `eventID` | `id` (immutable) |
 | `uid`, `uidScope` | `iCalUId`, `.global` |
 | `title`, `notes`, `location` | `subject`, `body` (text; HTML stripped by the existing detector helpers), `location.displayName` |
-| `start`, `end`, `timeZone` | `start`/`end` `dateTime` interpreted in their own `timeZone` (Windows name or IANA through `WindowsTimeZones`; a custom or unknown zone falls back to `originalStartTimeZone`, then UTC) |
+| `start`, `end`, `timeZone` | `start`/`end` `dateTime` interpreted in the zone the response names (the account zone, because of the `Prefer` header); `timeZone` as in Time zones |
 | `isAllDay` | `isAllDay`, converted to the library's canonical all-day form with the `AllDay` helper (exclusive end, calendar date in the event's zone); must pass `AllDayConformance` |
 | `status` | `isCancelled` cancelled; `showAs == tentative` is availability, not status; everything else confirmed |
 | `availability` | `showAs` |
@@ -85,7 +92,7 @@ Every request sends `Prefer: IdType="ImmutableId"` so ids survive folder moves. 
 | `lastModified`, `created` | `lastModifiedDateTime`, `createdDateTime` |
 | `url` | `webLink` |
 
-Declared `providedFields`: `.kind`, `.visibility`, `.availability`, `.reminders`, `.series`, `.participation`, `.structuredConference`, `.version`, `.lastModified`, `.created`, `.uidScope`, `.recurrenceRules` (see Series), `.isDefault`, `.provider`, `.supportedAvailabilities`, `.permissionDetails`. Google's list minus `.calendarTimeZone` and `.defaultReminders`, which Graph does not supply.
+Declared `providedFields`: `.kind`, `.visibility`, `.availability`, `.reminders`, `.series`, `.participation`, `.structuredConference`, `.version`, `.lastModified`, `.created`, `.uidScope`, `.recurrenceRules` (see Series), `.isDefault`, `.calendarTimeZone`, `.provider`, `.supportedAvailabilities`, `.permissionDetails`. Google's list minus `.defaultReminders`, which Graph does not supply.
 
 ## Change detection
 
@@ -128,7 +135,7 @@ Writing accepts only what Graph can express and throws `WriteError.unsupported(f
 
 **Create.** With a draft `uid`, look up `iCalUId eq '<uid>'` on the target calendar first; a hit throws `.alreadyExists(storedCopy)` and writes nothing. Otherwise `POST /me/calendars/{id}/events`. A recurring draft carries `recurrence` (rule mapped as above, `range.startDate` from the draft start in its zone).
 
-**Update.** Read the current event, run `PatchMerge` against `EventPatch.base` to detect a field-level conflict (`WriteError.conflict(fields:)`), then send only the changed fields with `PATCH`. Timing patches send `start` and `end` with explicit zones; an all-day event sends midnight dateTimes with `isAllDay: true`. Attendee patches send the full attendee list (Graph replaces it). Conference: `generate` sets `isOnlineMeeting: true` and `onlineMeetingProvider: "teamsForBusiness"`; `remove` sets `isOnlineMeeting: false`.
+**Update.** Read the current event, run `PatchMerge` against `EventPatch.base` to detect a field-level conflict (`WriteError.conflict(fields:)`), then send only the changed fields with `PATCH`. Timing patches send `start` and `end` as local `dateTime` values with the event's zone written as a Windows name (from the reverse table; a zone with no Windows entry is sent as UTC with the instant converted); an all-day event sends midnight dateTimes in the account zone with `isAllDay: true`. Attendee patches send the full attendee list (Graph replaces it). Conference: `generate` sets `isOnlineMeeting: true` and `onlineMeetingProvider: "teamsForBusiness"`; `remove` sets `isOnlineMeeting: false`.
 
 **Scope handling.**
 
@@ -160,14 +167,14 @@ An Azure app registration (Microsoft Entra, "App registrations"), with:
 - Supported account types: accounts in any organizational directory and personal Microsoft accounts.
 - Platform: "Mobile and desktop applications" with redirect URI `http://localhost` (Microsoft ignores the port for loopback redirects).
 - "Allow public client flows": yes.
-- API permissions (delegated): `offline_access`, `User.Read`, `Calendars.ReadWrite`, `Calendars.ReadWrite.Shared`.
+- API permissions (delegated): `offline_access`, `User.Read`, `MailboxSettings.Read`, `Calendars.ReadWrite`, `Calendars.ReadWrite.Shared`.
 - The Application (client) id goes in `~/.config/timetug/microsoft-oauth.xcconfig` as `MICROSOFT_OAUTH_CLIENT_ID = ...`.
 
 For live testing: one personal Outlook.com account and, ideally, one Microsoft 365 work account.
 
 ## Testing
 
-- **Library unit tests** on `FakeTransport`, in a new `MicrosoftCalendarTests` target: sign-in and re-authorize (identity, wrong account, cancel, refresh-token rotation), the API client (paging, retry, error translation), `GraphEventMapper` fixtures (timed, all-day in UTC and in a Windows zone, custom zone fallback, cancelled, occurrence and exception, attendees and self, Teams, reminders), `WindowsTimeZones`, `GraphRecurrenceMapper` round trips over every pattern and the unsupported writes, delta baseline, poll, removal, re-baseline after 14 days, `410`, and calendar-set changes.
+- **Library unit tests** on `FakeTransport`, in a new `MicrosoftCalendarTests` target: sign-in and re-authorize (identity, wrong account, cancel, refresh-token rotation), the API client (paging, retry, error translation), the mailbox zone lookup (Windows name, IANA name, unknown name, 403, failure: each ends in a zone, UTC on failure), `GraphEventMapper` fixtures (timed with and without `originalStartTimeZone`, all-day in the account zone and in UTC, cancelled, occurrence and exception, attendees and self, Teams, reminders), `WindowsTimeZones`, `GraphRecurrenceMapper` round trips over every pattern and the unsupported writes, delta baseline, poll, removal, re-baseline after 14 days, `410`, and calendar-set changes.
 - **Conformance:** `AllDayConformance`, `ProvidedFieldsConformance` and `WritableSourceConformance` against a stubbed transport, as for Google; write tests for create (including `.alreadyExists`), update (merge, conflict), delete, respond and every scope, and for `.thisAndFollowing` including numbered-range arithmetic, split at the first occurrence, and the partial-failure rollback.
 - **App tests:** `MicrosoftOAuthSettingsTests` (missing, placeholder and valid values) and the `AppConnectorsTests` registry cases.
 - **Live smoke** (`TIMETUG_LIVE_MICROSOFT=1`, in `CalendarApple` tests like the Google one): the risks below, recorded in a "Live findings" section added to this spec when it is run. Needs the user's client id and an account to sign in with.
@@ -176,7 +183,7 @@ For live testing: one personal Outlook.com account and, ideally, one Microsoft 3
 ## Risks (verify in the live spike)
 
 1. **Loopback redirect host.** The current loopback session builds `http://127.0.0.1:<port>`. Microsoft's registration takes `http://localhost` and ignores the port; whether `127.0.0.1` is matched at runtime must be confirmed. If not, the session gets a redirect-host option so the authorization URL uses `http://localhost:<port>` while the listener still binds the loopback interface (and, if `localhost` resolves to `::1` first in the browser, also binds IPv6).
-2. **Time zones.** Confirm all-day events and events in custom zones read correctly without `Prefer: outlook.timezone`, and that the Windows-to-IANA table covers the zones seen in the wild (unknown names fall back to `originalStartTimeZone`, then UTC, and are logged in test).
+2. **Time zones.** Confirm `Prefer: outlook.timezone` accepts the raw mailbox name (Windows or IANA), that all-day events land on the right date in it, that `originalStartTimeZone` is present on events created elsewhere (Outlook web, iPhone, an invite from another tenant), that writes accept the zone names the connector sends (Windows names are the safe form; IANA names are used only if the live run shows Graph accepts them), and that the table covers the zones seen in the wild.
 3. **Exdates.** Confirm what `RecurrenceSet` can recover for moved and cancelled occurrences on v1.0, and document the window limit if it applies.
 4. **Notifications on create, update and delete**, and whether personal accounts and work accounts behave the same.
 5. **Teams generation** for personal accounts (`teamsForBusiness` versus consumer providers) and the `onlineMeeting` field shape returned.
