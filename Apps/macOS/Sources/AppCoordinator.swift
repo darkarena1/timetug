@@ -49,9 +49,11 @@ final class AppCoordinator {
     private static let dedupLog = Logger(subsystem: "com.timetug.app", category: "dedup")
     private let overlay = OverlayController()
     private lazy var googleOAuthConfig = GoogleOAuthSettings.config()
-    private lazy var registry = AppConnectors.makeRegistry(google: googleOAuthConfig, eventKit: eventKit)
+    private lazy var microsoftOAuthConfig = MicrosoftOAuthSettings.config()
+    private lazy var registry = AppConnectors.makeRegistry(google: googleOAuthConfig, microsoft: microsoftOAuthConfig, eventKit: eventKit)
     /// Kinds TimeTug supports in code but this build couldn't register — see `AccountsController.unconfiguredKindIDs`.
-    private lazy var unconfiguredKindIDs: [String] = googleOAuthConfig == nil ? ["google"] : []
+    private lazy var unconfiguredKindIDs: [String] =
+        (googleOAuthConfig == nil ? ["google"] : []) + (microsoftOAuthConfig == nil ? ["microsoft"] : [])
     private let credentials = KeychainCredentialStore(service: "com.timetug.app.credentials")
     private let syncState = FileSyncStateStore(url: AppSupportFiles.url("sync-state.json"))
     private lazy var reconciler = SourceReconciler(
