@@ -6,6 +6,10 @@ final class ProviderIconTests: XCTestCase {
         XCTAssertEqual(ProviderIcon.Style.forKind("google"), .google)
     }
 
+    func testMicrosoftAccountsGetTheMicrosoftMark() {
+        XCTAssertEqual(ProviderIcon.Style.forKind("microsoft"), .microsoft)
+    }
+
     func testUnknownProvidersFallBackToAGenericIcon() {
         XCTAssertEqual(ProviderIcon.Style.forKind("caldav"), .generic)
         XCTAssertEqual(ProviderIcon.Style.forKind(""), .generic)
