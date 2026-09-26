@@ -24,7 +24,7 @@ Status: design, approved in brainstorming (2026-09-25). Phases 1, 2, 2.5 and 3 a
 Made with the user during brainstorming:
 
 - **Scope: full parity with Google.** Reads, delta sync, writes, `SeriesSource`.
-- **Accounts: work/school and personal**, authority `common`. Some work tenants will require admin consent; the connector surfaces that as a sign-in error, it does not work around it.
+- **Accounts: work/school and personal**, authority `common`. Work tenants other than the registering one need admin consent while the app has no verified publisher; the connector surfaces that as a sign-in error, it does not work around it.
 - **Change detection: `calendarView/delta` over a rolling window**, re-baselined before it ages out. (Rejected: fetch-and-hash each poll, wasteful; `lastModifiedDateTime` filter, misses deletions.)
 - **Public client, PKCE, no secret.** `OAuthConfig.clientSecret` is already optional.
 - **Optimistic locking by read-before-write plus `PatchMerge`**, not `If-Match` (Graph's ETag support on events is not dependable).
@@ -48,7 +48,7 @@ Everything in `MicrosoftCalendar` uses only Foundation and the library, like `Go
 
 - `kindID = "microsoft"`, `displayName = "Microsoft"` (the Accounts tab may show "Outlook" as the subtitle), `authorization = .oauth`, all four platforms.
 - Endpoints: `https://login.microsoftonline.com/common/oauth2/v2.0/authorize` and `.../token`.
-- Scopes: `offline_access`, `User.Read`, `MailboxSettings.Read`, `Calendars.ReadWrite`, `Calendars.ReadWrite.Shared`. `.Shared` gives parity with Google's calendar list (shared and delegated calendars); `MailboxSettings.Read` is for the account's time zone (see Time zones). All are user-consentable.
+- Scopes: `offline_access`, `User.Read`, `MailboxSettings.Read`, `Calendars.ReadWrite`, `Calendars.ReadWrite.Shared`. `.Shared` gives parity with Google's calendar list (shared and delegated calendars); `MailboxSettings.Read` is for the account's time zone (see Time zones). None needs admin consent by itself. Consent is another matter for work and school accounts: an app registered without a verified publisher (a Microsoft Cloud Partner Program step, out of scope) cannot get user consent in other organizations' tenants, so a work account outside the registering tenant needs its admin to approve the app. Personal accounts and the registering tenant are unaffected. The connector reports the resulting sign-in error as is.
 - `MicrosoftOAuthConfig` holds the client id only. Extra auth parameter: `prompt=select_account`, so a user with several Microsoft accounts is not silently signed in as the wrong one.
 - After the code exchange, `GET /me?$select=mail,userPrincipalName,displayName` gives the account identity. The connection's `config["email"]` is `mail` if present, else `userPrincipalName`, lowercased, and `displayName` is that address. `reauthorize` throws `SourceError.invalidResponse("signed in as a different account")` when the identity differs, exactly like Google, and stores secrets only after sign-in succeeds.
 - Secrets: `["refresh_token": ...]` through `AccessTokenProvider`. Microsoft rotates refresh tokens; `AccessTokenProvider` already writes a rotated one back to the store, so no change is needed there. `invalid_grant` becomes `SourceError.authExpired`; work tenants may also return `interaction_required`, which maps to `authExpired` too.
