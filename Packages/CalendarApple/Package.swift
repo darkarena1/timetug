@@ -12,7 +12,8 @@ let package = Package(
                 swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(name: "CalendarAppleTests", dependencies: ["CalendarApple", .product(name: "CalendarCore", package: "CalendarConnectors"),
                                    .product(name: "CalendarOAuth", package: "CalendarConnectors"),
-                                   .product(name: "GoogleCalendar", package: "CalendarConnectors")],
+                                   .product(name: "GoogleCalendar", package: "CalendarConnectors"),
+                                   .product(name: "MicrosoftCalendar", package: "CalendarConnectors")],
                     swiftSettings: [.swiftLanguageMode(.v5)]),
     ]
 )
