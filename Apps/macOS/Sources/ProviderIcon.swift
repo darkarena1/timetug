@@ -84,7 +84,7 @@ private struct MicrosoftMark: View {
                 square(Color(red: 0.00, green: 0.64, blue: 0.94), cell).offset(x: 0, y: cell + gap)
                 square(Color(red: 1.00, green: 0.73, blue: 0.00), cell).offset(x: cell + gap, y: cell + gap)
             }
-            .frame(width: side, height: side)
+            .frame(width: side, height: side, alignment: .topLeading)
             .position(x: geo.size.width / 2, y: geo.size.height / 2)
         }
     }
