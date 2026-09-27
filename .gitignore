@@ -20,6 +20,10 @@ dist/
 .env
 .env.*
 
+# Local agent tooling: Serena's per-project cache and memories; xcode-build-server's per-checkout config
+.serena/
+buildServer.json
+
 # Per-checkout signing override (see Apps/macOS/Config/Signing.xcconfig)
 Apps/macOS/Config/Local.xcconfig
 Apps/macOS/Config/GoogleOAuth.xcconfig
