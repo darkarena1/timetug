@@ -7,6 +7,7 @@
 #   app         Generates the Xcode project with XcodeGen, then builds and runs the app's XCTest suite (macOS).
 #   dmg         Builds the release app and the unsigned drag-to-install DMG, verifies it and uploads it
 #               as the `TimeTug-dmg` artifact (a fresh installer from every run).
+#   architecture  Checks the AGENTS.md layering rules (scripts/ci/check-architecture.sh) on Linux.
 #   core-linux  Runs the Core and CalendarConnectors tests on Linux to prove Core and the connector library
 #               stay portable. Allowed to fail (see below).
 #
@@ -111,6 +112,19 @@ jobs:
             dist/TimeTug-*-unsigned.dmg.sha256
           retention-days: 14
           if-no-files-found: error
+
+  # The layering rules from AGENTS.md that the compiler does not enforce (imports, Package.swift
+  # dependencies, no clock reads in Core), plus the tests of the check and of scripts/dev/affected-tests.sh.
+  architecture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check architecture rules
+        run: scripts/ci/check-architecture.sh
+      - name: Test the checks
+        run: |
+          scripts/ci/tests/test-check-architecture.sh
+          scripts/dev/tests/test-affected-tests.sh
 
   # Core and the connector library are meant to be portable (no Apple-only imports). This job checks that on Linux.
   # It is allowed to fail (continue-on-error) until Linux support is confirmed; once it is

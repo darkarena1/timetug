@@ -24,7 +24,8 @@ App -> `WidgetSnapshot` -> group container (`agenda-snapshot.json`) -> widget ti
 ## Adding a calendar source
 Implement `CalendarSource` in a new package under `Packages/`, return only Core's model, throw
 `SourceError` for permission/auth problems, and register the source in `AppCoordinator`. Never import
-UI frameworks; never leak source-specific types.
+UI frameworks; never leak source-specific types. Give the package its allowed dependencies and import
+rules in `scripts/ci/check-architecture.sh`, which fails until it has them.
 
 ## Adding a platform front end
 Depend on `TimeTugCore` only. Decide for yourself whether a status bar exists and what it shows, how
