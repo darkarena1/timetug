@@ -61,7 +61,7 @@ The two kinds share `CalDAVAccount` and `CalDAVCalendarSource`; they differ only
 
 - `authorize(using:credentials:)` calls `interaction.promptCredentials(fields)`, trims whitespace from non-secret fields, and runs discovery with the result. Nothing is stored until discovery succeeds.
 - **Discovery:** `PROPFIND` on `<server>/.well-known/caldav` (RFC 6764), following redirects under the rules in Security; then `PROPFIND current-user-principal`; then `PROPFIND calendar-home-set` and `calendar-user-address-set` on the principal. If `.well-known` is missing (404), the server URL itself is tried as the context path. A 401 at any step is `SourceError.authExpired`.
-- **Connection:** `connectionID` is a new UUID. `displayName` is the Apple ID for iCloud and `username@host` otherwise. `config` holds `serverURL`, `principalURL`, `homeURL`, `userAddresses` (the principal's `calendar-user-address-set`, newline-separated) and `autoSchedule` (`true` when the server's `DAV:` header lists `calendar-auto-schedule`), so capabilities are fixed when the source is made. The Keychain entry holds the username and the password under the keys `username` and `password`.
+- **Connection:** `connectionID` is a new UUID. `displayName` is the Apple ID for iCloud and `username@host` otherwise. `config` holds `serverURL`, `username` (not secret; used to prefill the sheet on reauthorize), `principalURL`, `homeURL`, `userAddresses` (the principal's `calendar-user-address-set`, newline-separated) and `autoSchedule` (`true` when the server's `DAV:` header lists `calendar-auto-schedule`), so capabilities are fixed when the source is made. The Keychain entry holds the username and the password under the keys `username` and `password`.
 - **Reauthorize:** prompts again with the non-secret fields prefilled from `config` (see App wiring), runs discovery, and throws `SourceError.invalidResponse` if the principal URL differs (a different account); otherwise replaces the stored secrets and keeps the `connectionID`.
 - **Help text:** kinds may adopt a small optional protocol `CredentialPromptHelp` (in `CalendarCore`: `var credentialHelp: (text: String, url: URL?)? { get }`) so the sheet can explain app-specific passwords and link to Apple's page. The iCloud kind adopts it; `AuthorizationMethod` and `CredentialField` are unchanged.
 
@@ -115,7 +115,7 @@ The two kinds share `CalDAVAccount` and `CalDAVCalendarSource`; they differ only
 | `CLASS` | `visibility` (`PUBLIC`, `PRIVATE`, `CONFIDENTIAL`; absent is `.default`) |
 | `ORGANIZER`, `ATTENDEE` (`CN`, `ROLE`, `PARTSTAT`, `CUTYPE`) | `organizer`, `attendees`; email through `CalendarUserAddress.email(from:)`; `isSelf` by matching the principal's `calendar-user-address-set`; `CUTYPE=RESOURCE`/`ROOM` is `.resource` |
 | `VALARM` (`TRIGGER` relative or absolute, `ACTION`, `REPEAT`/`DURATION`, Apple proximity) | `reminders` (the `VALARM` reader ADR 0014 deferred to this connector); a `VALARM` with `X-APPLE-DEFAULT-ALARM:TRUE` has `isCalendarDefault = true`; no `VALARM` is `[]` |
-| `URL`, `X-APPLE-STRUCTURED-LOCATION` | `url`, structured location |
+| `URL` | `url` (`X-APPLE-STRUCTURED-LOCATION` has no event field and is kept as an unmodeled property) |
 | `LAST-MODIFIED`, `CREATED` | `lastModified`, `created` |
 
 Conference links come from the shared `ConferenceDetector` (location, URL, notes). `participation` is derived from the self attendee as the other connectors do. Calendars get `supportedAvailabilities = [.busy, .free]` (all `TRANSP` can say).
