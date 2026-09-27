@@ -72,7 +72,7 @@ def list_files(root):
 
 
 MAX_CHARS = 2400      # target ceiling per chunk (~600 tokens)
-CHUNKER_VER = b"ast-v1"  # mixed into file hashes so a chunking change re-embeds every file
+CHUNKER_VER = b"ast-v2"  # mixed into file hashes so a chunking change re-embeds every file
 LANGS = {".swift": "swift", ".go": "go", ".java": "java", ".c": "c", ".h": "c", ".cpp": "cpp", ".hpp": "cpp",
          ".cc": "cpp", ".cxx": "cpp", ".hh": "cpp", ".hxx": "cpp", ".inl": "cpp", ".ipp": "cpp", ".m": "objc",
          ".mm": "objc", ".cs": "csharp", ".py": "python", ".js": "javascript", ".jsx": "javascript",
@@ -92,15 +92,25 @@ def get_parser(lang):
 
 
 def line_spans(data, start, end):
-    """Fallback: split data[start:end] into ~CHUNK_LINES-line spans with overlap (byte offsets)."""
+    """Fallback: split data[start:end] into spans of at most CHUNK_LINES lines and MAX_CHARS bytes (byte offsets).
+    Neighbouring spans overlap by up to OVERLAP lines; a single line longer than MAX_CHARS is cut into pieces.
+    The size cap matters: embedding memory grows with the square of a chunk's length (a 5k-token chunk needs ~9 GB)."""
     offs = [start] + [i + 1 for i in range(start, end) if data[i] == 10 and i + 1 < end]
-    step = CHUNK_LINES - OVERLAP
-    out = []
-    for i in range(0, len(offs), step):
-        j = min(i + CHUNK_LINES, len(offs))
-        out.append((offs[i], offs[j] if j < len(offs) else end, ()))
-        if j >= len(offs):
+    n = len(offs)
+    offs.append(end)
+    out, i = [], 0
+    while i < n:
+        j = i + 1
+        while j < n and j - i < CHUNK_LINES and offs[j + 1] - offs[i] <= MAX_CHARS:
+            j += 1
+        s, e = offs[i], offs[j]
+        if e - s > MAX_CHARS:
+            out.extend((k, min(k + MAX_CHARS, e), ()) for k in range(s, e, MAX_CHARS))
+        else:
+            out.append((s, e, ()))
+        if j >= n:
             break
+        i = max(j - min(OVERLAP, (j - i) // 5), i + 1)
     return out
 
 
@@ -337,13 +347,17 @@ def cmd_index(a):
 
     emb = TextEmbedding(MODEL)
     n_chunks = 0
-    for rel, h, data, p in todo:
+    if len(todo) > 50:
+        print(f"Embedding {len(todo)} files...", flush=True)
+    for k, (rel, h, data, p) in enumerate(todo, 1):
+        if len(todo) > 50 and k % 50 == 0:
+            print(f"  {k}/{len(todo)} files", flush=True)
         pieces = chunk_file(p, data)
         docs = [f"{rel}\n{t}" for _, _, t in pieces]
         metas = [(a, b) for a, b, _ in pieces]
         if not docs:
             continue
-        vecs = list(emb.embed(docs))
+        vecs = list(emb.embed(docs, batch_size=16))  # bounded batches keep peak memory predictable
         c.upsert(name, points=[
             models.PointStruct(
                 id=str(uuid.UUID(hashlib.sha1(f"{rel}:{i}".encode()).hexdigest()[:32])),
