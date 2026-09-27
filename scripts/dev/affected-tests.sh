@@ -36,7 +36,7 @@ fi
 packages=""
 for m in Packages/*/Package.swift; do packages="$packages $(basename "$(dirname "$m")")"; done
 deps_of() { grep -oE '\.package\(path:[[:space:]]*"\.\./[^"]+"' "Packages/$1/Package.swift" | sed -E 's#.*"\.\./([^"]+)"#\1#' || true; }
-app_deps="$(grep -oE 'path:[[:space:]]*\.\./\.\./Packages/[A-Za-z0-9_]+' Apps/macOS/project.yml | sed 's#.*/##' | tr '\n' ' ')"
+app_deps="$(grep -oE 'path:[[:space:]]*\.\./\.\./Packages/[A-Za-z0-9_]+' Apps/macOS/project.yml | sed 's#.*/##' | tr '\n' ' ' || true)"
 
 direct="" app=0 regen=0 arch=0 scripts=()
 while IFS= read -r f; do

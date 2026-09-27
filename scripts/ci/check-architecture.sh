@@ -2,6 +2,7 @@
 # Checks the layering rules from AGENTS.md ("Rules") that the compiler does not enforce on its own.
 # Usage: scripts/ci/check-architecture.sh [repo-root]
 # Prints one "path:line: message" per violation and exits 1 if there are any.
+# Imports are matched at the start of a line (Swift style here); `import A; import B` on one line is not checked.
 # To add a package, give it a line in allowed_deps and, if it needs them, import rules below.
 set -euo pipefail
 cd "${1:-$(dirname "$0")/../..}"
@@ -60,7 +61,8 @@ never "Apps/macOS/Widgets and Shared" "EventKit Sparkle" Apps/macOS/Widgets Apps
 if [ -d $P/TimeTugCore/Sources ]; then
   while IFS= read -r hit; do
     report "$(echo "$hit" | cut -d: -f1,2)" "TimeTugCore reads the clock (Date()/Date.now); pass now: Date in instead"
-  done < <(grep -rn --include='*.swift' 'Date' $P/TimeTugCore/Sources | grep -v 'architecture-check: allow' | sed 's#//.*##' |
+  done < <(grep -rn --include='*.swift' 'Date' $P/TimeTugCore/Sources | grep -v 'architecture-check: allow' |
+    sed -E -e 's#^([^:]+:[0-9]+:)[[:space:]]*//.*#\1#' -e 's#[[:space:]]//.*##' |
     grep -E '^[^:]+:[0-9]+:(.*[^A-Za-z0-9_])?Date(\(\)|\.now([^A-Za-z0-9_]|$)|\(timeIntervalSinceNow)' || true)
 fi
 
@@ -80,11 +82,12 @@ for manifest in $P/*/Package.swift; do
     report "$manifest:1" "no rule for $P/$name in scripts/ci/check-architecture.sh; add its allowed dependencies (and AGENTS.md Rules)"
     continue
   fi
-  while IFS= read -r hit; do
-    line="${hit%%:*}"
-    dep="$(echo "$hit" | sed -E 's/.*(path|url):[[:space:]]*"([^"]*)".*/\2/')"
-    has "$allowed" "$dep" || report "$manifest:$line" "$name may not depend on $dep (allowed: ${allowed:-none})"
-  done < <(grep -noE '\.package\([^)]*\)' "$manifest" || true)
+  # Read the manifest as one line so a .package(...) wrapped across lines is still seen.
+  while IFS= read -r dep; do
+    line="$(grep -nF "\"$dep\"" "$manifest" | head -1 | cut -d: -f1)"
+    has "$allowed" "$dep" || report "$manifest:${line:-1}" "$name may not depend on $dep (allowed: ${allowed:-none})"
+  done < <(tr '\n' ' ' < "$manifest" | grep -oE '\.package\([^)]*\)' |
+    sed -E 's/.*(path|url):[[:space:]]*"([^"]*)".*/\2/' || true)
 done
 
 [ "$bad" = 0 ] || { echo "$bad architecture violation(s); the rules are in AGENTS.md (Rules)" >&2; exit 1; }

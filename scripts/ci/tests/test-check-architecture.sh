@@ -31,7 +31,7 @@ printf '@preconcurrency import CalendarCore\nimport struct Foundation.Date\n' > 
 printf 'import Testing\n@testable import TimeTugCore\n' > "$T/Packages/TimeTugCore/Tests/TimeTugCoreTests/T.swift"
 printf '#if canImport(FoundationNetworking)\nimport FoundationNetworking\n#endif\nimport CalendarOAuth\n' \
   > "$T/Packages/CalendarConnectors/Sources/CalendarCore/B.swift"
-printf 'func f(now: Date) -> Date { now } // never Date() here\n// Date() in a comment is fine\nlet a = x.startDate(); let b = someDate.now; let c = Date.distantPast\nlet s = "// Date()"; let e = Date(timeIntervalSince1970: 0)\n' \
+printf 'func f(now: Date) -> Date { now } // never Date() here\n// Date() in a comment is fine\nlet a = x.startDate(); let b = someDate.now; let c = Date.distantPast\nlet s = "a"  // Date() here is a comment\nlet e = Date(timeIntervalSince1970: 0)\n' \
   > "$T/Packages/TimeTugCore/Sources/TimeTugCore/Clock.swift"
 mkdir -p "$T/Apps/macOS/Sources" "$T/Apps/macOS/Widgets" "$T/Apps/macOS/Shared"
 printf 'import Sparkle\nimport EventKit\nimport SwiftUI\n' > "$T/Apps/macOS/Sources/App.swift"
@@ -76,6 +76,9 @@ expect Packages/TimeTugCore/Package.swift 'let package = Package(dependencies: [
 expect Packages/CalendarConnectors/Package.swift \
   'let package = Package(dependencies: [.package(url: "https://github.com/x/y", from: "1.0.0")])\n' \
   "CalendarConnectors may not depend on https://github.com/x/y"
+expect Packages/TimeTugCore/Package.swift 'let package = Package(\n  dependencies: [\n    .package(\n      path: "../CalendarBridge"\n    ),\n  ]\n)\n' \
+  "Package.swift:4: TimeTugCore may not depend on ../CalendarBridge"
+expect "$C" 'let u = "https://example.com/?at=\\(Date().timeIntervalSince1970)"\n' "X.swift:1: TimeTugCore reads the clock"
 expect Packages/NewThing/Package.swift 'let package = Package()\n' "no rule for Packages/NewThing"
 
 # An explicit, commented exception to the clock rule is allowed.
