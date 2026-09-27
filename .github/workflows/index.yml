@@ -31,18 +31,22 @@ permissions:
 jobs:
   index:
     runs-on: ubuntu-24.04 # its python3 is 3.12, which the pinned libraries below support
-    timeout-minutes: 60
+    # A full build (no usable previous artifact) takes ~25 minutes on an M-series Mac and longer here;
+    # runs seeded from the previous artifact take a few minutes.
+    timeout-minutes: 180
     services:
       qdrant:
         image: qdrant/qdrant:v1.19.1
         ports:
           - 6333:6333
-    env:
-      # Outside the checkout: the indexer also reads untracked files.
-      FASTEMBED_CACHE_PATH: ${{ runner.temp }}/fastembed
-      VENV: ${{ runner.temp }}/venv
     steps:
       - uses: actions/checkout@v7
+      # Outside the checkout: the indexer also reads untracked files. (The runner context is not available
+      # in job-level env, hence GITHUB_ENV.)
+      - name: Set paths
+        run: |
+          echo "FASTEMBED_CACHE_PATH=$RUNNER_TEMP/fastembed" >> "$GITHUB_ENV"
+          echo "VENV=$RUNNER_TEMP/venv" >> "$GITHUB_ENV"
       - name: Cache the embedding model
         uses: actions/cache@v6
         with:
