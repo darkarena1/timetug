@@ -15,6 +15,7 @@ repository has one: the newest unexpired Actions artifact named `qindex` from it
 """
 import argparse
 import base64
+import fnmatch
 import gzip
 import hashlib
 import json
@@ -46,8 +47,13 @@ TEXT_EXTS = {".md", ".txt", ".rst", ".py", ".js", ".jsx", ".ts", ".tsx", ".go", 
              ".json", ".yaml", ".yml", ".toml", ".ini", ".conf", ".cfg", ".xml", ".gradle", ".tf", ".proto", ".lua", ".cc", ".cxx", ".hh", ".hxx", ".inl", ".ipp", ".m", ".mm",
              ".kts", ".scala", ".groovy", ".cmake", ".mod", ".plist", ".entitlements", ".storyboard", ".pbxproj"}
 TEXT_NAMES = {"Dockerfile", "Makefile", "compose.yaml", "docker-compose.yml", "CMakeLists.txt", "Package.swift", "Podfile", "go.mod"}
+# Files that look like they hold a credential are not indexed. Quoted values must be opaque (no `$`, `\(`, `{`, `(`:
+# those are shell variables or string interpolation, not secrets), and only a real `Authorization: Bearer|Basic`
+# header counts (Swift's `authorization: SomeType` labels do not).
 SECRET = re.compile(r"(sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{30,}|AKIA[0-9A-Z]{16}|BEGIN [A-Z ]*PRIVATE KEY|"
-                    r"(password|passwd|secret|api_?key|token)\s*[=:]\s*['\"][^'\"\s]{8,}['\"]|Authorization:\s*\S+)", re.I)
+                    r"(password|passwd|secret|api_?key|token)\s*[=:]\s*['\"][^'\"\s$\\{}()]{8,}['\"]|"
+                    r"(?-i:Authorization):\s*(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{12,})", re.I)
+IGNORE_FILE = ".qindexignore"  # per-project patterns (fnmatch on the repo-relative path; "dir/" skips a folder)
 
 
 def project_root(start):
@@ -60,12 +66,31 @@ def collection_for(root):
     return f"proj-{re.sub(r'[^A-Za-z0-9_-]', '-', root.name)}-{hashlib.sha1(str(root).encode()).hexdigest()[:6]}-{MODEL_TAG}"
 
 
+def ignore_patterns(root):
+    try:
+        lines = (root / IGNORE_FILE).read_text().splitlines()
+    except OSError:
+        return []
+    return [l.strip() for l in lines if l.strip() and not l.lstrip().startswith("#")]
+
+
+def ignored(rel, patterns):
+    for pat in patterns:
+        if pat.endswith("/"):
+            if rel.startswith(pat) or fnmatch.fnmatch(rel, pat + "*"):
+                return True
+        elif fnmatch.fnmatch(rel, pat):
+            return True
+    return False
+
+
 def list_files(root):
     r = subprocess.run(["git", "-C", str(root), "ls-files", "-co", "--exclude-standard"], capture_output=True, text=True)
     paths = [root / f for f in r.stdout.splitlines()] if r.returncode == 0 else [p for p in root.rglob("*") if p.is_file()]
+    patterns = ignore_patterns(root)
     for p in paths:
         rel = p.relative_to(root)
-        if SKIP_DIRS & set(rel.parts) or SKIP_NAMES.search(p.name) or not p.is_file():
+        if SKIP_DIRS & set(rel.parts) or SKIP_NAMES.search(p.name) or not p.is_file() or ignored(rel.as_posix(), patterns):
             continue
         if p.suffix.lower() in TEXT_EXTS or p.name in TEXT_NAMES:
             yield p

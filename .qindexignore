@@ -1,0 +1,5 @@
+# Paths the semantic code index (the index skill, scripts/dev/qindex.py) leaves out, one pattern per line:
+# fnmatch on the repo-relative path; a trailing "/" skips a whole folder.
+# Implementation plans are step-by-step logs of past work that repeat the code they produced; searches
+# should land on the code itself (the design specs stay in).
+docs/superpowers/plans/
