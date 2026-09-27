@@ -3,6 +3,10 @@
 TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
 `docs/superpowers/specs/2026-09-18-timetug-core-design.md` first, then `docs/architecture.md`.
 
+## Finding code
+- If your agent has a semantic code-index skill (in Claude Code, the `index` skill), use it in this repo without asking first; this is standing permission. At the start of a task check its status. If this checkout is not indexed, or files changed a lot since the last index, run the (incremental) index. The first build of a new checkout or worktree takes a long time, so start it in the background and keep working with grep until it finishes. Then search the index before broad grepping or reading many files, and read the hit ranges rather than trusting snippets. Use grep for exact identifiers and strings.
+- Without such a skill, start from Layout below and grep.
+
 ## Layout
 - `Packages/TimeTugCore`: pure Swift, platform-neutral logic. NO UI or Apple-only imports.
 - `Packages/EventKitSource`: Apple Calendar adapter (macOS only); speaks the library's `CalendarSource`.
@@ -23,8 +27,11 @@ TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
 - Core has no display strings. Formatting belongs to the front end.
 - Every Core behavior has a Swift Testing test. Write the failing test first.
 - Record significant decisions in `docs/decisions/` (ADR, one file each).
+- `scripts/ci/check-architecture.sh` enforces the import, dependency and clock rules above (CI job `architecture`). When a rule changes or a package is added, update this list, the script and `scripts/ci/tests/test-check-architecture.sh` together. A justified clock read in Core carries a `// architecture-check: allow (reason)` comment.
 
 ## Commands
+- Tests a change needs: `scripts/dev/affected-tests.sh` prints the commands for the packages you touched, every package and the app that depend on them, and the tests of changed scripts, dependencies first. `--run` runs them and stops at the first failure; pass paths or `--base <ref>` to scope it (default: everything changed since the merge base with `origin/master`, including uncommitted and untracked files). Use it before committing instead of guessing or running every suite.
+- Architecture rules: `scripts/ci/check-architecture.sh`
 - Core tests: `swift test --package-path Packages/TimeTugCore`
 - EventKitSource tests: `swift test --package-path Packages/EventKitSource`
 - Bridge tests: `swift test --package-path Packages/CalendarBridge`
