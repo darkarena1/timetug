@@ -72,10 +72,14 @@ struct CredentialSheet: View {
 /// Shows the credential sheet while `prompter` has a request. Closing it any way other than Sign In cancels the sign-in.
 struct CredentialSheetPresenter: ViewModifier {
     @ObservedObject var prompter: CredentialPrompter
+    /// The request whose sheet is on screen, so a `nil` written while one sheet is swapped for the next (a retry after
+    /// an instant failure) does not cancel the new prompt.
+    @State private var shownID: UUID?
 
     func body(content: Content) -> some View {
-        content.sheet(item: Binding(get: { prompter.request }, set: { if $0 == nil { prompter.cancel() } })) { request in
+        content.sheet(item: Binding(get: { prompter.request }, set: { if $0 == nil, prompter.request?.id == shownID { prompter.cancel() } })) { request in
             CredentialSheet(request: request, onSubmit: { prompter.submit($0) }, onCancel: { prompter.cancel() })
+                .onAppear { shownID = request.id }
         }
     }
 }
