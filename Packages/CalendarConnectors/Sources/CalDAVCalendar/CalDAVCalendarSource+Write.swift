@@ -77,7 +77,10 @@ extension CalDAVCalendarSource: WritableCalendarSource {
         if let originalStart, let occurrence = EventReader.occurrence(in: resource, originalStart: originalStart, context: context) {
             return occurrence
         }
-        guard let master = EventReader.masterEvent(of: resource, context: context) else { throw WriteError.notFound }
+        // A resource with overrides but no master (an invite to single occurrences) reads as its first override.
+        let everything = DateInterval(start: .distantPast, end: .distantFuture)
+        guard let master = EventReader.masterEvent(of: resource, context: context)
+            ?? EventReader.events(in: resource, overlapping: everything, context: context).first else { throw WriteError.notFound }
         return master
     }
 
@@ -89,9 +92,14 @@ extension CalDAVCalendarSource: WritableCalendarSource {
         resource.master.flatMap { EventReader.timing(of: $0, resolver: resource.resolver, calendarZone: calendarZone)?.start }
     }
 
-    /// Whether the server would tell anyone but the account about a change: any attendee that is not the account.
+    /// Whether the server would tell anyone but the account about a change: any attendee that is not the account, or an
+    /// organizer that is not the account (an invite often lists only the account as an attendee, and an attendee's delete
+    /// or exception is answered to the organizer). An organizer whose address cannot be read counts as someone else.
     func tellsOthers(_ resource: EventResource) -> Bool {
-        resource.events.contains { vevent in AttendeeMapper.read(vevent, selfAddresses: selfAddresses).attendees.contains { !$0.isSelf } }
+        resource.events.contains { vevent in
+            let people = AttendeeMapper.read(vevent, selfAddresses: selfAddresses)
+            return people.attendees.contains { !$0.isSelf } || people.organizer.map { !$0.isSelf } == true
+        }
     }
 
     /// Implicit scheduling tells attendees of every change and cannot be stopped (`controlsNotifications == false`).
@@ -104,8 +112,25 @@ extension CalDAVCalendarSource: WritableCalendarSource {
     func comparedEvent(_ fresh: FetchedResource, ref: EventRef, scope: RecurrenceScope, calendarZone: TimeZone) throws -> CalendarEvent {
         let context = context(calendarID: ref.calendarID, zone: calendarZone, resourceName: fresh.name, etag: fresh.etag)
         if isRecurring(fresh.resource), let slot = ref.originalStart {
-            if let occurrence = EventReader.occurrence(in: fresh.resource, originalStart: slot, context: context) { return occurrence }
-            if scope != .allInSeries { throw WriteError.notFound }
+            let occurrence = EventReader.occurrence(in: fresh.resource, originalStart: slot, context: context)
+            if scope != .allInSeries {
+                guard let occurrence else { throw WriteError.notFound }
+                return occurrence
+            }
+            // A whole-series edit is judged against the series master, so another client's change to the series shows up
+            // even when the occurrence the caller read has its own values. The caller's base is an occurrence, so the
+            // timing stays the occurrence's.
+            if var master = EventReader.masterEvent(of: fresh.resource, context: context) {
+                if let occurrence {
+                    master.start = occurrence.start
+                    master.end = occurrence.end
+                    master.timeZone = occurrence.timeZone
+                    master.isAllDay = occurrence.isAllDay
+                }
+                return master
+            }
+            if let occurrence { return occurrence }   // a resource of overrides only
+            throw WriteError.notFound
         }
         guard let master = EventReader.masterEvent(of: fresh.resource, context: context) else { throw WriteError.notFound }
         return master
@@ -234,6 +259,16 @@ extension CalDAVCalendarSource: WritableCalendarSource {
             SeriesEditor.setOverride(override, at: slot, in: &resource, calendarZone: calendarZone)
             return slot
         }
+        guard resource.master != nil else {
+            // A resource of overrides only (an invite to single occurrences): there is no series to edit, so a
+            // whole-series edit applies to each occurrence. One timing cannot describe several occurrences.
+            guard scope == .allInSeries, patch.recurrence == .keep else { throw WriteError.unsupported(fields: [.recurrence]) }
+            if patch.timing != nil && resource.overrides.count > 1 { throw WriteError.unsupported(fields: [.timing]) }
+            var events = resource.overrides
+            for index in events.indices { try EventWriter.apply(patch, to: &events[index], now: stamp, organizerAddress: organizerAddress) }
+            resource.setEvents(events)
+            return nil
+        }
         // .allInSeries, or .thisAndFollowing at the first occurrence.
         guard var master = resource.master,
               let timing = EventReader.timing(of: master, resolver: resource.resolver, calendarZone: calendarZone) else { throw WriteError.notFound }
@@ -279,9 +314,28 @@ extension CalDAVCalendarSource: WritableCalendarSource {
         let (name, isOccurrence) = Self.resourceName(of: ref.eventID)
         try Self.checkSeriesRef(ref, scope: scope, isOccurrence: isOccurrence, movesTime: false)
         let zone = try await calendarZone(ref.calendarID)
-        var current = try await fetch(calendarID: ref.calendarID, name: name)
+        // An occurrence delete is idempotent and local to that occurrence, so a 412 (another occurrence changed) is
+        // re-applied to the fresh copy. Every attempt judges the fresh copy again: who would be told, and whether the
+        // occurrence still exists. From the second attempt on, a resource or occurrence that is gone is the goal reached.
+        for attempt in 0..<3 {
+            do {
+                let current = try await fetch(calendarID: ref.calendarID, name: name)
+                if try await deleteAttempt(current, ref: ref, scope: scope, isOccurrence: isOccurrence, notify: notify, zone: zone) { return }
+            } catch WriteError.notFound where attempt > 0 {
+                return
+            }
+        }
+        throw WriteError.conflict(fields: [.recurrence])
+    }
+
+    /// One delete against `current`: true when done, false when the server said the copy is stale.
+    private func deleteAttempt(_ current: FetchedResource, ref: EventRef, scope: RecurrenceScope, isOccurrence: Bool,
+                               notify: NotifyPolicy, zone: TimeZone) async throws -> Bool {
         try requireNotify(notify, tellsOthers: tellsOthers(current.resource))
-        var effective = isRecurring(current.resource) ? scope : .allInSeries
+        let recurring = isRecurring(current.resource)
+        // The id names an occurrence of a series that has since become a single event: that occurrence no longer exists.
+        if isOccurrence && !recurring && scope != .allInSeries { throw WriteError.notFound }
+        var effective = recurring ? scope : .allInSeries
         if effective != .allInSeries {
             guard isOccurrence else { throw WriteError.invalid(Self.seriesMessage) }
             guard let slot = ref.originalStart else { throw WriteError.invalid(Self.slotMessage) }
@@ -289,35 +343,43 @@ extension CalDAVCalendarSource: WritableCalendarSource {
         }
         if effective == .allInSeries {
             // Last writer wins, like the other connectors' deletes.
-            let reply = try await client.send("DELETE", current.url)
-            switch reply.response.status {
-            case 200, 204: await state.forget(current.url); return
-            case 404, 410: throw WriteError.notFound
-            case 403: throw WriteError.forbidden(nil)
-            default: throw SourceError.invalidResponse("DELETE answered \(reply.response.status)")
-            }
+            return try await remove(current.url, ifMatch: nil)
         }
         let slot = ref.originalStart!
-        // Idempotent and local to this occurrence, so a 412 (another occurrence changed) is re-applied to the fresh copy.
-        for attempt in 0..<3 {
-            if attempt > 0 { current = try await fetch(calendarID: ref.calendarID, name: name) }
-            var resource = current.resource
-            do {
-                if effective == .thisInstance {
-                    try SeriesEditor.exclude(slot, in: &resource, calendarZone: zone)
-                    if var master = resource.master {
-                        EventWriter.touch(&master, now: now(), bumpSequence: true)
-                        resource.setEvents([master] + resource.overrides)
-                    }
-                } else {
-                    resource = try SeriesEditor.split(resource, at: slot, newUID: makeUUID(), calendarZone: zone, now: now()).head
-                }
-            } catch WriteError.notFound where attempt > 0 {
-                return   // someone else removed it meanwhile
+        var resource = current.resource
+        if resource.master == nil {
+            // A resource of overrides only: drop the occurrence (and, for this and following, the later ones).
+            let resolver = resource.resolver
+            let remaining = resource.overrides.filter { vevent in
+                guard let id = EventReader.recurrenceID(of: vevent, resolver: resolver, calendarZone: zone) else { return true }
+                return effective == .thisInstance ? id != slot : id < slot
             }
-            if case .stored = try await put(resource, to: current.url, ifMatch: current.etag) { return }
+            if remaining.count == resource.overrides.count { throw WriteError.notFound }
+            if remaining.isEmpty { return try await remove(current.url, ifMatch: current.etag) }
+            resource.setEvents(remaining)
+        } else if effective == .thisInstance {
+            try SeriesEditor.exclude(slot, in: &resource, calendarZone: zone)
+            if var master = resource.master {
+                EventWriter.touch(&master, now: now(), bumpSequence: true)
+                resource.setEvents([master] + resource.overrides)
+            }
+        } else {
+            resource = try SeriesEditor.split(resource, at: slot, newUID: makeUUID(), calendarZone: zone, now: now()).head
         }
-        throw WriteError.conflict(fields: [.recurrence])
+        if case .stored = try await put(resource, to: current.url, ifMatch: current.etag) { return true }
+        return false
+    }
+
+    /// DELETE; false on a 412 (only when `ifMatch` was sent).
+    private func remove(_ url: URL, ifMatch: String?) async throws -> Bool {
+        let reply = try await client.send("DELETE", url, headers: ifMatch.map { ["If-Match": $0] } ?? [:])
+        switch reply.response.status {
+        case 200, 204: await state.forget(url); return true
+        case 412: return false
+        case 404, 410: throw WriteError.notFound
+        case 403: throw WriteError.forbidden(nil)
+        default: throw SourceError.invalidResponse("DELETE answered \(reply.response.status)")
+        }
     }
 
     // MARK: Respond
@@ -372,7 +434,6 @@ extension CalDAVCalendarSource: WritableCalendarSource {
             return slot
         case .allInSeries:
             // The answer is for the whole series: the master and every override.
-            guard resource.master != nil else { throw WriteError.notFound }
             var events = resource.events
             var found = false
             for index in events.indices where AttendeeMapper.setResponse(response, in: &events[index], selfAddresses: me) {

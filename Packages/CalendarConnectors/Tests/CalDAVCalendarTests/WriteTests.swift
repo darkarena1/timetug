@@ -252,3 +252,127 @@ private let timing = EventTiming(start: pt(2026, 9, 10, 9), end: pt(2026, 9, 10,
     let source = try await h.source()
     await expectWriteError(.forbidden(nil)) { _ = try await source.create(EventDraft(title: "x", timing: timing), in: "shared", notify: .none) }
 }
+
+// MARK: Review round 1
+
+/// Forwards to the server, but lets `beforeFirstPUT` (another client's edit) happen just before the first PUT, so that
+/// PUT is genuinely stale.
+private final class InterferingTransport: HTTPTransport, @unchecked Sendable {
+    private let server: FakeCalDAVServer
+    private let lock = NSLock()
+    private var pending: (@Sendable (FakeCalDAVServer) async -> Void)?
+
+    init(_ server: FakeCalDAVServer, beforeFirstPUT: @escaping @Sendable (FakeCalDAVServer) async -> Void) {
+        self.server = server
+        pending = beforeFirstPUT
+    }
+
+    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        if request.method == "PUT", let action = lock.withLock({ () -> (@Sendable (FakeCalDAVServer) async -> Void)? in
+            defer { pending = nil }
+            return pending
+        }) {
+            await action(server)
+        }
+        return try await server.send(request)
+    }
+}
+
+/// An invite to single occurrences: overrides, no master.
+private func overridesOnlyICS(_ slots: [Int] = [22]) -> String {
+    let events = slots.flatMap { day -> [String] in
+        ["BEGIN:VEVENT", "UID:only-uid", "DTSTAMP:20260901T000000Z", "RECURRENCE-ID;TZID=America/Los_Angeles:202609\(day)T100000",
+         "SUMMARY:Guest spot \(day)", "DTSTART;TZID=America/Los_Angeles:202609\(day)T100000",
+         "DTEND;TZID=America/Los_Angeles:202609\(day)T103000", "ORGANIZER;CN=Me:mailto:me@icloud.test",
+         "ATTENDEE;CN=Me;PARTSTAT=NEEDS-ACTION:mailto:me@icloud.test", "END:VEVENT"]
+    }
+    return (["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Apple Inc.//iCloud//EN"] + events + ["END:VCALENDAR"]).joined(separator: "\r\n") + "\r\n"
+}
+
+@Test func anOrganizerWhoIsNotTheAccountIsToldEvenWhenNoOtherAttendeeIsListed() async throws {
+    let h = CalDAVHarness()
+    await h.server.store("home", "invite.ics", singleICS(uid: "i", title: "Invite", attendees: [
+        "ORGANIZER:mailto:boss@example.test", "ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:me@icloud.test",
+    ]))
+    let source = try await h.source()
+    let invite = try #require(try await source.events(in: september).first)
+    for policy in [NotifyPolicy.none, .externalOnly] {
+        await expectWriteError(.unsupported(fields: [.attendees])) { try await source.delete(EventRef(invite), scope: .thisInstance, notify: policy) }
+        await expectWriteError(.unsupported(fields: [.attendees])) {
+            _ = try await source.update(EventRef(invite), EventPatch(title: "x"), scope: .thisInstance, notify: policy)
+        }
+    }
+    let puts = await h.server.requests("PUT")
+    let deletes = await h.server.requests("DELETE")
+    #expect(puts.isEmpty && deletes.isEmpty)
+}
+
+@Test func deletingAnOccurrenceOfASeriesThatBecameASingleEventIsNotFound() async throws {
+    let h = CalDAVHarness()
+    await h.server.store("home", "weekly.ics", weeklyICS(organizer: nil))
+    let source = try await h.source()
+    let tuesday = try await occurrence(source, on: 22)
+    await h.server.store("home", "weekly.ics", singleICS(uid: "weekly-uid", title: "Now a one-off"))
+    await expectWriteError(.notFound) { try await source.delete(EventRef(tuesday), scope: .thisInstance, notify: .none) }
+    await expectWriteError(.notFound) { try await source.delete(EventRef(tuesday), scope: .thisAndFollowing, notify: .none) }
+    let deletes = await h.server.requests("DELETE")
+    let puts = await h.server.requests("PUT")
+    let names = await h.server.names("home")
+    #expect(deletes.isEmpty && puts.isEmpty && names == ["weekly.ics"])
+}
+
+@Test func aWholeSeriesEditIsJudgedAgainstTheSeriesMaster() async throws {
+    let h = CalDAVHarness()
+    await h.server.store("home", "weekly.ics", weeklyICS(organizer: nil))
+    let source = try await h.source()
+    let moved = try await occurrence(source, on: 15, hour: 10)   // the override: its own title, not the master's
+    let tuesday = try await occurrence(source, on: 22)
+    _ = try await source.update(EventRef(tuesday), EventPatch(title: "Planning"), scope: .allInSeries, notify: .none)
+    var mine = moved
+    mine.title = "Planning (mine)"
+    await expectWriteError(.conflict(fields: [.title])) {
+        _ = try await source.update(EventRef(moved), EventPatch(from: moved, to: mine), scope: .allInSeries, notify: .none)
+    }
+    #expect(try await stored(h, "weekly.ics").master?.property("SUMMARY")?.value == "Planning")
+}
+
+@Test func anOccurrenceInAResourceWithoutAMasterCanBeDeletedUpdatedAndAnswered() async throws {
+    let h = CalDAVHarness()
+    await h.server.store("home", "only.ics", overridesOnlyICS([22, 29]))
+    let source = try await h.source()
+    let first = try await occurrence(source, on: 22)
+    try await source.delete(EventRef(first), scope: .thisInstance, notify: .all)
+    #expect(try await source.events(in: september).map(\.start) == [pt(2026, 9, 29, 10)])
+    let last = try await occurrence(source, on: 29)
+    let renamed = try await source.update(EventRef(last), EventPatch(title: "Renamed"), scope: .allInSeries, notify: .all)
+    #expect(renamed.title == "Renamed")
+    let answered = try await source.respond(to: EventRef(renamed), .accepted, scope: .allInSeries, notify: .all)
+    #expect(answered.participation == .invited(.accepted))
+    try await source.delete(EventRef(answered), scope: .thisInstance, notify: .all)
+    #expect(await h.server.names("home").isEmpty)
+    let deletion = try #require(await h.server.requests("DELETE").last)
+    #expect(deletion.headers["If-Match"] != nil)
+}
+
+@Test func deleteRerunsTheNotifyCheckOnEveryAttempt() async throws {
+    let h = CalDAVHarness()
+    await h.server.store("home", "weekly.ics", weeklyICS(organizer: nil))
+    let transport = InterferingTransport(h.server) { server in
+        await server.store("home", "weekly.ics", weeklyICS())   // meanwhile someone invites people
+    }
+    let source = try await h.source(transport: transport)
+    let tuesday = try await occurrence(source, on: 22)
+    await expectWriteError(.unsupported(fields: [.attendees])) { try await source.delete(EventRef(tuesday), scope: .thisInstance, notify: .none) }
+    let body = try #require(await h.server.body("home", "weekly.ics"))
+    #expect(!body.contains("20260922"))
+}
+
+@Test func deleteTreatsAResourceGoneOnARetryAsDone() async throws {
+    let h = CalDAVHarness()
+    await h.server.store("home", "weekly.ics", weeklyICS(organizer: nil))
+    let transport = InterferingTransport(h.server) { server in await server.remove("home", "weekly.ics") }
+    let source = try await h.source(transport: transport)
+    let tuesday = try await occurrence(source, on: 22)
+    try await source.delete(EventRef(tuesday), scope: .thisInstance, notify: .none)   // the PUT 412s, the re-fetch 404s
+    #expect(await h.server.names("home").isEmpty)
+}

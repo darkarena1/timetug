@@ -58,12 +58,12 @@ struct CalDAVHarness {
                             userAddresses: userAddresses, autoSchedule: autoSchedule)
     }
 
-    func source(autoSchedule: Bool = true, userAddresses: [String] = defaultAddresses) async throws -> CalDAVCalendarSource {
+    func source(autoSchedule: Bool = true, userAddresses: [String] = defaultAddresses, transport: (any HTTPTransport)? = nil) async throws -> CalDAVCalendarSource {
         try await credentials.setSecrets(["username": "me@icloud.test", "password": "app-pass-1234"], for: "c1")
         let account = account(autoSchedule: autoSchedule, userAddresses: userAddresses)
         let connection = Connection(kindID: "icloud", connectionID: "c1", displayName: "me@icloud.test", config: account.config)
         let store = credentials
-        let client = WebDAVClient(transport: server, hostBase: "icloud.com", credentials: {
+        let client = WebDAVClient(transport: transport ?? server, hostBase: "icloud.com", credentials: {
             let secrets = try await store.secrets(for: "c1") ?? [:]
             return WebDAVCredentials(username: secrets["username"] ?? "", password: secrets["password"] ?? "")
         })
