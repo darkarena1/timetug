@@ -376,3 +376,32 @@ private func overridesOnlyICS(_ slots: [Int] = [22]) -> String {
     try await source.delete(EventRef(tuesday), scope: .thisInstance, notify: .none)   // the PUT 412s, the re-fetch 404s
     #expect(await h.server.names("home").isEmpty)
 }
+
+private func allDayICS(uid: String = "allday-uid", first: String = "20260305", rule: String) -> String {
+    ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Apple Inc.//iCloud//EN", "BEGIN:VEVENT", "UID:\(uid)", "DTSTAMP:20260301T000000Z",
+     "SEQUENCE:0", "SUMMARY:Holiday", "DTSTART;VALUE=DATE:\(first)", "DTEND;VALUE=DATE:\(next(first))", "RRULE:\(rule)", "END:VEVENT", "END:VCALENDAR"]
+        .joined(separator: "\r\n") + "\r\n"
+}
+
+private func next(_ date: String) -> String { String(Int(date)! + 1) }
+
+private func day(_ zone: TimeZone, _ y: Int, _ m: Int, _ d: Int) -> Date {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = zone
+    return calendar.date(from: DateComponents(year: y, month: m, day: d))!
+}
+
+@Test func deletingFromTheDayAfterASpringForwardDayKeepsThatDay() async throws {
+    let newYork = TimeZone(identifier: "America/New_York")!
+    let h = CalDAVHarness()
+    await h.server.configure { $0.collections["home"]?.timeZoneID = "America/New_York" }
+    await h.server.store("home", "holiday.ics", allDayICS(rule: "FREQ=DAILY"))
+    let source = try await h.source()
+    let window = DateInterval(start: day(newYork, 2026, 3, 1), end: day(newYork, 2026, 3, 15))
+    let mar9 = try #require(try await source.events(in: window).first { $0.originalStart == day(newYork, 2026, 3, 9) })
+    try await source.delete(EventRef(mar9), scope: .thisAndFollowing, notify: .none)
+    // Mar 8 is 23 hours long in New York; the series must still cover it.
+    #expect(try await source.events(in: window).map(\.start) == (5...8).map { day(newYork, 2026, 3, $0) })
+    let head = try await stored(h, "holiday.ics")
+    #expect(head.master?.property("RRULE")?.value == "FREQ=DAILY;UNTIL=20260308")
+}

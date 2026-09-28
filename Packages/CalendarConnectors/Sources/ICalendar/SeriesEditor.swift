@@ -149,7 +149,13 @@ public enum SeriesEditor {
                 headRule.end = .count(before)
                 tailRule.end = .count(total - before)
             case .until, .never:
-                headRule.end = .until(timing.isAllDay ? slot.addingTimeInterval(-86_400) : slot.addingTimeInterval(-1))
+                if timing.isAllDay {
+                    // The previous calendar day, by date arithmetic: a 23-hour (spring-forward) day must not skip a date.
+                    let previous = AllDay.date(of: slot, in: form.zone).adding(days: -1)
+                    headRule.end = .until(AllDay.startOfDay(previous, in: form.zone) ?? slot.addingTimeInterval(-86_400))
+                } else {
+                    headRule.end = .until(slot.addingTimeInterval(-1))
+                }
             }
             headMaster.set(ICalProperty(name: "RRULE", value: headRule.rruleString(allDay: timing.isAllDay, in: form.zone)))
             tailMaster.set(ICalProperty(name: "RRULE", value: tailRule.rruleString(allDay: timing.isAllDay, in: form.zone)))

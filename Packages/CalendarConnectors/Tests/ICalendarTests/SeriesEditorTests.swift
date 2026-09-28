@@ -124,3 +124,55 @@ private func starts(_ r: EventResource) -> [Date] {
         try SeriesEditor.split(try resource(twoRules), at: laTime(2026, 9, 22), newUID: "x", calendarZone: la, now: now)
     }
 }
+
+private func allDayDailySeries(rrule: String) -> String {
+    """
+    BEGIN:VCALENDAR
+    VERSION:2.0
+    PRODID:-//Test//EN
+    BEGIN:VEVENT
+    UID:ALLDAY-UID
+    DTSTAMP:20260301T000000Z
+    SUMMARY:Daily all-day
+    DTSTART;VALUE=DATE:20260305
+    DTEND;VALUE=DATE:20260306
+    \(rrule)
+    END:VEVENT
+    END:VCALENDAR
+    """
+}
+
+@Test func allDaySplitAfterASpringForwardDayKeepsTheDayBeforeTheSlot() throws {
+    let ny = TimeZone(identifier: "America/New_York")!
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = ny
+    let mar9 = cal.date(from: DateComponents(year: 2026, month: 3, day: 9))!
+    let mar8 = cal.date(from: DateComponents(year: 2026, month: 3, day: 8))!
+    let r = try resource(allDayDailySeries(rrule: "RRULE:FREQ=DAILY"))
+    let (head, tail) = try SeriesEditor.split(r, at: mar9, newUID: "new-uid", calendarZone: ny, now: now)
+    // Mar 8 is 23 hours long in New York; the previous day is Mar 8, not Mar 7.
+    #expect(head.master?.property("RRULE")?.value == "FREQ=DAILY;UNTIL=20260308")
+    let ctx = EventReadContext(calendarID: "home", resourceName: "a.ics", etag: "\"e\"", sourceID: "s", calendarZone: ny, selfAddresses: [])
+    let headStarts = EventReader.events(in: head, overlapping: DateInterval(start: mar8.addingTimeInterval(-86_400), end: mar9.addingTimeInterval(86_400 * 3)), context: ctx).map(\.start)
+    #expect(headStarts.contains(mar8))
+    #expect(!headStarts.contains(mar9))
+    #expect(tail.master?.property("DTSTART")?.value == "20260309")
+}
+
+@Test func timedSplitAcrossTheNovemberChangeKeepsTheHeadStrictlyBeforeTheSlot() throws {
+    let text = weeklySeries
+        .replacingOccurrences(of: "RRULE:FREQ=WEEKLY;BYDAY=TU", with: "RRULE:FREQ=WEEKLY;BYDAY=SU")
+        .replacingOccurrences(of: "EXDATE;TZID=America/Los_Angeles:20260908T100000\n", with: "")
+        .replacingOccurrences(of: "20260901T100000", with: "20261018T013000")
+        .replacingOccurrences(of: "20260901T103000", with: "20261018T020000")
+    let r = try resource(text)
+    let oct25 = laTime(2026, 10, 25, 1, 30), nov1 = laTime(2026, 11, 1, 1, 30), nov8 = laTime(2026, 11, 8, 1, 30)
+    let wide = DateInterval(start: laTime(2026, 10, 1, 0), end: laTime(2026, 12, 1, 0))
+    for slot in [nov1, nov8] {
+        let (head, tail) = try SeriesEditor.split(r, at: slot, newUID: "new-uid", calendarZone: la, now: now)
+        let h = EventReader.events(in: head, overlapping: wide, context: context()).map(\.start)
+        let t = EventReader.events(in: tail, overlapping: wide, context: context()).map(\.start)
+        #expect(h.contains(oct25) && h.allSatisfy { $0 < slot }, "head for \(slot)")
+        #expect(t.first == slot, "tail for \(slot)")
+    }
+}
