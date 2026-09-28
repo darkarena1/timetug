@@ -161,7 +161,7 @@ calendars are writable. The three write fields default to the read-only value. C
 |---|---|---|---|---|---|---|---|---|
 | Google | true | true | true | true | `.token` | all | true | all three |
 | EventKit | true | false | false | false | `.notification` | title, notes, location, timing, availability, reminders, recurrence | false | all three (subject to the EventKit spike, part 11) |
-| CalDAV (iCloud, other) | true | true when the server schedules (`calendar-auto-schedule`) and the account has addresses | same as `canEditAttendees` | true (`participation` only with addresses) | `.token` (`sync-collection`, else ctag) | all but `conference` (attendees only when scheduling) | false | all three |
+| CalDAV (iCloud, other) | true | true when the server schedules (`calendar-auto-schedule`) | true when the server schedules and the account has addresses | true (`participation` only with addresses) | `.token` (`sync-collection`, else ctag) | all but `conference` (attendees only when scheduling) | false | all three |
 
 ### 3.4 Changes
 
@@ -691,7 +691,7 @@ client, XML and discovery are internal.
   if the new resource cannot be stored the original is restored, and a failed or stale restore is `WriteError.partial`.
   A draft's `uid` is used for the duplicate check (a `calendar-query` by UID; a hit is `alreadyExists`). `conference`
   is not writable. `controlsNotifications == false`: the server schedules on its own, so a write that would tell
-  someone else with a policy other than `.all` throws `unsupported(fields: [.attendees])` before any request (someone
+  someone else with a policy other than `.all` throws `unsupported(fields: [.attendees])` before any write request (someone
   else is an attendee or organizer that is not the account). `respond` sets the account's `PARTSTAT` on its own
   attendee entry, always needs `.all` (the organizer is told) and needs `canRespondToInvite`.
 - **`SeriesSource`:** `series(id:calendarID:)` GETs the resource and returns the master's rules, `RDATE`s and
