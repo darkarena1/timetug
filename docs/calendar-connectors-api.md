@@ -109,7 +109,7 @@ public struct CalendarDescriptor: Hashable, Sendable, Identifiable {
 | `uidScope` | `UIDScope?` | `.global` (an iCalendar UID, comparable across sources), `.provider` (a provider id, comparable only within one service and provider), nil = unknown (treated as `.provider`) |
 | `sourceID` | `String?` | The source that produced the event (`Connection.sourceID`; `"eventkit"` for EventKit); lets a host route an event to its account. Does not change `id` |
 
-Reads return recurring events already expanded into instances. No read path returns a recurrence rule.
+Reads return recurring events already expanded into instances. No read path returns a recurrence rule; a source that conforms to `SeriesSource` returns a series' rule on request.
 
 ### 3.2 Sources
 
