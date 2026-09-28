@@ -5086,6 +5086,7 @@ private let good = ["username": "  me@icloud.test ", "password": "app-pass-1234"
     #expect(try CalDAVAccountSetup.serverURL(from: "http://localhost:8008").absoluteString == "http://localhost:8008")
     #expect(throws: SourceError.self) { try CalDAVAccountSetup.serverURL(from: "http://caldav.example.test") }
     #expect(throws: SourceError.self) { try CalDAVAccountSetup.serverURL(from: "https://") }
+    #expect(throws: SourceError.self) { try CalDAVAccountSetup.serverURL(from: "https://me:secret@caldav.example.test/dav/") }
     let server = FakeCalDAVServer()
     let interaction = StubInteraction(["serverURL": "http://caldav.example.test", "username": "me", "password": "p"])
     await #expect(throws: SourceError.self) {
@@ -5502,6 +5503,9 @@ struct CalDAVAccountSetup: Sendable {
         }
         guard scheme == "https" || (scheme == "http" && ["localhost", "127.0.0.1"].contains(host)) else {
             throw SourceError.invalidResponse("the server address must start with https://")
+        }
+        guard url.user == nil, url.password == nil else {
+            throw SourceError.invalidResponse("enter the user name and password in their own fields, not in the server address")
         }
         return url
     }

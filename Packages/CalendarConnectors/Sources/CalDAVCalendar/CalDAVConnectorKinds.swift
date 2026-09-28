@@ -75,6 +75,9 @@ struct CalDAVAccountSetup: Sendable {
         guard scheme == "https" || (scheme == "http" && ["localhost", "127.0.0.1"].contains(host)) else {
             throw SourceError.invalidResponse("the server address must start with https://")
         }
+        guard url.user == nil, url.password == nil else {
+            throw SourceError.invalidResponse("enter the user name and password in their own fields, not in the server address")
+        }
         return url
     }
 
