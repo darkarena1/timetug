@@ -1168,7 +1168,7 @@ END:VCALENDAR\r
 @Test func unescapesText() throws {
     let event = try #require(try ICalParser.parse(sample).components(named: "VEVENT").first)
     #expect(event.property("SUMMARY")?.text == "Planning, part 2\nwith notes")
-    #expect(ICalText.escape("a;b,c\\d\ne") == "a\;b\\,c\\\\d\\ne")
+    #expect(ICalText.escape("a;b,c\\d\ne") == "a\\;b\\,c\\\\d\\ne")
     #expect(ICalText.unescape(ICalText.escape("x;y,z\\\n")) == "x;y,z\\\n")
 }
 
@@ -1244,7 +1244,7 @@ public enum ICalText {
         for character in text {
             switch character {
             case "\\": out += "\\\\"
-            case ";": out += "\;"
+            case ";": out += "\\;"
             case ",": out += "\\,"
             case "\n", "\r\n": out += "\\n"
             case "\r": continue
