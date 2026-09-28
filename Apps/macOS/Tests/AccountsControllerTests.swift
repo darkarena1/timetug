@@ -3,9 +3,48 @@ import TimeTugCore
 import XCTest
 @testable import TimeTug
 
-private struct NoInteraction: AuthorizationInteraction {
+private struct PrompterInteraction: AuthorizationInteraction {
+    let prompter: CredentialPrompter
     func beginOAuthRedirect() async throws -> any OAuthRedirectSession { throw CalendarCore.SourceError.invalidResponse("unused") }
-    func promptCredentials(_ fields: [CredentialField]) async throws -> [String: String] { [:] }
+    func promptCredentials(_ fields: [CredentialField]) async throws -> [String: String] { try await prompter.prompt(fields) }
+}
+
+/// A `.password` kind like "Other CalDAV": it prompts, then accepts only `goodPassword` (or throws `failure`).
+private final class PasswordKind: ConnectorKind, CredentialPromptHelp, @unchecked Sendable {
+    let id = "caldav"
+    let displayName = "Other CalDAV"
+    let supportedPlatforms = Platform.macOS
+    let fields = [
+        CredentialField(key: "serverURL", label: "Server address"), CredentialField(key: "username", label: "User name"),
+        CredentialField(key: "password", label: "Password", isSecret: true),
+    ]
+    var authorization: AuthorizationMethod { .password(fields: fields) }
+    let credentialHelp: CredentialHelp? = CredentialHelp(text: "Use the address your provider gives you.")
+    var goodPassword = "right"
+    var failure: Error?
+    private(set) var attempts = 0
+
+    func authorize(using interaction: any AuthorizationInteraction, credentials: any CredentialStore) async throws -> Connection {
+        let values = try await signIn(interaction)
+        let connection = Connection(kindID: id, connectionID: "p\(attempts)", displayName: values["username"] ?? "",
+                                    config: ["serverURL": values["serverURL"] ?? "", "username": values["username"] ?? ""])
+        try await credentials.setSecrets(["username": values["username"] ?? "", "password": values["password"] ?? ""], for: connection.connectionID)
+        return connection
+    }
+    func reauthorize(_ connection: Connection, using interaction: any AuthorizationInteraction, credentials: any CredentialStore) async throws -> Connection {
+        _ = try await signIn(interaction)
+        return connection
+    }
+    private func signIn(_ interaction: any AuthorizationInteraction) async throws -> [String: String] {
+        attempts += 1
+        let values = try await interaction.promptCredentials(fields)
+        if let failure { throw failure }
+        guard values["password"] == goodPassword else { throw CalendarCore.SourceError.authExpired }
+        return values
+    }
+    func makeSource(for connection: Connection, credentials: any CredentialStore, syncState: any SyncStateStore) throws -> any CalendarCore.CalendarSource {
+        fatalError("controller tests build core sources through the reconciler closure")
+    }
 }
 
 private final class FakeKind: ConnectorKind, @unchecked Sendable {
@@ -84,14 +123,140 @@ final class AccountsControllerTests: XCTestCase {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    private func makeController(credentials override: (any CredentialStore)? = nil) -> AccountsController {
+    private func makeController(
+        credentials override: (any CredentialStore)? = nil, password: PasswordKind? = nil, prompter: CredentialPrompter? = nil
+    ) -> AccountsController {
         var registry = ConnectorRegistry()
         registry.register(kind)
+        if let password { registry.register(password) }
+        let prompter = prompter ?? CredentialPrompter()
         return AccountsController(
             registry: registry, connectionStore: connectionStore, credentials: override ?? credentials,
-            syncState: syncState, interaction: NoInteraction(), settings: settings, reconciler: reconciler,
+            syncState: syncState, interaction: PrompterInteraction(prompter: prompter), settings: settings, reconciler: reconciler,
             applySources: { [unowned self] sources in applied.append(sources.map(\.id)) },
-            requestEventKitAccess: {})
+            requestEventKitAccess: {}, credentialPrompter: prompter)
+    }
+
+    private let typed = ["serverURL": "https://dav.example.test", "username": "me"]
+
+    private func submit(_ prompter: CredentialPrompter, password: String) {
+        prompter.submit(typed.merging(["password": password]) { $1 })
+    }
+
+    func testAPasswordSignInUsesTheSheetAndAddsTheAccount() async throws {
+        let prompter = CredentialPrompter()
+        let controller = makeController(password: PasswordKind(), prompter: prompter)
+        controller.beginAddAccount(kindID: "caldav")
+        try await waitUntil { prompter.request != nil }
+        XCTAssertEqual(controller.waitingText, "Signing in…")
+        let request = try XCTUnwrap(prompter.request)
+        XCTAssertEqual(request.title, "Other CalDAV account")
+        XCTAssertEqual(request.help?.text, "Use the address your provider gives you.")
+        XCTAssertEqual(request.fields.map(\.key), ["serverURL", "username", "password"])
+        XCTAssertNil(request.error)
+        submit(prompter, password: "right")
+        try await waitUntil { !controller.isWorking }
+        XCTAssertEqual(controller.accounts.map(\.displayName), ["me"])
+        XCTAssertNil(controller.errorMessage)
+    }
+
+    func testARejectedPasswordReopensTheSheetWithTheErrorAndWhatWasTyped() async throws {
+        let password = PasswordKind()
+        let prompter = CredentialPrompter()
+        let controller = makeController(password: password, prompter: prompter)
+        controller.beginAddAccount(kindID: "caldav")
+        try await waitUntil { prompter.request != nil }
+        submit(prompter, password: "wrong")
+        try await waitUntil { prompter.request?.error != nil }
+        let retry = try XCTUnwrap(prompter.request)
+        XCTAssertEqual(retry.error, "User name or password was not accepted.")
+        XCTAssertEqual(retry.values, typed)   // never the password
+        XCTAssertTrue(controller.accounts.isEmpty)
+        submit(prompter, password: "right")
+        try await waitUntil { !controller.isWorking }
+        XCTAssertEqual(controller.accounts.map(\.connectionID), ["p2"])
+        XCTAssertEqual(password.attempts, 2)
+        XCTAssertNil(controller.errorMessage)
+    }
+
+    func testOtherSignInFailuresReopenTheSheetWithTheirDescription() async throws {
+        let password = PasswordKind()
+        password.failure = CalendarCore.SourceError.invalidResponse("the server address must start with https://")
+        let prompter = CredentialPrompter()
+        let controller = makeController(password: password, prompter: prompter)
+        controller.beginAddAccount(kindID: "caldav")
+        try await waitUntil { prompter.request != nil }
+        submit(prompter, password: "right")
+        try await waitUntil { prompter.request?.error != nil }
+        XCTAssertEqual(prompter.request?.error, "Sign-in failed: the server address must start with https://.")
+        prompter.cancel()
+        try await waitUntil { !controller.isWorking }
+        XCTAssertTrue(controller.accounts.isEmpty)
+        XCTAssertNil(controller.errorMessage)
+    }
+
+    func testCancellingTheSheetAddsNothingAndShowsNoError() async throws {
+        let password = PasswordKind()
+        let prompter = CredentialPrompter()
+        let controller = makeController(password: password, prompter: prompter)
+        controller.beginAddAccount(kindID: "caldav")
+        try await waitUntil { prompter.request != nil }
+        prompter.cancel()
+        try await waitUntil { !controller.isWorking }
+        XCTAssertTrue(controller.accounts.isEmpty)
+        XCTAssertNil(controller.errorMessage)
+        XCTAssertEqual(password.attempts, 1)
+    }
+
+    func testCancelInThePaneClosesTheSheet() async throws {
+        let prompter = CredentialPrompter()
+        let controller = makeController(password: PasswordKind(), prompter: prompter)
+        controller.beginAddAccount(kindID: "caldav")
+        try await waitUntil { prompter.request != nil }
+        controller.cancelAuthorization()
+        try await waitUntil { !controller.isWorking }
+        XCTAssertNil(prompter.request)
+        XCTAssertTrue(controller.accounts.isEmpty)
+        XCTAssertNil(controller.errorMessage)
+    }
+
+    func testSignInAgainPrefillsTheSavedNonSecretFields() async throws {
+        let prompter = CredentialPrompter()
+        let controller = makeController(password: PasswordKind(), prompter: prompter)
+        controller.beginAddAccount(kindID: "caldav")
+        try await waitUntil { prompter.request != nil }
+        submit(prompter, password: "right")
+        try await waitUntil { !controller.isWorking }
+        controller.beginReauthorize(connectionID: "p1")
+        try await waitUntil { prompter.request != nil }
+        XCTAssertEqual(prompter.request?.values, typed)
+        submit(prompter, password: "right")
+        try await waitUntil { !controller.isWorking }
+        XCTAssertNil(controller.errorMessage)
+    }
+
+    func testBrowserSignInsSayTheyWaitForTheBrowser() async throws {
+        let prompter = CredentialPrompter()
+        let controller = makeController(password: PasswordKind(), prompter: prompter)
+        controller.beginAddAccount(kindID: "caldav")
+        try await waitUntil { prompter.request != nil }
+        prompter.cancel()
+        try await waitUntil { !controller.isWorking }
+        await controller.addAccount(kindID: "google")
+        XCTAssertEqual(controller.waitingText, "Waiting for your browser…")
+    }
+
+    func testOtherCalDAVIsOfferedLast() {
+        let controller = makeController(password: PasswordKind())
+        XCTAssertEqual(controller.availableKinds.map(\.id), ["google", "caldav"])
+    }
+
+    func testARejectedPasswordNamesTheKindsOwnFields() {
+        let icloud = [CredentialField(key: "username", label: "Apple ID"), CredentialField(key: "password", label: "App-specific password", isSecret: true)]
+        XCTAssertEqual(AccountsController.describeSignIn(CalendarCore.SourceError.authExpired, fields: icloud),
+                       "Apple ID or app-specific password was not accepted.")
+        XCTAssertEqual(AccountsController.describeSignIn(CalendarCore.SourceError.server(status: 500), fields: icloud),
+                       "Sign-in failed (server(status: 500)).")
     }
 
     func testAddPersistsAppliesAndTracksTheAccount() async {

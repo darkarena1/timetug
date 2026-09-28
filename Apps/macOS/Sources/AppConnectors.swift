@@ -1,3 +1,4 @@
+import CalDAVCalendar
 import CalendarApple
 import CalendarCore
 import EventKitSource
@@ -8,6 +9,8 @@ enum AppConnectors {
     static func makeRegistry(google: GoogleOAuthConfig?, microsoft: MicrosoftOAuthConfig?, eventKit: EventKitSource) -> ConnectorRegistry {
         var registry = ConnectorRegistry()
         registry.register(EventKitConnectorKind(source: eventKit))
+        registry.register(ICloudConnectorKind())
+        registry.register(CalDAVConnectorKind())
         if let google { registry.register(GoogleConnectorKind(config: google, hasher: CryptoKitSHA256())) }
         if let microsoft { registry.register(MicrosoftConnectorKind(config: microsoft, hasher: CryptoKitSHA256())) }
         return registry

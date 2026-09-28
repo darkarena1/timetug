@@ -49,6 +49,8 @@ targets:
         product: GoogleCalendar
       - package: CalendarConnectors
         product: MicrosoftCalendar
+      - package: CalendarConnectors
+        product: CalDAVCalendar
       - package: CalendarBridge
         product: CalendarBridge
       - package: CalendarApple
@@ -120,6 +122,8 @@ targets:
         product: GoogleCalendar
       - package: CalendarConnectors
         product: MicrosoftCalendar
+      - package: CalendarConnectors
+        product: CalDAVCalendar
       - package: CalendarBridge
         product: CalendarBridge
       - package: CalendarApple

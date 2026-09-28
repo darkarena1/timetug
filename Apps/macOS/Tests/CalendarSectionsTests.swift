@@ -55,6 +55,8 @@ final class CalendarSectionsTests: XCTestCase {
 
     func testProviderNames() {
         XCTAssertEqual(ProviderIcon.displayName(forKindID: "google"), "Google")
-        XCTAssertEqual(ProviderIcon.displayName(forKindID: "caldav"), "Caldav")
+        XCTAssertEqual(ProviderIcon.displayName(forKindID: "icloud"), "iCloud")
+        XCTAssertEqual(ProviderIcon.displayName(forKindID: "caldav"), "CalDAV")
+        XCTAssertEqual(ProviderIcon.displayName(forKindID: "zoom"), "Zoom")
     }
 }
