@@ -1988,7 +1988,12 @@ public enum VTimeZoneWriter {
         if zone.identifier == "UTC" || zone.identifier == "GMT" { return nil }
         let utc = TimeZone(identifier: "UTC")!
         var observances: [ICalComponent] = []
-        var cursor = start.addingTimeInterval(-366 * 86_400)
+        // January 1 of the year before `start`'s year: a fixed 366-day lookback from `start` itself can land after
+        // that year's DST-start transition (e.g. `start` in June), skipping straight to the following year's.
+        var utcCalendar = Calendar(identifier: .gregorian)
+        utcCalendar.timeZone = utc
+        let startYear = utcCalendar.component(.year, from: start)
+        var cursor = utcCalendar.date(from: DateComponents(year: startYear - 1, month: 1, day: 1)) ?? start.addingTimeInterval(-366 * 86_400)
         while observances.count < 400, let transition = zone.nextDaylightSavingTimeTransition(after: cursor), transition <= end {
             let from = zone.secondsFromGMT(for: transition.addingTimeInterval(-1))
             let to = zone.secondsFromGMT(for: transition)
