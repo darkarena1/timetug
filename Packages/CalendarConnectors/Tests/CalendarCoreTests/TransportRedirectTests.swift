@@ -28,20 +28,29 @@ final class RedirectingProtocol: URLProtocol, @unchecked Sendable {
     override func stopLoading() {}
 }
 
+/// swift-corelibs-foundation traps when a custom `URLProtocol` reports a redirect, so these two run on Apple platforms only.
+private let protocolsCanRedirect: Bool = {
+    #if canImport(FoundationNetworking)
+    false
+    #else
+    true
+    #endif
+}()
+
 private func configuration() -> URLSessionConfiguration {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [RedirectingProtocol.self]
     return configuration
 }
 
-@Test func transportCanDeclineRedirects() async throws {
+@Test(.enabled(if: protocolsCanRedirect)) func transportCanDeclineRedirects() async throws {
     let transport = URLSessionTransport(configuration: configuration(), followsRedirects: false)
     let response = try await transport.send(HTTPRequest(url: URL(string: "https://redirect.test/start")!))
     #expect(response.status == 302)
     #expect(response.header("location") == "https://redirect.test/end")
 }
 
-@Test func transportFollowsRedirectsByDefault() async throws {
+@Test(.enabled(if: protocolsCanRedirect)) func transportFollowsRedirectsByDefault() async throws {
     let transport = URLSessionTransport(configuration: configuration(), followsRedirects: true)
     let response = try await transport.send(HTTPRequest(url: URL(string: "https://redirect.test/start")!))
     #expect(response.status == 200)
