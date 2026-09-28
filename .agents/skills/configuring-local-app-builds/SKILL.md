@@ -28,6 +28,8 @@ Widgets and Control Center controls only work in team-signed builds. Ad-hoc buil
 | Beta and release builds | optional repository secrets of the same names | optional repository secret of the same name |
 
 - In CI only the `Build Release app` steps of `beta.yml` and `release.yml` receive these secrets, never `ci.yml`. `scripts/ci/google-oauth-config.sh` and `scripts/ci/microsoft-oauth-config.sh` write a mode-600 temporary xcconfig and export `TIMETUG_GOOGLE_XCCONFIG` or `TIMETUG_MICROSOFT_XCCONFIG` before `xcodegen generate`. `build-release.sh` checks the built Info.plist and prints only "configured" or "absent".
+- iCloud and Other CalDAV are always registered (no client id). If they are missing from Settings > Accounts, check
+  `AppConnectors.makeRegistry`.
 - Google's Desktop-app client secret is not confidential (it ships inside the app), but it must stay out of git. Never print it or pass it on the command line of a logged step.
 
 ## The sign-in sheet

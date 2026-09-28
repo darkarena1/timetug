@@ -1,6 +1,6 @@
 # Calendar connectors, Phase 5: CalDAV and iCloud connector
 
-Status: design approved in brainstorming (2026-09-27); not yet implemented. Phases 1 to 4 are merged (#16, #17, #18, #32, #38, #40). This phase adds a generic CalDAV connector to the connector library, with iCloud as a preset, at full parity with Google and Microsoft (read, change detection, writes, RSVP, series), and plugs it into TimeTug's Accounts tab. The API contract is in `docs/calendar-connectors-api.md`; part 11 lists "No CalDAV connector yet", which this phase closes. ADR 0012 already chose CalDAV for iCloud because, unlike EventKit, it can invite and RSVP (RFC 6638 server-side scheduling).
+Status: implemented on branch `claude/icloud-connection-4286cc`; see As built. Design approved in brainstorming (2026-09-27). Phases 1 to 4 are merged (#16, #17, #18, #32, #38, #40). This phase adds a generic CalDAV connector to the connector library, with iCloud as a preset, at full parity with Google and Microsoft (read, change detection, writes, RSVP, series), and plugs it into TimeTug's Accounts tab. The API contract is in `docs/calendar-connectors-api.md`; part 11 lists "No CalDAV connector yet", which this phase closes. ADR 0012 already chose CalDAV for iCloud because, unlike EventKit, it can invite and RSVP (RFC 6638 server-side scheduling).
 
 ## Goals
 
@@ -213,10 +213,60 @@ A `TZID` that `TimeZone(identifier:)` knows is used directly. Otherwise the reso
 - [ ] An event added in Calendar.app on iCloud appears in TimeTug within one poll.
 - [ ] Revoking the app-specific password shows "Sign in again"; signing in again keeps the calendar choices.
 - [ ] Removing the account removes its Keychain item.
+- [ ] The credential sheet's layout (fields, error line, help text and link, Cancel and Sign In) looks right; it was not checked in the GUI.
+- [ ] A wrong password followed at once by the right one (a rapid retry) signs in without a stuck or doubled sheet; this was not checked in the GUI.
+
+## As built
+
+Differences from the design above:
+
+- The iCloud live smoke test is in `CalDAVCalendarTests` (`iCloudLiveSmoke`), not `CalendarApple`: it needs no Apple-only
+  code and uses the source's internals for raw probes. Run it with
+  `TIMETUG_LIVE_ICLOUD=1 swift test --package-path Packages/CalendarConnectors --filter iCloudLiveSmoke`.
+- `URLSessionTransport(configuration:followsRedirects:)` instead of `(session:followsRedirects:)` (a session's delegate
+  is fixed when it is made).
+- `CredentialPromptHelp.credentialHelp` is a `CredentialHelp` struct (`text`, `linkTitle`, `url`) instead of a tuple.
+- `FakeCalDAVServer` is its own `HTTPTransport`, not built on `FakeTransport` (it keeps resources, ETags and sync tokens).
+- `series(id:)` reads the master through `EventReader` and its time zone resolver, not
+  `RecurrenceSet(iCalendarLines:)`, so non-IANA `TZID`s resolve the same way as in reads.
+- A patch is compared (`PatchMerge`) with the occurrence at `originalStart` whenever the ref has one, else the master.
+- The "Other CalDAV" display name is the user name alone when it already contains "@".
+- `canRespondToInvite` also needs `userAddresses` (without them the account's attendee entry cannot be found).
+- Changing a series between all-day and timed while it has changed occurrences throws `unsupported([.timing])`.
+- The architecture check (`scripts/ci/check-architecture.sh`) now allows `FoundationXML` in the connector library.
+- The connector reads a `STATUS:CANCELLED` component with `status == .cancelled` and does not drop it; `CalendarBridge`
+  drops cancelled events, as for the other connectors.
+
+Known limitations:
+
+- A whole-series edit changes only the master resource. An occurrence that has its own override keeps its own values and
+  attendees.
+- Moving a timed series from one occurrence shifts it by absolute seconds (`seriesTiming`, `SeriesEditor.shift`), so
+  across a DST change the local wall-clock time can differ by an hour from the one the caller chose.
+- A weak ETag always fails `If-Match` (412), so writes to a server that sends only weak ETags never succeed. A
+  duplicate-UID creation race (the server's `no-uid-conflict` answer, 403) surfaces as a forbidden error.
+- The `sync-collection` REPORT is sent with `Depth: 1`; RFC 6578 says `Depth: 0`. To be verified in the live iCloud run.
+- Splitting a series (`.thisAndFollowing`): a 429 or 503 on the write that truncates the original is treated as a certain
+  refusal (nothing was applied). An account with no known own addresses cannot split a series it organizes, and an
+  account that is only an attendee cannot split (both throw `unsupported([.attendees])`). Switching between all-day and
+  timed during a split is refused when the series has overrides or exclusions. When the state after an unclear failure
+  cannot be established, or was changed by other clients, the result is `WriteError.partial` and the user must check the
+  calendar.
+- The app's own writes come back as `eventsChanged` on the next poll.
+- A resource of several overrides and no master: `readBack` returns the first occurrence when `originalStart` is unknown.
+- `FakeCalDAVServer` is less strict than a real server: the first `sync-collection` with an empty token reports
+  tombstones, every `REPORT` that is not a sync is treated as a `calendar-query`, the UID match assumes CRLF line ends,
+  and `If-Match: *` is not treated as a wildcard.
+- On Linux the two `URLProtocol` redirect tests in `CalendarCoreTests/TransportRedirectTests.swift` are skipped:
+  swift-corelibs-foundation traps when a custom `URLProtocol` reports a redirect. They run on macOS. The refusal of real
+  HTTP redirects by `URLSessionTransport(followsRedirects: false)` is therefore untested on Linux. TimeTug ships on macOS
+  only, and the Linux CI job is a portability check.
+- The credential sheet layout and a rapid wrong-then-right sign-in retry were not verified in the GUI (see the manual
+  checklist).
 
 ## Live findings
 
-(To be filled from the live smoke test's `LIVE` lines.)
+Pending: the opt-in live run has not been done yet.
 
 ## Open questions
 

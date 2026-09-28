@@ -14,4 +14,5 @@
 - Providers: Google `overrides` map to start-relative `.display` (popup) or `.email(address: nil)` reminders and `useDefault` resolves to the calendar's `defaultReminders` with `isCalendarDefault == true`; EventKit maps `EKAlarm` directly (a location alarm with no coordinates keeps its title; radius 0 is nil). Microsoft Graph (later): `isReminderOn` gives one `.display` reminder at `-minutes`, else `[]`.
 - Writes accept the common denominator; anything a provider cannot store throws `.unsupported(fields: [.reminders])` before any change. Google: start-relative popup or owner email, 0 to 40320 minutes, at most 5. EventKit: start-relative, absolute and location triggers, with a display or sound alert (the alert type is derived from which related value is set, so email and procedure are refused).
 - Patches and merges compare reminders as a set of write identities (trigger, type, repeat), ignoring order and `isCalendarDefault`.
-- Deferred: a `VALARM` reader and writer (arrives with a CalDAV connector, one place with a round-trip test), and snooze and acknowledged state.
+- Deferred: snooze and acknowledged state. (The `VALARM` reader and writer arrived with the CalDAV connector, in
+  `ICalendar`'s `AlarmMapper`, with its round-trip test; see ADR 0016.)
