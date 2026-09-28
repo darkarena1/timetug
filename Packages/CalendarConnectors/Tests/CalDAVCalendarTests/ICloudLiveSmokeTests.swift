@@ -12,7 +12,7 @@ private let smokePrefix = "TimeTug write smoke"
 /// The only calendar the test writes to; the user creates it in the account first.
 private let testCalendarTitle = "TimeTug Live Test"
 
-/// Line 1 the Apple ID, line 2 an app-specific password, from a git-ignored file. Never printed.
+/// Line 1 the Apple ID, line 2 an app-specific password, from a file outside the repository. Never printed.
 private func liveCredentials() throws -> [String: String] {
     let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/timetug/icloud-live")
     let lines = try String(contentsOf: url, encoding: .utf8)
@@ -70,7 +70,8 @@ private func cleanUp(_ source: CalDAVCalendarSource, calendarID: String, window:
 /// - a weekly series of four: a `.thisInstance` edit, then a split at the third occurrence (expected `[2, 2]`);
 /// - `checkForChanges` after the writes, and how the server answers an unknown sync token;
 /// - with `TIMETUG_LIVE_ICLOUD_ATTENDEE=<an address you read>`: whether iCloud stamps `SCHEDULE-STATUS` on an attendee
-///   marked `SCHEDULE-AGENT=CLIENT` (it should not; also check that mailbox for an invitation).
+///   marked `SCHEDULE-AGENT=CLIENT` (it should not). Use only an address you read: if iCloud ignores the parameter, the PUT may send a real invitation
+///   and the cleanup DELETE a cancellation to it.
 @Test(.enabled(if: liveICloud), .timeLimit(.minutes(10))) func iCloudLiveSmoke() async throws {
     let kind = ICloudConnectorKind()
     let credentials = InMemoryCredentialStore()
@@ -146,7 +147,8 @@ private func cleanUp(_ source: CalDAVCalendarSource, calendarID: String, window:
         #expect(counts == [2, 2])
 
         // 4. Change detection after our own writes, and an unknown sync token.
-        print("LIVE checkForChanges after writes: \(String(describing: try await source.checkForChanges()))")
+        let change = try await source.checkForChanges()
+        print("LIVE checkForChanges after writes: \(change.map { c -> String in if case .eventsChanged(let ids) = c { return "eventsChanged(\(ids?.count ?? 0))" }; return "calendarsChanged" } ?? "nil")")
         do {
             let bogus = try await source.client.report(
                 source.calendarURL(target.id), depth: 1, body: DAVXML.syncCollection(token: "https://caldav.icloud.com/sync/timetug-invalid"))
