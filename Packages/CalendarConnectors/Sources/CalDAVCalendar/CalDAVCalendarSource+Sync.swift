@@ -35,38 +35,39 @@ extension CalDAVCalendarSource {
             }
             return stored == nil ? nil : .calendarsChanged
         }
+        // New markers are written only after every calendar was checked, so an error on one calendar cannot swallow the
+        // change already found on another: the retry finds both.
         var changed = Set<String>()
-        for calendar in calendars where try await hasChanged(calendar) { changed.insert(calendar.descriptor.id) }
+        var pending: [(scope: String, marker: String)] = []
+        for calendar in calendars {
+            let outcome = try await check(calendar)
+            if outcome.changed { changed.insert(calendar.descriptor.id) }
+            if let marker = outcome.marker { pending.append((Self.calendarScope(calendar.descriptor.id), marker)) }
+        }
+        for entry in pending { await syncState.setToken(entry.marker, for: owner, scope: entry.scope) }
         return changed.isEmpty ? nil : .eventsChanged(calendarIDs: changed)
     }
 
-    private func hasChanged(_ calendar: CalDAVCalendarInfo) async throws -> Bool {
+    /// Whether the calendar changed, and the marker to store once the whole check has succeeded (nil: keep the old one).
+    private func check(_ calendar: CalDAVCalendarInfo) async throws -> (changed: Bool, marker: String?) {
         let owner = connection.connectionID
-        let scope = Self.calendarScope(calendar.descriptor.id)
         let current = Self.marker(calendar)
-        let stored = await syncState.token(for: owner, scope: scope)
-        guard stored != current else { return false }
+        let stored = await syncState.token(for: owner, scope: Self.calendarScope(calendar.descriptor.id))
+        guard stored != current else { return (false, nil) }
         // A ctag server (or a calendar that changed how it reports) has nothing finer to ask.
-        guard let stored, stored.hasPrefix("sync:"), current.hasPrefix("sync:") else {
-            await syncState.setToken(current, for: owner, scope: scope)
-            return true
-        }
+        guard let stored, stored.hasPrefix("sync:"), current.hasPrefix("sync:") else { return (true, current) }
         let reply = try await client.report(calendar.url, depth: 1, body: DAVXML.syncCollection(token: String(stored.dropFirst(5))))
-        if DAVXML.isInvalidSyncToken(reply.response) {
-            await syncState.setToken(current, for: owner, scope: scope)
-            return true
-        }
+        if DAVXML.isInvalidSyncToken(reply.response) { return (true, current) }
         switch reply.response.status {
         case 207: break
         // Removed or lost access since the list was read: the next list signature reports it.
-        case 403, 404, 410: return false
+        case 403, 404, 410: return (false, nil)
         default: throw SourceError.invalidResponse("sync-collection answered \(reply.response.status)")
         }
         let status = try DAVXML.multistatus(reply.response.body)
         for response in status.responses {
             if let url = try? client.resolve(response.href, against: reply.url) { await state.forget(url) }
         }
-        await syncState.setToken(status.syncToken.map { "sync:" + $0 } ?? current, for: owner, scope: scope)
-        return !status.responses.isEmpty
+        return (!status.responses.isEmpty, status.syncToken.map { "sync:" + $0 } ?? current)
     }
 }

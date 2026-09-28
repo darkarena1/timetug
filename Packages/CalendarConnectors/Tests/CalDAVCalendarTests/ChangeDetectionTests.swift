@@ -62,3 +62,17 @@ import Testing
     for await change in source.changes() { received.append(change) }
     #expect(received == [.sourceFailed(.authExpired)])
 }
+
+@Test func aFailureOnOneCalendarDoesNotSwallowAnothersChange() async throws {
+    let h = CalDAVHarness()
+    await h.server.configure { $0.collections["work"] = .init(displayName: "Work") }
+    let source = try await h.source()
+    _ = try await source.checkForChanges()
+    await h.server.store("home", "a.ics", singleICS(uid: "a"))
+    await h.server.store("work", "b.ics", singleICS(uid: "b"))
+    await h.server.fail("REPORT", pathContains: "/work/", status: 500)
+    await #expect(throws: SourceError.server(status: 500)) { try await source.checkForChanges() }
+    // `home` was found changed before `work` failed; the retry must still report both.
+    #expect(try await source.checkForChanges() == .eventsChanged(calendarIDs: ["home", "work"]))
+    #expect(try await source.checkForChanges() == nil)
+}
