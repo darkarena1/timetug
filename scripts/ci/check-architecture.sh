@@ -41,7 +41,7 @@ P=Packages
 # Core is platform-neutral and builds on Linux: Foundation and the connector model only.
 only TimeTugCore "Foundation CalendarCore TimeTugCore Testing" $P/TimeTugCore/Sources $P/TimeTugCore/Tests
 # The connector library imports nothing from TimeTug and nothing Apple-only (it builds on Linux).
-only CalendarConnectors "Foundation FoundationNetworking Testing $LIB" $P/CalendarConnectors/Sources $P/CalendarConnectors/Tests
+only CalendarConnectors "Foundation FoundationNetworking FoundationXML Testing $LIB" $P/CalendarConnectors/Sources $P/CalendarConnectors/Tests
 # The bridge is minimal glue between Core and the library.
 only CalendarBridge "Foundation TimeTugCore CalendarCore" $P/CalendarBridge/Sources
 # Source adapters speak the library, contain no UI and never see TimeTug.
