@@ -5,12 +5,13 @@ extension CalDAVCalendarSource {
     static let calendarsScope = "calendars"
     static func calendarScope(_ id: String) -> String { "calendar:" + id }
 
-    /// What a consumer must reload the calendar list for: calendars added or removed, renamed, recoloured, access or
-    /// zone changed. Event changes (the ctag) are not part of it.
+    /// What a consumer must reload the calendar list for: calendars added or removed, renamed, recoloured, access,
+    /// zone or default status changed. Event changes (the ctag) are not part of it.
     static func signature(_ calendars: [CalDAVCalendarInfo]) -> String {
         calendars.map { calendar in
             let d = calendar.descriptor
-            return [d.id, d.title, d.colorHex ?? "", String(d.permissions.canEdit), String(d.permissions.canViewDetails), calendar.zone.identifier]
+            return [d.id, d.title, d.colorHex ?? "", String(d.permissions.canEdit), String(d.permissions.canViewDetails), calendar.zone.identifier,
+                    d.isDefault.map(String.init) ?? ""]
                 .joined(separator: "\u{1F}")
         }.sorted().joined(separator: "\u{1E}")
     }

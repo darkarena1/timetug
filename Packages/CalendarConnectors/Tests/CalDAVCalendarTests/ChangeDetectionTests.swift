@@ -76,3 +76,14 @@ import Testing
     #expect(try await source.checkForChanges() == .eventsChanged(calendarIDs: ["home", "work"]))
     #expect(try await source.checkForChanges() == nil)
 }
+
+@Test func switchingTheDefaultCalendarIsCalendarsChanged() async throws {
+    let h = CalDAVHarness()
+    await h.server.configure { $0.collections["work"] = .init(displayName: "Work") }
+    let source = try await h.source()
+    _ = try await source.checkForChanges()
+    #expect(try await source.checkForChanges() == nil)
+    await h.server.configure { $0.defaultCalendar = "work" }
+    #expect(try await source.checkForChanges() == .calendarsChanged)
+    #expect(try await source.checkForChanges() == nil)
+}
