@@ -237,6 +237,4 @@ public final class CalDAVCalendarSource: PollingCalendarSource {
     }
 
     public func changes() -> AsyncStream<CalendarChange> { monitor.changes(polling: self) }
-
-    public func checkForChanges() async throws -> CalendarChange? { nil }
 }
