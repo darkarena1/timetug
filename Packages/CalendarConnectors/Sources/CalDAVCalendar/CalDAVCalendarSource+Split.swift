@@ -134,12 +134,19 @@ extension CalDAVCalendarSource {
             case .failure(let failure): return .unknown(cause: error, lookup: failure)
             case .success(let fresh):
                 if fresh.etag == current.etag { return .notApplied(error) }
-                let ours = ["DTSTAMP", "SEQUENCE", "RRULE"].allSatisfy {
-                    fresh.resource.master?.property($0)?.value == head.master?.property($0)?.value
-                }
+                // Ours only if every component is as we wrote it: another client's edit to a kept override (or a server
+                // applying an attendee's reply) must not be mistaken for our truncation and restored over.
+                let ours = Self.fingerprint(fresh.resource) == Self.fingerprint(head)
                 return ours ? .appliedDespiteError(etag: fresh.etag, resource: fresh.resource, cause: error) : .changedByOthers(error)
             }
         }
+    }
+
+    /// One line per component: its `RECURRENCE-ID` (empty for the master), `DTSTAMP`, `SEQUENCE` and, for the master, `RRULE`.
+    private static func fingerprint(_ resource: EventResource) -> [String] {
+        resource.events.map { vevent in
+            ["RECURRENCE-ID", "DTSTAMP", "SEQUENCE", "RRULE"].map { vevent.property($0)?.value ?? "" }.joined(separator: "|")
+        }.sorted()
     }
 
     /// PUTs the new series under `If-None-Match: *`. After a failure that may have been applied, asks the server for the

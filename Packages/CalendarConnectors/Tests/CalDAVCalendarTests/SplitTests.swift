@@ -435,3 +435,32 @@ private func seriesStarts(_ source: CalDAVCalendarSource) async throws -> [Date]
     #expect(await h.server.requests("PUT").isEmpty)
     #expect(await h.server.names("home") == ["weekly.ics"])
 }
+
+// MARK: Fix round 2: our truncation is recognised on every component
+
+@Test func anEditToAKeptOverrideAfterALostTruncationReplyIsNotRestoredOver() async throws {
+    let h = CalDAVHarness()
+    await h.server.store("home", "weekly.ics", weeklyICS(organizer: nil))
+    let puts = Count()
+    let source = try await h.source(transport: ScriptedTransport(server: h.server) { request, server in
+        guard isPUT(request, "weekly.ics"), await puts.next() == 1 else { return nil }
+        let landed = try await server.send(request)
+        precondition(landed.status == 204 || landed.status == 201)
+        // Our truncation is on the server; before the caller looks again another client edits the kept override at the 15th.
+        var body = try #require(await server.body("home", "weekly.ics"))
+        body = body.replacingOccurrences(of: "Team sync (moved)", with: "Edited by another client")
+        // A real client stamps its edit (only the override carries this DTSTAMP and is followed by its RECURRENCE-ID).
+        body = body.replacingOccurrences(of: "DTSTAMP:20260901T000000Z\r\nRECURRENCE-ID", with: "DTSTAMP:20260922T000000Z\r\nRECURRENCE-ID")
+        await server.store("home", "weekly.ics", body)
+        throw SourceError.network("connection lost")
+    })
+    let target = try await occurrence(source, on: 22)
+    await h.server.clearLog()
+    do {
+        _ = try await source.update(EventRef(target), EventPatch(title: "x"), scope: .thisAndFollowing, notify: .none)
+        Issue.record("expected partial")
+    } catch WriteError.partial {}
+    #expect(try #require(await h.server.body("home", "weekly.ics")).contains("Edited by another client"))
+    #expect(await h.server.requests("PUT").count == 1)   // only our truncation; nothing was restored over the edit
+    #expect(await h.server.names("home") == ["weekly.ics"])
+}
