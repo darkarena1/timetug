@@ -132,6 +132,8 @@ extension CalDAVCalendarSource: WritableCalendarSource {
             if let occurrence { return occurrence }   // a resource of overrides only
             throw WriteError.notFound
         }
+        // The id names an occurrence of a series that has since become a single event: that occurrence no longer exists.
+        if Self.resourceName(of: ref.eventID).isOccurrence && scope != .allInSeries { throw WriteError.notFound }
         guard let master = EventReader.masterEvent(of: fresh.resource, context: context) else { throw WriteError.notFound }
         return master
     }
@@ -244,6 +246,8 @@ extension CalDAVCalendarSource: WritableCalendarSource {
             }
         }
         guard isRecurring(resource) else {
+            // The id names an occurrence of a series that has since become a single event (as in `delete`).
+            if isOccurrence && scope != .allInSeries { throw WriteError.notFound }
             guard var master = resource.master else { throw WriteError.notFound }
             try EventWriter.apply(patch, to: &master, now: stamp, organizerAddress: organizerAddress, calendarZone: calendarZone)
             resource.setEvents([master])
@@ -253,7 +257,7 @@ extension CalDAVCalendarSource: WritableCalendarSource {
         if scope != .allInSeries && ref.originalStart == nil { throw WriteError.invalid(Self.slotMessage) }
         if scope == .thisInstance {
             let slot = ref.originalStart!
-            if patch.recurrence != .keep { throw WriteError.invalid("a recurrence change applies to the whole series") }
+            if patch.recurrence != .keep { throw WriteError.unsupported(fields: [.recurrence]) }
             guard var override = SeriesEditor.override(in: resource, at: slot, calendarZone: calendarZone) else { throw WriteError.notFound }
             try EventWriter.apply(patch, to: &override, now: stamp, organizerAddress: organizerAddress, calendarZone: calendarZone)
             SeriesEditor.setOverride(override, at: slot, in: &resource, calendarZone: calendarZone)
@@ -414,6 +418,8 @@ extension CalDAVCalendarSource: WritableCalendarSource {
         let stamp = now()
         let me = selfAddresses
         guard isRecurring(resource) else {
+            // The id names an occurrence of a series that has since become a single event (as in `delete`).
+            if isOccurrence && scope != .allInSeries { throw WriteError.notFound }
             guard var master = resource.master, AttendeeMapper.setResponse(response, in: &master, selfAddresses: me) else {
                 throw WriteError.unsupported(fields: [.attendees])
             }

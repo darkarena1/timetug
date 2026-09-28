@@ -434,3 +434,39 @@ private func day(_ zone: TimeZone, _ y: Int, _ m: Int, _ d: Int) -> Date {
     #expect(try await stored(h, "uuid-2.ics").master?.property("RRULE")?.value == "FREQ=DAILY;UNTIL=20260312")
     #expect(try await source.events(in: window).map(\.start) == (5...12).map { day(berlin, 2026, 3, $0) })
 }
+
+@Test func updatingOrAnsweringAnOccurrenceOfASeriesThatBecameASingleEventIsNotFound() async throws {
+    let h = CalDAVHarness()
+    await h.server.store("home", "weekly.ics", weeklyICS(organizer: nil))
+    let source = try await h.source()
+    let tuesday = try await occurrence(source, on: 22)
+    let invite = ["ORGANIZER;CN=Boss:mailto:boss@example.test", "ATTENDEE;CN=Me;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:me@icloud.test"]
+    await h.server.store("home", "weekly.ics", singleICS(uid: "weekly-uid", title: "Now a one-off", attendees: invite))
+    let before = await h.server.body("home", "weekly.ics")
+    // Without a version the write goes straight at the current copy; with the stale version it is refused on the way in.
+    var unversioned = EventRef(tuesday)
+    unversioned.version = nil
+    for ref in [unversioned, EventRef(tuesday)] {
+        await expectWriteError(.notFound) { _ = try await source.update(ref, EventPatch(title: "x"), scope: .thisInstance, notify: .all) }
+        await expectWriteError(.notFound) { _ = try await source.update(ref, EventPatch(title: "x"), scope: .thisAndFollowing, notify: .all) }
+        await expectWriteError(.notFound) { _ = try await source.respond(to: ref, .accepted, scope: .thisInstance, notify: .all) }
+    }
+    let puts = await h.server.requests("PUT")
+    let after = await h.server.body("home", "weekly.ics")
+    #expect(after == before)
+    // The only PUT is the stale-version attempt on the copy the caller read, which the server refuses.
+    #expect(puts.allSatisfy { $0.headers["If-Match"] != nil } && puts.count <= 3)
+}
+
+@Test func aRecurrenceChangeOnOneOccurrenceIsUnsupported() async throws {
+    let h = CalDAVHarness()
+    await h.server.store("home", "weekly.ics", weeklyICS(organizer: nil))
+    let source = try await h.source()
+    let tuesday = try await occurrence(source, on: 22)
+    let rule = try RecurrenceRule(rrule: "FREQ=DAILY;COUNT=3")
+    await expectWriteError(.unsupported(fields: [.recurrence])) {
+        _ = try await source.update(EventRef(tuesday), EventPatch(recurrence: .set(rule)), scope: .thisInstance, notify: .none)
+    }
+    let puts = await h.server.requests("PUT")
+    #expect(puts.isEmpty)
+}
