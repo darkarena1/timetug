@@ -369,4 +369,7 @@ extension CalendarDate {
         let c = calendar.dateComponents([.year, .month, .day], from: date)
         self.init(year: c.year!, month: c.month!, day: c.day!)
     }
+
+    /// Whole days from `self` to `other` (negative when `other` is earlier).
+    public func days(to other: CalendarDate) -> Int { RuleExpander.daysBetween(self, other) }
 }
