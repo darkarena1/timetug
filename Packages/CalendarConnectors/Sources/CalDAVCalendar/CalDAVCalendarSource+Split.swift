@@ -75,7 +75,7 @@ extension CalDAVCalendarSource {
             tailPatch.timing = moved.timing
             delta = moved.delta
         }
-        try EventWriter.apply(tailPatch, to: &tailMaster, now: stamp, organizerAddress: organizerAddress)
+        try EventWriter.apply(tailPatch, to: &tailMaster, now: stamp, organizerAddress: organizerAddress, calendarZone: calendarZone)
         tailMaster.set(ICalProperty(name: "SEQUENCE", value: "0"))
         // The carried exceptions are new components under a new UID: stamp them like the master (SeriesEditor.split
         // moves them across without touching DTSTAMP/LAST-MODIFIED).

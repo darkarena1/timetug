@@ -405,3 +405,32 @@ private func day(_ zone: TimeZone, _ y: Int, _ m: Int, _ d: Int) -> Date {
     let head = try await stored(h, "holiday.ics")
     #expect(head.master?.property("RRULE")?.value == "FREQ=DAILY;UNTIL=20260308")
 }
+
+@Test func anAllDayRuleChangeKeepsItsLastDayInTheCalendarZone() async throws {
+    let berlin = TimeZone(identifier: "Europe/Berlin")!
+    let h = CalDAVHarness()
+    await h.server.configure { $0.collections["home"]?.timeZoneID = "Europe/Berlin" }
+    await h.server.store("home", "holiday.ics", allDayICS(rule: "FREQ=DAILY"))
+    let source = try await h.source()
+    let window = DateInterval(start: day(berlin, 2026, 3, 1), end: day(berlin, 2026, 3, 20))
+    let first = try #require(try await source.events(in: window).first { $0.originalStart == day(berlin, 2026, 3, 5) })
+    // The caller reads a date UNTIL in the calendar's zone, so this rule ends on (and includes) March 10.
+    let rule = try RecurrenceRule(rrule: "FREQ=DAILY;UNTIL=20260310", in: berlin)
+    _ = try await source.update(EventRef(first), EventPatch(recurrence: .set(rule)), scope: .allInSeries, notify: .none)
+    #expect(try await stored(h, "holiday.ics").master?.property("RRULE")?.value == "FREQ=DAILY;UNTIL=20260310")
+    #expect(try await source.events(in: window).map(\.start) == (5...10).map { day(berlin, 2026, 3, $0) })
+}
+
+@Test func anAllDaySplitTailKeepsItsRuleChangeLastDayInTheCalendarZone() async throws {
+    let berlin = TimeZone(identifier: "Europe/Berlin")!
+    let h = CalDAVHarness()
+    await h.server.configure { $0.collections["home"]?.timeZoneID = "Europe/Berlin" }
+    await h.server.store("home", "holiday.ics", allDayICS(rule: "FREQ=DAILY"))
+    let source = try await h.source()
+    let window = DateInterval(start: day(berlin, 2026, 3, 1), end: day(berlin, 2026, 3, 20))
+    let eighth = try #require(try await source.events(in: window).first { $0.originalStart == day(berlin, 2026, 3, 8) })
+    let rule = try RecurrenceRule(rrule: "FREQ=DAILY;UNTIL=20260312", in: berlin)
+    _ = try await source.update(EventRef(eighth), EventPatch(recurrence: .set(rule)), scope: .thisAndFollowing, notify: .none)
+    #expect(try await stored(h, "uuid-2.ics").master?.property("RRULE")?.value == "FREQ=DAILY;UNTIL=20260312")
+    #expect(try await source.events(in: window).map(\.start) == (5...12).map { day(berlin, 2026, 3, $0) })
+}

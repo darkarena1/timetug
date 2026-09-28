@@ -245,7 +245,7 @@ extension CalDAVCalendarSource: WritableCalendarSource {
         }
         guard isRecurring(resource) else {
             guard var master = resource.master else { throw WriteError.notFound }
-            try EventWriter.apply(patch, to: &master, now: stamp, organizerAddress: organizerAddress)
+            try EventWriter.apply(patch, to: &master, now: stamp, organizerAddress: organizerAddress, calendarZone: calendarZone)
             resource.setEvents([master])
             return nil
         }
@@ -255,7 +255,7 @@ extension CalDAVCalendarSource: WritableCalendarSource {
             let slot = ref.originalStart!
             if patch.recurrence != .keep { throw WriteError.invalid("a recurrence change applies to the whole series") }
             guard var override = SeriesEditor.override(in: resource, at: slot, calendarZone: calendarZone) else { throw WriteError.notFound }
-            try EventWriter.apply(patch, to: &override, now: stamp, organizerAddress: organizerAddress)
+            try EventWriter.apply(patch, to: &override, now: stamp, organizerAddress: organizerAddress, calendarZone: calendarZone)
             SeriesEditor.setOverride(override, at: slot, in: &resource, calendarZone: calendarZone)
             return slot
         }
@@ -265,7 +265,7 @@ extension CalDAVCalendarSource: WritableCalendarSource {
             guard scope == .allInSeries, patch.recurrence == .keep else { throw WriteError.unsupported(fields: [.recurrence]) }
             if patch.timing != nil && resource.overrides.count > 1 { throw WriteError.unsupported(fields: [.timing]) }
             var events = resource.overrides
-            for index in events.indices { try EventWriter.apply(patch, to: &events[index], now: stamp, organizerAddress: organizerAddress) }
+            for index in events.indices { try EventWriter.apply(patch, to: &events[index], now: stamp, organizerAddress: organizerAddress, calendarZone: calendarZone) }
             resource.setEvents(events)
             return nil
         }
@@ -283,7 +283,7 @@ extension CalDAVCalendarSource: WritableCalendarSource {
             masterPatch.timing = moved.timing
             delta = moved.delta
         }
-        try EventWriter.apply(masterPatch, to: &master, now: stamp, organizerAddress: organizerAddress)
+        try EventWriter.apply(masterPatch, to: &master, now: stamp, organizerAddress: organizerAddress, calendarZone: calendarZone)
         resource.setEvents([master] + resource.overrides)
         if delta != 0 { SeriesEditor.shift(&resource, by: delta, calendarZone: calendarZone) }
         if patch.recurrence != .keep { SeriesEditor.pruneUnmatched(&resource, calendarZone: calendarZone) }

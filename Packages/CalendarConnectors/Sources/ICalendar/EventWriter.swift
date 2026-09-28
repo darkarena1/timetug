@@ -67,8 +67,10 @@ public enum EventWriter {
 
     /// Applies a patch whose fields the caller has already checked against the capabilities. Clearing reminders (the
     /// calendar's defaults) cannot be expressed in CalDAV and throws `.unsupported(fields: [.reminders])`. A generated
-    /// or removed conference is refused by the caller before this is reached.
-    public static func apply(_ patch: EventPatch, to vevent: inout ICalComponent, now: Date, organizerAddress: String?) throws {
+    /// or removed conference is refused by the caller before this is reached. `calendarZone` is the zone a date `UNTIL`
+    /// of an all-day series is written in.
+    public static func apply(_ patch: EventPatch, to vevent: inout ICalComponent, now: Date, organizerAddress: String?,
+                             calendarZone: TimeZone? = nil) throws {
         if case .clear = patch.reminders { throw WriteError.unsupported(fields: [.reminders]) }
         if let title = patch.title { vevent.set(ICalProperty(name: "SUMMARY", text: title)) }
         switch patch.notes { case .keep: break; case .set(let text): vevent.setText("DESCRIPTION", text); case .clear: vevent.removeProperties(named: "DESCRIPTION") }
@@ -106,7 +108,10 @@ public enum EventWriter {
         case .set(let rule):
             let start = vevent.property("DTSTART")
             let isAllDay = start?.parameter("VALUE")?.uppercased() == "DATE"
-            let zone = start?.parameter("TZID").flatMap { TimeZoneResolver().zone(for: $0) } ?? utc
+            // An all-day series has no TZID, and its date UNTIL is read in the calendar's zone (as `create` and
+            // `SeriesEditor.split` write it), so write it in that zone too.
+            let zone = start?.parameter("TZID").flatMap { TimeZoneResolver().zone(for: $0) }
+                ?? (isAllDay ? calendarZone ?? patch.timing?.timeZone : nil) ?? utc
             vevent.set(ICalProperty(name: "RRULE", value: rule.rruleString(allDay: isAllDay, in: zone)))
         case .clear:
             for name in ["RRULE", "RDATE", "EXDATE", "EXRULE"] { vevent.removeProperties(named: name) }

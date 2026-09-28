@@ -143,3 +143,24 @@ private func readBack(_ vevent: ICalComponent, zones: [TimeZone] = [la]) throws 
     try EventWriter.apply(EventPatch(recurrence: .clear), to: &vevent, now: now, organizerAddress: nil)
     #expect(vevent.property("RRULE") == nil && vevent.property("EXDATE") == nil && vevent.property("RDATE") == nil)
 }
+
+@Test func anAllDayRecurrenceUntilIsWrittenInTheCalendarZone() throws {
+    let berlin = TimeZone(identifier: "Europe/Berlin")!
+    var vevent = try #require(try resource("""
+    BEGIN:VCALENDAR
+    VERSION:2.0
+    PRODID:-//Test//EN
+    BEGIN:VEVENT
+    UID:ALLDAY
+    DTSTAMP:20260301T000000Z
+    DTSTART;VALUE=DATE:20260305
+    DTEND;VALUE=DATE:20260306
+    RRULE:FREQ=DAILY
+    END:VEVENT
+    END:VCALENDAR
+    """).master)
+    // Read the way EventReader reads a date UNTIL: in the calendar's zone.
+    let rule = try RecurrenceRule(rrule: "FREQ=DAILY;UNTIL=20260310", in: berlin)
+    try EventWriter.apply(EventPatch(recurrence: .set(rule)), to: &vevent, now: now, organizerAddress: nil, calendarZone: berlin)
+    #expect(vevent.property("RRULE")?.value == "FREQ=DAILY;UNTIL=20260310")
+}
