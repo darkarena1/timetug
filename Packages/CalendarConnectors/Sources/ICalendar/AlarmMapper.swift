@@ -50,4 +50,35 @@ public enum AlarmMapper {
         return StructuredLocation(title: property.parameter("X-TITLE"), latitude: latitude, longitude: longitude,
                                   radius: property.parameter("X-APPLE-RADIUS").flatMap(Double.init))
     }
+
+    /// `VALARM`s for reminders a CalDAV server stores as written: relative to the start or end, or absolute, as a
+    /// display or sound alert, optionally repeating. Anything else throws `.unsupported(fields: [.reminders])`.
+    public static func alarms(from reminders: [Reminder]) throws -> [ICalComponent] {
+        try reminders.map { reminder in
+            var properties: [ICalProperty] = []
+            switch reminder.type {
+            case .display:
+                properties += [ICalProperty(name: "ACTION", value: "DISPLAY"), ICalProperty(name: "DESCRIPTION", text: "Reminder")]
+            case .audio(let sound):
+                properties.append(ICalProperty(name: "ACTION", value: "AUDIO"))
+                if let sound { properties.append(ICalProperty(name: "ATTACH", parameters: [ICalParameter("VALUE", "URI")], value: sound)) }
+            default:
+                throw WriteError.unsupported(fields: [.reminders])
+            }
+            switch reminder.trigger {
+            case .relative(let offset, let anchor):
+                properties.append(ICalProperty(name: "TRIGGER", parameters: anchor == .end ? [ICalParameter("RELATED", "END")] : [],
+                                               value: ICalValues.durationText(offset)))
+            case .absolute(let date):
+                properties.append(ICalProperty(name: "TRIGGER", parameters: [ICalParameter("VALUE", "DATE-TIME")], value: ICalValues.utcText(date)))
+            case .location:
+                throw WriteError.unsupported(fields: [.reminders])
+            }
+            if reminder.repeatCount > 0, let interval = reminder.repeatInterval {
+                properties += [ICalProperty(name: "REPEAT", value: String(reminder.repeatCount)),
+                               ICalProperty(name: "DURATION", value: ICalValues.durationText(interval))]
+            }
+            return ICalComponent(name: "VALARM", properties: properties)
+        }
+    }
 }

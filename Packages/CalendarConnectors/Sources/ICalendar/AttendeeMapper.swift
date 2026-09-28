@@ -66,4 +66,34 @@ public enum AttendeeMapper {
         if organizer?.isSelf == true { return .invited(.accepted) }
         return .notInvited
     }
+
+    public static func property(for draft: AttendeeDraft) -> ICalProperty {
+        var parameters: [ICalParameter] = []
+        if let name = draft.name, !name.isEmpty { parameters.append(ICalParameter("CN", name)) }
+        switch draft.role {
+        case .required: parameters.append(ICalParameter("ROLE", "REQ-PARTICIPANT"))
+        case .optional: parameters.append(ICalParameter("ROLE", "OPT-PARTICIPANT"))
+        case .resource: parameters += [ICalParameter("ROLE", "REQ-PARTICIPANT"), ICalParameter("CUTYPE", "RESOURCE")]
+        }
+        parameters += [ICalParameter("PARTSTAT", "NEEDS-ACTION"), ICalParameter("RSVP", "TRUE")]
+        return ICalProperty(name: "ATTENDEE", parameters: parameters, value: "mailto:" + draft.email)
+    }
+
+    public static func organizerProperty(address: String) -> ICalProperty {
+        ICalProperty(name: "ORGANIZER", value: address)
+    }
+
+    /// Sets the account's own `PARTSTAT` and clears `RSVP` on each of its `ATTENDEE` entries. Returns false when the
+    /// account is not an attendee.
+    public static func setResponse(_ response: ResponseStatus, in vevent: inout ICalComponent, selfAddresses: Set<String>) -> Bool {
+        var found = false
+        for index in vevent.properties.indices where vevent.properties[index].name == "ATTENDEE" {
+            let property = vevent.properties[index]
+            guard isSelf(property.value, email: email(of: property), selfAddresses: selfAddresses) else { continue }
+            vevent.properties[index].setParameter("PARTSTAT", partstat(response))
+            vevent.properties[index].setParameter("RSVP", nil)
+            found = true
+        }
+        return found
+    }
 }
