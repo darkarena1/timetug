@@ -76,7 +76,11 @@ actor FakeCalDAVServer: HTTPTransport {
     }
 
     /// Every sync token issued so far stops being accepted.
-    func expireSyncTokens() { oldestValidToken = revision + 1 }
+    func expireSyncTokens() {
+        revision += 1
+        oldestValidToken = revision
+        for key in collections.keys { collections[key]!.revision = revision }
+    }
 
     static func crlf(_ text: String) -> String {
         text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\n", with: "\r\n")
