@@ -21,4 +21,12 @@ final class AppConnectorsTests: XCTestCase {
         let some = AppConnectors.makeRegistry(google: nil, microsoft: MicrosoftOAuthConfig(clientID: "i"), eventKit: EventKitSource())
         XCTAssertNotNil(some.kind(id: "microsoft"))
     }
+
+    func testICloudAndOtherCalDAVAreAlwaysRegistered() {
+        let registry = AppConnectors.makeRegistry(google: nil, microsoft: nil, eventKit: EventKitSource())
+        XCTAssertEqual(registry.kind(id: "icloud")?.displayName, "iCloud")
+        XCTAssertEqual(registry.kind(id: "caldav")?.displayName, "Other CalDAV")
+        guard case .password? = registry.kind(id: "icloud")?.authorization else { return XCTFail("iCloud signs in with a password") }
+        XCTAssertNotNil((registry.kind(id: "icloud") as? CredentialPromptHelp)?.credentialHelp?.url)
+    }
 }

@@ -216,4 +216,10 @@ final class SettingsSearchTests: XCTestCase {
             XCTAssertEqual(hit?.pane, .general, query)
         }
     }
+
+    func testCalDAVProvidersFindTheAccountsPane() {
+        for query in ["icloud", "caldav", "fastmail", "nextcloud"] {
+            XCTAssertTrue(ids(query).contains("accounts"), query)
+        }
+    }
 }

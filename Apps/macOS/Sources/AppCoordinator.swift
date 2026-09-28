@@ -63,11 +63,13 @@ final class AppCoordinator {
         },
         buildEventKit: { [unowned self] in ConnectedSource(eventKit) },
         onChange: { [weak self] in await self?.refresh() })
+    private let credentialPrompter = CredentialPrompter()
     lazy var accounts: AccountsController = AccountsController(
         registry: registry, connectionStore: FileConnectionStore(url: AppSupportFiles.url("accounts.json")),
         credentials: credentials, syncState: syncState,
         interaction: LoopbackAuthorizationInteraction(
             openURL: { url in await MainActor.run { NSWorkspace.shared.open(url) } },
+            promptCredentials: { [credentialPrompter] fields in try await credentialPrompter.prompt(fields) },
             presenter: BrowserPreferringPresenter(
                 sheet: WebAuthenticationSessionPresenter(anchor: { [weak self] in self?.settingsWindow.currentWindow ?? NSApp.keyWindow }))),
         settings: settings, reconciler: reconciler,
@@ -76,7 +78,7 @@ final class AppCoordinator {
             await self?.refresh()
         },
         requestEventKitAccess: { [unowned self] in _ = await eventKit.requestAccess() },
-        unconfiguredKindIDs: unconfiguredKindIDs)
+        unconfiguredKindIDs: unconfiguredKindIDs, credentialPrompter: credentialPrompter)
     private lazy var aboutWindow = AboutWindowController()
     private lazy var settingsWindow = SettingsWindowController { [unowned self] in
         SettingsView(settings: settings, model: model, navigation: navigation, accounts: accounts, updates: updates, onTestTug: { [weak self] in self?.fireTest() },

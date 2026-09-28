@@ -16,6 +16,12 @@ final class AccountsController: ObservableObject {
     /// with their real icon, dimmed, plus a warning, instead of silently leaving them out.
     let unconfiguredKindIDs: [String]
 
+    /// What the pane shows while a sign-in runs: a password sign-in happens in the app, an OAuth one in the browser.
+    @Published private(set) var waitingText = "Waiting for your browser…"
+
+    /// Shows the credential sheet for `.password` kinds; the same instance answers `promptCredentials` (see AppCoordinator).
+    let credentialPrompter: CredentialPrompter
+
     private let registry: ConnectorRegistry
     private let connectionStore: FileConnectionStore
     private let credentials: any CredentialStore
@@ -31,7 +37,8 @@ final class AccountsController: ObservableObject {
         registry: ConnectorRegistry, connectionStore: FileConnectionStore, credentials: any CredentialStore,
         syncState: any SyncStateStore, interaction: any AuthorizationInteraction, settings: SettingsStore,
         reconciler: SourceReconciler, applySources: @escaping ([any TimeTugCore.CalendarSource]) async -> Void,
-        requestEventKitAccess: @escaping () async -> Void, unconfiguredKindIDs: [String] = []
+        requestEventKitAccess: @escaping () async -> Void, unconfiguredKindIDs: [String] = [],
+        credentialPrompter: CredentialPrompter? = nil
     ) {
         self.registry = registry
         self.connectionStore = connectionStore
@@ -43,11 +50,14 @@ final class AccountsController: ObservableObject {
         self.applySources = applySources
         self.requestEventKitAccess = requestEventKitAccess
         self.unconfiguredKindIDs = unconfiguredKindIDs
+        self.credentialPrompter = credentialPrompter ?? CredentialPrompter()
     }
 
     /// Account kinds offered by `+` (system-permission kinds such as Apple Calendar are a switch, not an account).
+    /// "Other CalDAV" goes last: it is the catch-all for providers without their own entry.
     var availableKinds: [any ConnectorKind] {
-        registry.kinds(for: .current).filter { if case .system = $0.authorization { false } else { true } }
+        let kinds = registry.kinds(for: .current).filter { if case .system = $0.authorization { false } else { true } }
+        return kinds.filter { $0.id != "caldav" } + kinds.filter { $0.id == "caldav" }
     }
 
     /// The key of this account's status in `CalendarSnapshot.statuses`.
@@ -78,7 +88,9 @@ final class AccountsController: ObservableObject {
         defer { isWorking = false }
         var authorized: Connection?
         do {
-            let connection = try await kind.authorize(using: interaction, credentials: credentials)
+            let connection = try await signIn(with: kind, prefill: [:]) {
+                try await kind.authorize(using: interaction, credentials: credentials)
+            }
             authorized = connection
             if accounts.contains(where: { $0.kindID == connection.kindID && $0.displayName == connection.displayName }) {
                 await discardSecretsIfUnowned(connection.connectionID)
@@ -117,6 +129,44 @@ final class AccountsController: ObservableObject {
 
     func cancelAuthorization() { authTask?.cancel() }
 
+    /// Runs one sign-in. A `.password` kind signs in through the credential sheet: when a submitted form fails, the sheet
+    /// opens again with the error and what the user typed (never the password), until it succeeds or the user cancels.
+    /// `prefill` may hold any connection config; only the kind's non-secret fields are shown.
+    private func signIn(
+        with kind: any ConnectorKind, prefill: [String: String], _ attempt: () async throws -> Connection
+    ) async throws -> Connection {
+        guard case .password(let fields) = kind.authorization else {
+            waitingText = "Waiting for your browser…"
+            return try await attempt()
+        }
+        waitingText = "Signing in…"
+        let help = (kind as? CredentialPromptHelp)?.credentialHelp
+        var values = prefill
+        var message: String?
+        while true {
+            credentialPrompter.prepare(title: "\(kind.displayName) account", help: help, values: values, error: message)
+            do {
+                return try await attempt()
+            } catch let error as CancellationError {
+                throw error
+            } catch {
+                if Task.isCancelled { throw CancellationError() }
+                guard let typed = credentialPrompter.lastNonSecretValues else { throw error }   // failed before the form
+                values = typed
+                message = Self.describeSignIn(error, fields: fields)
+            }
+        }
+    }
+
+    /// "Apple ID or app-specific password was not accepted." for a rejected password, in the kind's own words;
+    /// the usual description otherwise.
+    static func describeSignIn(_ error: Error, fields: [CredentialField]) -> String {
+        guard case CalendarCore.SourceError.authExpired = error,
+              let name = fields.first(where: { !$0.isSecret && $0.key == "username" }) ?? fields.first(where: { !$0.isSecret }),
+              let secret = fields.first(where: \.isSecret) else { return describe(error) }
+        return "\(name.label) or \(secret.label.prefix(1).lowercased() + secret.label.dropFirst()) was not accepted."
+    }
+
     /// Order matters so an interruption never leaves a half-removed account that looks alive: the stored connection
     /// goes first (it is what makes the account exist), the source is then stopped through the reconciler, the
     /// calendar selections are forgotten, and secrets and sync state are deleted last, best effort.
@@ -140,7 +190,9 @@ final class AccountsController: ObservableObject {
         errorMessage = nil
         defer { isWorking = false }
         do {
-            let updated = try await kind.reauthorize(connection, using: interaction, credentials: credentials)
+            let updated = try await signIn(with: kind, prefill: connection.config) {
+                try await kind.reauthorize(connection, using: interaction, credentials: credentials)
+            }
             if let index = accounts.firstIndex(where: { $0.connectionID == connectionID }) { accounts[index] = updated }
             try await connectionStore.add(updated)
             let update = reconciler.rebuild(updated, connections: accounts, eventKitEnabled: settings.eventKitEnabled)
@@ -178,6 +230,7 @@ final class AccountsController: ObservableObject {
     private static func describe(_ error: Error) -> String {
         switch error {
         case CalendarCore.SourceError.authExpired: "Sign-in was not completed."
+        case CalendarCore.SourceError.invalidResponse(let message): "Sign-in failed: \(message)."
         case let e as CalendarCore.SourceError: "Sign-in failed (\(e))."
         default: error.localizedDescription
         }

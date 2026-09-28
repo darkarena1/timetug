@@ -13,13 +13,11 @@ struct AccountsPane: View {
     /// Providers on the roadmap but not yet wired to a real `ConnectorKind`. Shown greyed out so people
     /// know they're coming rather than assuming TimeTug only ever talks to Google.
     private static let placeholderProviders: [PlaceholderProvider] = [
-        .init(name: "iCloud", systemImage: "icloud"),
         .init(name: "Fastmail", systemImage: "at"),
         .init(name: "Meetup", systemImage: "person.3"),
         .init(name: "Todoist", systemImage: "checklist"),
         .init(name: "Zoom", systemImage: "video"),
         .init(name: "Webex", systemImage: "video.fill"),
-        .init(name: "Other CalDAV", systemImage: "link"),
     ]
 
     var body: some View {
@@ -43,6 +41,7 @@ struct AccountsPane: View {
             .padding(16)
         }
         .settingsHighlight("accounts", navigation: navigation)
+        .modifier(CredentialSheetPresenter(prompter: accounts.credentialPrompter))
         .confirmationDialog(
             "Remove \(pendingRemoval?.displayName ?? "this account")?", isPresented: removalBinding, titleVisibility: .visible
         ) {
@@ -179,7 +178,7 @@ struct AccountsPane: View {
     private var waitingRow: some View {
         HStack(spacing: 8) {
             ProgressView().controlSize(.small)
-            Text("Waiting for your browser…").font(.callout)
+            Text(accounts.waitingText).font(.callout)
             Button("Cancel") { accounts.cancelAuthorization() }.buttonStyle(.link)
         }
     }

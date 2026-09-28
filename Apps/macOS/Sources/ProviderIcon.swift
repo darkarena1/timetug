@@ -3,12 +3,14 @@ import SwiftUI
 /// The small mark shown beside an internet account. Drawn here (no bundled brand artwork); unknown providers get a person icon.
 struct ProviderIcon: View {
     enum Style: Equatable {
-        case google, microsoft, generic
+        case google, microsoft, icloud, caldav, generic
 
         static func forKind(_ kindID: String) -> Style {
             switch kindID {
             case "google": .google
             case "microsoft": .microsoft
+            case "icloud": .icloud
+            case "caldav": .caldav
             default: .generic
             }
         }
@@ -17,9 +19,13 @@ struct ProviderIcon: View {
     let kindID: String
     var size: CGFloat = 26
 
-    /// "google" gives "Google"; kinds without a special name are just capitalised.
+    /// "google" gives "Google"; names with their own capitalisation are spelled out; the rest are just capitalised.
     static func displayName(forKindID kindID: String) -> String {
-        kindID.prefix(1).uppercased() + kindID.dropFirst()
+        switch kindID {
+        case "icloud": "iCloud"
+        case "caldav": "CalDAV"
+        default: kindID.prefix(1).uppercased() + kindID.dropFirst()
+        }
     }
 
     var body: some View {
@@ -27,6 +33,12 @@ struct ProviderIcon: View {
             switch Style.forKind(kindID) {
             case .google: GoogleMark().padding(size * 0.2)
             case .microsoft: MicrosoftMark().padding(size * 0.22)
+            case .icloud:
+                Image(systemName: "icloud.fill")
+                    .resizable().scaledToFit().foregroundStyle(Color(red: 0.24, green: 0.56, blue: 0.98)).padding(size * 0.18)
+            case .caldav:
+                Image(systemName: "calendar")
+                    .resizable().scaledToFit().foregroundStyle(Color(white: 0.35)).padding(size * 0.2)
             case .generic:
                 Image(systemName: "person.crop.circle")
                     .resizable().scaledToFit().foregroundStyle(.secondary).padding(size * 0.1)
