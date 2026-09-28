@@ -4338,7 +4338,7 @@ actor FakeCalDAVServer: HTTPTransport {
     private var failures: [Failure] = []
     private(set) var log: [HTTPRequest] = []
 
-    func configure(_ change: (isolated FakeCalDAVServer) -> Void) { change(self) }
+    func configure(_ change: @Sendable (isolated FakeCalDAVServer) -> Void) { change(self) }
 
     // MARK: Test helpers
 
