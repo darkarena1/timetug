@@ -67,12 +67,11 @@
         Your Mac asks Google directly, using a token Google issues to you. Google Calendar support is currently
         in beta, pending Google's certification (OAuth verification) of TimeTug.</li>
       <li id="microsoft"><strong>Microsoft (Outlook) calendars, if you connect an account.</strong> TimeTug uses
-        Microsoft's sign-in and requests these permissions: <code>offline_access</code> (stay signed in without
-        asking again), <code>User.Read</code> (your name and email address, to label the account),
-        <code>MailboxSettings.Read</code> (your time zone), and <code>Calendars.ReadWrite</code> and
-        <code>Calendars.ReadWrite.Shared</code> (your calendars, and calendars shared with you). Those last two
-        are Microsoft's read-and-edit permissions. TimeTug currently only <em>reads</em> events: it does not
-        create, change or delete anything in your Microsoft calendar.</li>
+        Microsoft's sign-in and requests these read-only permissions: <code>offline_access</code> (stay signed in
+        without asking again), <code>User.Read</code> (your name and email address, to label the account),
+        <code>MailboxSettings.Read</code> (your time zone), and <code>Calendars.Read</code> and
+        <code>Calendars.Read.Shared</code> (view your calendars, and calendars shared with you). TimeTug only
+        reads events; it cannot create, change or delete anything in your Microsoft calendar.</li>
       <li><strong>iCloud and other CalDAV calendars.</strong> For iCloud, you give TimeTug your Apple ID and an
         app-specific password that you create yourself at account.apple.com, so your real Apple Account password
         is never needed. For any other CalDAV provider (for example Fastmail or Nextcloud), you give TimeTug the
@@ -167,8 +166,8 @@
         what other software can inject into or change in the running app. The widgets run in the macOS App
         Sandbox, and the only TimeTug data they can read is the agenda file above and a few shared on/off
         preferences.</li>
-      <li><strong>Least permission for Google.</strong> TimeTug asks Google for read-only scopes, so it cannot
-        change or delete anything in your Google account. (See above for Microsoft.)</li>
+      <li><strong>Read-only permissions.</strong> TimeTug asks Google and Microsoft only for read-only calendar
+        permissions, so it cannot change or delete anything in your Google or Microsoft account.</li>
       <li><strong>No extra copies.</strong> There is no TimeTug account, database or cloud copy of your calendar
         data, and nobody but you has access to it through TimeTug.</li>
     </ul>
