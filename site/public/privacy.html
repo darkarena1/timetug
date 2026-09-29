@@ -33,7 +33,7 @@
 
   <main class="legal" style="padding-block:48px 64px">
     <h1>Privacy Policy</h1>
-    <p class="updated">Effective September 22, 2026</p>
+    <p class="updated">Effective September 29, 2026</p>
 
     <p>TimeTug is a macOS app made by an individual developer, Scott O'Bryan, not a company. Your
       <strong>calendar data is processed entirely on your Mac</strong>: TimeTug reads it locally, shows it to
@@ -77,6 +77,36 @@
         show you next and is never uploaded anywhere.</li>
       <li>None of the above is backed up to, synced through, or readable by any server we run.</li>
     </ul>
+
+    <h2 id="protection">How we protect your data</h2>
+    <p>Because your calendar data never reaches a server we operate, most of its protection comes from keeping
+      it on your Mac and using the protections macOS already provides. Specifically:</p>
+    <ul>
+      <li><strong>Encrypted in transit.</strong> All communication with Google, for sign-in and for the
+        Calendar API, uses HTTPS/TLS and goes directly between your Mac and Google.</li>
+      <li><strong>Credentials in the Keychain.</strong> Google access and refresh tokens are kept in the macOS
+        Keychain, which encrypts them at rest. They are not available to other apps, and they are readable only
+        after you have unlocked your Mac at least once since it started up.</li>
+      <li><strong>Safer sign-in.</strong> Sign-in uses Google's OAuth flow with PKCE (a per-sign-in secret that
+        stops an intercepted authorization code from being reused), in your own browser or the system sign-in
+        sheet. TimeTug never sees or stores your Google password.</li>
+      <li><strong>App Sandbox and hardened runtime.</strong> TimeTug runs inside the macOS App Sandbox with the
+        hardened runtime enabled, so its access to files, the network and other apps is limited to what it
+        needs, and its local data sits in its own container, apart from other apps.</li>
+      <li><strong>Disk encryption.</strong> TimeTug's local state files are protected by your Mac's account
+        permissions and, if you have turned on FileVault, by full-disk encryption. We recommend keeping
+        FileVault on.</li>
+      <li><strong>Least privilege.</strong> TimeTug requests read-only Google Calendar scopes, so it cannot
+        modify or delete anything in your Google account.</li>
+      <li><strong>No copies elsewhere.</strong> There is no TimeTug server, database or cloud backup that could
+        be breached, and no one but you has access to your calendar data through TimeTug.</li>
+      <li><strong>Deletion.</strong> Disconnecting an account in Settings › Accounts deletes its Keychain token
+        and cached calendar data from your Mac. Revoking access at
+        <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google Account ›
+          Third-party access</a> also invalidates the token on Google's side.</li>
+    </ul>
+    <p>If you find a security problem in TimeTug, or believe your data has been exposed, please email
+      <a href="mailto:darkarena@gmail.com">darkarena@gmail.com</a>.</p>
 
     <h2>What TimeTug does not do</h2>
     <ul>
