@@ -33,20 +33,26 @@
 
   <main class="legal" style="padding-block:48px 64px">
     <h1>Privacy Policy</h1>
-    <p class="updated">Effective September 22, 2026</p>
+    <p class="updated">Effective September 29, 2026</p>
 
-    <p>TimeTug is a macOS app made by an individual developer, Scott O'Bryan, not a company. Your
-      <strong>calendar data is processed entirely on your Mac</strong>: TimeTug reads it locally, shows it to
-      you locally, and stores it locally. No server we operate ever receives, stores, or processes your
-      calendar data. Where TimeTug reads a calendar, your Mac talks directly to that service (Apple's or
-      Google's), not to us.</p>
+    <p>TimeTug is a macOS app made by Scott O'Bryan. It reads your
+      calendars, shows your upcoming meetings, and takes over your screen shortly before one starts so you
+      don't miss it. To do that, <strong>TimeTug talks directly to wherever your calendar already lives</strong>:
+      Google, Microsoft, iCloud, another CalDAV calendar provider, or the Apple Calendar system built into your
+      Mac. The calendar data goes between your Mac and that provider, and TimeTug works with it on your Mac.
+      This page explains what TimeTug reads, exactly what it keeps on your Mac, what is protected and how, and
+      how to remove it.</p>
 
     <h2>What TimeTug reads, and why</h2>
+    <p>TimeTug reads events from the calendars you choose, so it can show them in your agenda, warn you before
+      they start, and offer a Join button for video calls. Depending on the calendar, an event can include its
+      title, start and end times, location, description or notes, the people invited, and a video-call link.
+      TimeTug uses these while it is running; the next section says which of them are ever saved.</p>
     <ul>
-      <li><strong>Apple Calendar, via EventKit.</strong> If you grant Calendar access, TimeTug reads event
-        titles, times, locations, notes, attendees and conferencing links from the calendars macOS already
-        has configured (iCloud, Google, Exchange, or anything else added in System Settings). This happens
-        locally, through Apple's own framework; TimeTug never sees your Apple ID or iCloud credentials.</li>
+      <li><strong>Apple Calendar (built into macOS).</strong> If you grant Calendar access, TimeTug reads events
+        from the calendars macOS already has configured (iCloud, Google, Exchange, or anything else added in
+        System Settings). The events stay in Apple's own calendar system on your Mac; TimeTug asks it for them
+        and never sees the Apple ID or passwords behind those accounts.</li>
       <li id="google"><strong>Google Calendar, if you connect an account.</strong> TimeTug uses Google's OAuth
         sign-in and requests two scopes:
         <div class="scope-list">
@@ -58,31 +64,122 @@
               so you can choose which ones TimeTug pays attention to.</li>
           </ul>
         </div>
-        Your Mac calls Google's Calendar API directly with a token Google issues to you; the events it
-        returns are shown in TimeTug and never relayed anywhere else. Google Calendar support is currently in beta.</li>
+        Your Mac asks Google directly, using a token Google issues to you. Google Calendar support is currently
+        in beta, pending Google's certification (OAuth verification) of TimeTug.</li>
+      <li id="microsoft"><strong>Microsoft (Outlook) calendars, if you connect an account.</strong> TimeTug uses
+        Microsoft's sign-in and requests these read-only permissions: <code>offline_access</code> (stay signed in
+        without asking again), <code>User.Read</code> (your name and email address, to label the account),
+        <code>MailboxSettings.Read</code> (your time zone), and <code>Calendars.Read</code> and
+        <code>Calendars.Read.Shared</code> (view your calendars, and calendars shared with you). TimeTug only
+        reads events; it cannot create, change or delete anything in your Microsoft calendar.</li>
+      <li><strong>iCloud and other CalDAV calendars.</strong> For iCloud, you give TimeTug your Apple ID and an
+        app-specific password that you create yourself at account.apple.com, so your real Apple Account password
+        is never needed. For any other CalDAV provider (for example Fastmail or Nextcloud), you give TimeTug the
+        provider's server address, your user name and your password. TimeTug uses them to ask that provider for
+        your events, and only sends them to that provider.</li>
       <li><strong>An on-device Apple Intelligence model, only if you turn it on.</strong> Settings › Calendars
         has an opt-in, off-by-default, Beta feature that asks your Mac's own on-device model whether two
         ambiguous events are the same meeting, to avoid double-tugging you. It requires macOS 26 on a
-        supported Mac, runs entirely on-device, and nothing about your calendar leaves your Mac for this
-        either.</li>
+        supported Mac. For each pair of events it is shown their titles, times, calendar names, and, where they
+        exist, locations, the names of attendees (not email addresses) and the start of the notes. It runs
+        entirely on your Mac, answers with one word (same, different or unsure), and nothing about your
+        calendar leaves your Mac for this. Your calendar data is never used to train or improve any AI or
+        machine-learning model.</li>
     </ul>
 
-    <h2>Where things are stored</h2>
+    <h2>What TimeTug keeps on your Mac</h2>
+    <p>Everything below stays on your Mac. TimeTug has no TimeTug account, and it doesn't upload, sync or back
+      up any of it. Your Mac's own backups, such as Time Machine, may include these files like any other file
+      on your Mac.</p>
+
+    <h3>Locked in the macOS Keychain (encrypted)</h3>
+    <p>Only sign-in secrets go here. macOS encrypts them and only lets TimeTug read them, and only after you
+      have unlocked your Mac at least once since it started up.</p>
     <ul>
-      <li><strong>Google sign-in tokens</strong> are stored in the macOS Keychain, protected by your Mac's own
-        security, and used only to talk to Google's Calendar API on your behalf.</li>
-      <li><strong>Local app state</strong> — which meetings TimeTug has already shown you, and its duplicate
-        detection memory — lives in plain files under
-        <code>~/Library/Application Support/TimeTug/</code> on your Mac. It is used only to decide what to
-        show you next and is never uploaded anywhere.</li>
-      <li>None of the above is backed up to, synced through, or readable by any server we run.</li>
+      <li>For Google and Microsoft: the token that keeps TimeTug signed in. It is not your password.</li>
+      <li>For iCloud and other CalDAV providers: the user name and the app-specific password or password you
+        entered.</li>
     </ul>
+
+    <h3>Saved as ordinary files (not encrypted by TimeTug)</h3>
+    <p>These are plain files. They are protected by your Mac's account permissions and, if you have turned it
+      on, FileVault, which encrypts your whole disk. The first four are in
+      <code>~/Library/Application Support/TimeTug/</code>; the agenda file is in a folder that TimeTug shares
+      with its widgets. In everyday terms, here is what is in them.</p>
+    <ul>
+      <li><strong>Your list of accounts.</strong> Each connected account's type (Google, Microsoft, iCloud,
+        CalDAV), its email address, Apple ID or user name, and, for CalDAV, the server address, the web
+        addresses of your calendars on that server, and the email addresses your account uses on invitations.
+        No passwords or tokens are in this file.</li>
+      <li><strong>Sync bookmarks.</strong> Short markers that let TimeTug ask a provider for only what changed
+        since the last check, plus a list of your calendars (their IDs and, for CalDAV, their names and colours)
+        so TimeTug notices when one is added or changed. They contain no event information.</li>
+      <li><strong>Alert history</strong>, so TimeTug never repeats an alert after a restart or snooze that you
+        set. For each event that has already alerted or been snoozed it saves a reference to the event made from
+        the account, the event's ID at the provider and its start time, and a lookup key made of the event's
+        <strong>title (lowercased), start time and end time</strong>. It does not save who was invited, the
+        description, notes or location. Entries are kept for at most seven days.</li>
+      <li><strong>Your merge corrections.</strong> If the same meeting appears on two calendars and you tell
+        TimeTug that two events are the same, or are different, it remembers your answer so it doesn't ask
+        again. It saves the <strong>two event titles</strong>, which calendars they were on, a note of what
+        details each event had (for example "no details" or "has a location and notes"), and your decision.
+        It does not save who was invited, descriptions, notes or locations. TimeTug keeps up to 300 of them,
+        for about six months after you last needed them. If the on-device model is on, TimeTug also remembers its same/different answers for a week,
+        stored under an anonymous fingerprint of the pair, with no titles or other event details. You can erase
+        all of this at once with <em>Forget learned corrections</em> in Settings › Calendars.</li>
+      <li><strong>An agenda for the widgets</strong>, because macOS widgets can't reach the app's data
+        themselves. It covers today and the next two days and contains, for each event, an internal ID, the
+        <strong>title</strong>, start and end times, whether it lasts all day, the calendar's colour, and the
+        <strong>video-call link</strong> if there is one. It does not contain who was invited, the description,
+        notes or location. It is replaced every time TimeTug refreshes, and the widgets ignore it if it is more
+        than 12 hours old. Events from calendars you've hidden are left out.</li>
+    </ul>
+
+    <h3>Preferences</h3>
+    <p>Your settings, such as how early to alert you, appearance, and which calendars you've switched on or off
+      (by the calendar's ID, which for some providers is an email address), are stored in the standard macOS
+      preferences for TimeTug.</p>
+
+    <h3>Never saved</h3>
+    <p>While TimeTug is running it holds the full details of upcoming events in memory: descriptions and notes,
+      locations, the names and email addresses of invitees, who accepted or declined, and reminders. It uses
+      them to show your agenda and pop-up cards and to find video-call links. It does not write them to disk,
+      and they are gone when you quit TimeTug. Event titles that appear in macOS's system logs are marked
+      private.</p>
+
+    <h2 id="protection">How we protect your data</h2>
+    <ul>
+      <li><strong>Encrypted in transit.</strong> TimeTug talks to Google, Microsoft, iCloud and other CalDAV
+        providers over HTTPS/TLS. For CalDAV it refuses any server address that isn't <code>https://</code>
+        (a local test machine is the only exception) and refuses addresses that have a password typed into
+        them. Apple Calendar events come through macOS itself.</li>
+      <li><strong>Secrets in the Keychain, not in files.</strong> The Keychain encrypts sign-in tokens and
+        passwords at rest, as described above. The plain files on your Mac never contain them.</li>
+      <li><strong>Safer sign-in.</strong> Google and Microsoft sign-in use OAuth with PKCE (a one-time secret
+        that stops an intercepted sign-in code from being reused), in your own browser or the system sign-in
+        sheet. TimeTug never sees your Google or Microsoft password. For iCloud we ask for an app-specific
+        password, so your Apple Account password isn't needed and the app-specific password can be revoked at any
+        time.</li>
+      <li><strong>Least data saved.</strong> As described above, TimeTug saves the least it needs to work:
+        titles and times in some files, and never invitee names, descriptions, notes or locations.</li>
+      <li><strong>Limited access.</strong> TimeTug uses macOS's hardened runtime and is code-signed, which limits
+        what other software can inject into or change in the running app. The widgets run in the macOS App
+        Sandbox, and the only TimeTug data they can read is the agenda file above and a few shared on/off
+        preferences.</li>
+      <li><strong>Read-only permissions.</strong> TimeTug asks Google and Microsoft only for read-only calendar
+        permissions, so it cannot change or delete anything in your Google or Microsoft account.</li>
+      <li><strong>No extra copies.</strong> There is no TimeTug account, database or cloud copy of your calendar
+        data, and nobody but you has access to it through TimeTug.</li>
+    </ul>
+    <p>If you find a security problem in TimeTug, or believe your data has been exposed, please email
+      <a href="mailto:darkarena@gmail.com">darkarena@gmail.com</a>.</p>
 
     <h2>What TimeTug does not do</h2>
     <ul>
       <li>No analytics, telemetry, or crash reporting of any kind.</li>
       <li>No advertising and no ad or tracking SDKs.</li>
       <li>We do not sell, rent, or share your calendar data with anyone, for any purpose.</li>
+      <li>Your calendar data is not used to train or improve any AI or machine-learning model.</li>
       <li>TimeTug does not require a TimeTug account to read or show your calendars.</li>
     </ul>
 
@@ -93,16 +190,22 @@
 
     <h2>Your controls</h2>
     <ul>
-      <li><strong>Disconnect Google</strong> anytime in TimeTug's Settings › Accounts, or revoke TimeTug's
-        access directly at
+      <li><strong>Disconnect an account</strong> anytime in TimeTug's Settings › Accounts. TimeTug stops reading
+        it, deletes its sign-in token or password from the Keychain, deletes its entry in the account list and
+        its sync bookmarks, and immediately rewrites the widget agenda without its events. The alert history
+        and merge corrections described above aren't deleted at that moment: alert history disappears within
+        seven days, and you can erase corrections at once with <em>Forget learned corrections</em>.</li>
+      <li><strong>Revoke access at the provider.</strong> Disconnecting in TimeTug removes TimeTug's copy of your
+        sign-in from your Mac. To also cancel the access on the provider's side, revoke it there: for Google, at
         <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google Account ›
-          Third-party access</a>. Removing an account also deletes its stored token and cached calendar data
-        from your Mac.</li>
+          Third-party access</a>; for Microsoft, in your Microsoft account's app permissions; for iCloud, by
+        deleting the app-specific password at
+        <a href="https://account.apple.com" target="_blank" rel="noopener">account.apple.com</a>.</li>
       <li><strong>Turn off Apple Intelligence matching</strong> anytime in Settings › Calendars; TimeTug falls
         back to rules-only matching.</li>
-      <li><strong>Remove local data entirely</strong> by deleting
-        <code>~/Library/Application Support/TimeTug/</code> after quitting TimeTug, or by uninstalling the
-        app, which leaves nothing running or stored anywhere else.</li>
+      <li><strong>Remove local data entirely.</strong> Quit TimeTug and disconnect your accounts (which clears
+        the Keychain items), then delete <code>~/Library/Application Support/TimeTug/</code>. Uninstalling the
+        app on its own does not remove those files or Keychain items, so do this first.</li>
     </ul>
 
     <h2>Google API Services User Data Policy</h2>
