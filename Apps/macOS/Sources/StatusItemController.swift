@@ -49,8 +49,7 @@ final class StatusItemController: NSObject {
 
     /// Opens a meeting link from the popup and closes the popup.
     func join(_ url: URL) {
-        NSWorkspace.shared.open(url)
-        popover.performClose(nil)
+        if SafeJoin.open(url, using: { NSWorkspace.shared.open($0) }) { popover.performClose(nil) }
     }
 
     /// Swaps between the idle puppy and the color puppy; a no-op when the state is unchanged.

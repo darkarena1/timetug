@@ -1,7 +1,7 @@
 # TimeTug: agent guide
 
 TimeTug is a macOS menu bar app that takes over the screen before meetings. Read
-`docs/superpowers/specs/2026-09-18-timetug-core-design.md` first, then `docs/architecture.md`.
+`docs/superpowers/specs/2026-09-18-timetug-core-design.md` first, then `docs/architecture.md`, then `docs/development.md` (how to verify a change) and `docs/decisions/README.md` (the ADR index).
 
 ## Finding code
 - If your agent has a semantic code-index skill (in Claude Code, the `index` skill), use it in this repo without asking first; this is standing permission. At the start of a task check its status. If this checkout is not indexed, or files changed a lot since the last index, run the (incremental) index. A new checkout or worktree is seeded from the index that the `Code index` workflow publishes from `master` (artifact `qindex`, fetched with `gh`), so the first run only embeds what differs from `master` and takes seconds. Without a compatible published index a full build takes about 25 minutes: start it in the background and keep working with grep until it finishes. Then search the index before broad grepping or reading many files, and read the hit ranges rather than trusting snippets. Use grep for exact identifiers and strings. `.qindexignore` lists paths the index leaves out (past-work plans, which repeat the code they produced).
@@ -40,6 +40,7 @@ When you move guidance between this file and a skill, keep one copy: skills hold
 
 ## Commands
 - Tests a change needs: `scripts/dev/affected-tests.sh` prints the commands for the packages you touched, every package and the app that depend on them, and the tests of changed scripts, dependencies first. `--run` runs them and stops at the first failure; pass paths or `--base <ref>` to scope it (default: everything changed since the merge base with `origin/master`, including uncommitted and untracked files). Use it before committing instead of guessing or running every suite.
+- Verify: `scripts/dev/verify.sh affected` for local changes, or `core`, `connectors`, `app`, `release-tools`, `all`; `affected --base <ref>` includes changes since a base. Logs and a per-run summary go to `build/verify/`. The wrapper never enables live tests. See `docs/development.md`.
 - Architecture rules: `scripts/ci/check-architecture.sh`
 - Core tests: `swift test --package-path Packages/TimeTugCore`
 - EventKitSource tests: `swift test --package-path Packages/EventKitSource`
@@ -67,6 +68,7 @@ When you move guidance between this file and a skill, keep one copy: skills hold
 
 ## CI
 - `.github/workflows/ci.yml`: on push to `master` and every PR (build and tests only; PRs get no signing, no secrets, and nothing that can enter the update feed). Jobs: `core` (tests for Core, the connector library, CalendarBridge, CalendarApple, EventKitSource and the inference package), `app` (XcodeGen + app tests, uploads the `.xcresult` on failure), `dmg` (unsigned DMG, uploaded as the `TimeTug-dmg` artifact), `architecture` (`scripts/ci/check-architecture.sh`, its tests and those of `affected-tests.sh`), `core-linux` (allowed to fail; swift:6.0; runs the Core and connector library tests to prove both stay portable).
+- The website PR job (`firebase-hosting-pull-request.yml`) validates `site/` with no deployment, signing or OAuth secrets and does not publish hosted previews; merged `site/` changes deploy through Firebase Hosting (`firebase-hosting-merge.yml`).
 - Releases and betas (`release.yml`, `beta.yml`, Sparkle, the DMG, versions and signing) follow `docs/release.md`; see the `releasing-timetug` skill.
 - When CI fails: reproduce with the Commands above; for the app job download the `TestResults` artifact. Runner label or Xcode problems: `scripts/ci/select-xcode.sh` and the `runs-on` lines. Keep logic in the scripts, not in YAML.
 - `.github/workflows/index.yml` (`Code index`): on pushes to `master` builds the semantic code index incrementally from the previous `qindex` artifact against a throwaway Qdrant and publishes it as the `qindex` artifact (90 days) for agents' index skill. `scripts/dev/qindex.py` is a copy of the index skill's script (`~/.claude/skills/index/scripts/qindex.py`): keep the two identical (`diff` them) and keep the library versions in the workflow equal to the skill's. The export records the model and chunker version, and the skill refuses an index that does not match and builds locally instead.

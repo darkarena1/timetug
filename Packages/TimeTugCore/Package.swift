@@ -8,6 +8,9 @@ let package = Package(
     dependencies: [.package(path: "../CalendarConnectors")],
     targets: [
         .target(name: "TimeTugCore", dependencies: [.product(name: "CalendarCore", package: "CalendarConnectors")]),
+        .executableTarget(name: "DedupBenchmark", dependencies: [
+            "TimeTugCore", .product(name: "CalendarCore", package: "CalendarConnectors"),
+        ]),
         .testTarget(name: "TimeTugCoreTests", dependencies: [
             "TimeTugCore", .product(name: "CalendarCore", package: "CalendarConnectors"),
         ]),

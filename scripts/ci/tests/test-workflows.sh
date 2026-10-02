@@ -4,8 +4,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 if ! python3 -c 'import yaml' 2>/dev/null; then
-  echo "SKIP: PyYAML is not installed (pip install pyyaml); workflow checks not run"
-  exit 0
+  echo "FAIL: PyYAML is required (pip install -r scripts/ci/requirements-test.txt)" >&2
+  exit 2
 fi
 CHECK="$(mktemp)"; TMP="$(mktemp -d)"
 trap 'rm -f "$CHECK"; rm -rf "$TMP"' EXIT
@@ -44,4 +44,5 @@ for w in beta release; do
   done
 done
 if grep -q "GOOGLE_OAUTH\|MICROSOFT_OAUTH" .github/workflows/ci.yml; then echo "FAIL: ci.yml must not reference the OAuth secrets" >&2; exit 1; fi
+python3 scripts/ci/tests/check-workflow-contracts.py
 echo "PASS"

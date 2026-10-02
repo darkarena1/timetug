@@ -1,7 +1,7 @@
 # TimeTug: Core App Design
 
 Date: 2026-09-18
-Status: Draft for review
+Status: Historical design. See docs/architecture.md for current modules and defaults; later ADRs supersede changed topics.
 Scope: Sub-project 1 of 3 (core app + Apple Calendar source + takeover).
 Out of scope here: public plugin loading (sub-project 2), Google/iCloud/Exchange sources (sub-project 3), Windows/Linux front ends.
 

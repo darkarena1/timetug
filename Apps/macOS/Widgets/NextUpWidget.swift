@@ -1,3 +1,4 @@
+import CalendarCore
 import SwiftUI
 import TimeTugCore
 import WidgetKit
@@ -41,7 +42,7 @@ struct NextUpView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .widgetURL(hero.joinURL)
+            .widgetURL(hero.joinURL.flatMap { JoinURLPolicy.isAllowed($0) ? $0 : nil })
         } else {
             VStack(spacing: 6) {
                 Image(systemName: "checkmark.circle").font(.title2)
@@ -70,7 +71,7 @@ struct NextUpView: View {
                 Text(event.start, style: .relative).font(.title3.monospacedDigit())
                 startText(event, now: now).font(.caption).foregroundStyle(.secondary)
             }
-            if event.joinURL != nil {
+            if let url = event.joinURL, JoinURLPolicy.isAllowed(url) {
                 Label("Join", systemImage: "video.fill").font(.caption2).foregroundStyle(.secondary)
             }
         }
@@ -86,7 +87,7 @@ struct NextUpView: View {
             }
         }
         return Group {
-            if let url = event.joinURL { Link(destination: url) { label } } else { label }
+            if let url = event.joinURL, JoinURLPolicy.isAllowed(url) { Link(destination: url) { label } } else { label }
         }
     }
 }

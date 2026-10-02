@@ -40,8 +40,9 @@ struct FoundationModelsAdjudicator: DuplicateAdjudicator {
 
     func judge(_ requests: [AdjudicationRequest]) async -> [AdjudicationVerdict] {
         var verdicts: [AdjudicationVerdict] = []
-        for request in requests {
-            if Task.isCancelled { break }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(30))
+        for request in requests.prefix(20) {
+            if Task.isCancelled || ContinuousClock.now >= deadline { break }
             do {
                 let session = LanguageModelSession(instructions: PromptBuilder.instructions)
                 let response = try await session.respond(
