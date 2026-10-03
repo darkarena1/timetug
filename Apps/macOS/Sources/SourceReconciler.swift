@@ -20,13 +20,13 @@ final class SourceReconciler {
     private static let eventKitKey = "\u{0}eventkit"
     private let buildAccount: (Connection) throws -> any TimeTugCore.CalendarSource
     private let buildEventKit: () -> any TimeTugCore.CalendarSource
-    private let onChange: @MainActor () async -> Void
+    private let onChange: @MainActor (SourceChange) async -> Void
     private var entries: [String: Entry] = [:]   // keyed by connection id, or `eventKitKey`
 
     init(
         buildAccount: @escaping (Connection) throws -> any TimeTugCore.CalendarSource,
         buildEventKit: @escaping () -> any TimeTugCore.CalendarSource,
-        onChange: @escaping @MainActor () async -> Void
+        onChange: @escaping @MainActor (SourceChange) async -> Void
     ) {
         self.buildAccount = buildAccount
         self.buildEventKit = buildEventKit
@@ -85,10 +85,10 @@ final class SourceReconciler {
     private func start(_ source: any TimeTugCore.CalendarSource) -> Entry {
         let onChange = onChange
         let listener = Task { @MainActor in
-            for await _ in source.changes() {
+            for await change in source.changes() {
                 // A removed source's listener may still see a buffered change before cancellation lands.
                 if Task.isCancelled { break }
-                await onChange()
+                await onChange(change)
             }
         }
         return Entry(source: source, listener: listener)

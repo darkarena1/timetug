@@ -31,19 +31,22 @@ public struct LoopbackAuthorizationInteraction: AuthorizationInteraction {
     private let presenter: (any AuthorizationPresenting)?
     private let completionScheme: String
     private let timeout: Duration
+    private let requestTimeout: Duration
 
     public init(openURL: @escaping OpenURL, promptCredentials: PromptCredentials? = nil,
                 presenter: (any AuthorizationPresenting)? = nil, completionScheme: String = "timetug-oauth",
-                timeout: Duration = .seconds(300)) {
+                timeout: Duration = .seconds(300), requestTimeout: Duration = .seconds(5)) {
         self.openURL = openURL
         self.prompt = promptCredentials
         self.presenter = presenter
         self.completionScheme = completionScheme
         self.timeout = timeout
+        self.requestTimeout = requestTimeout
     }
 
     public func beginOAuthRedirect() async throws -> any OAuthRedirectSession {
-        try await LoopbackSession.start(openURL: openURL, presenter: presenter, completionScheme: completionScheme, timeout: timeout)
+        try await LoopbackSession.start(openURL: openURL, presenter: presenter, completionScheme: completionScheme,
+                                        timeout: timeout, requestTimeout: requestTimeout)
     }
 
     public func promptCredentials(_ fields: [CredentialField]) async throws -> [String: String] {
@@ -79,10 +82,16 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
     private let presenter: (any AuthorizationPresenting)?
     private let completionScheme: String
     private let timeout: Duration
+    private let requestTimeout: Duration
     private let queue = DispatchQueue(label: "com.timetug.calendarapple.loopback")
     private let lock = NSLock()
     private var pending: CheckedContinuation<URL, Error>?
     private var received: Result<URL, Error>?
+    private var expectedPath: String?
+    private var expectedState: String?
+    private var earlyRequests: [Data] = []
+    private var connections: [ObjectIdentifier: NWConnection] = [:]
+    private var closed = false
     /// Set (under `lock`) while a presenter's sheet may hit the listener; the redirect is then answered with a 302.
     private var completionRedirect: URL?
     /// True while this flow's own presentation may still be showing. The presenter is shared, so `dismiss()` would cancel
@@ -91,30 +100,39 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
     private var presentationEnded = false
 
     private init(listener: NWListener, openURL: @escaping LoopbackAuthorizationInteraction.OpenURL,
-                 presenter: (any AuthorizationPresenting)?, completionScheme: String, timeout: Duration) {
+                 presenter: (any AuthorizationPresenting)?, completionScheme: String, timeout: Duration,
+                 requestTimeout: Duration) {
         self.listener = listener
         self.openURL = openURL
         self.presenter = presenter
         self.completionScheme = completionScheme
         self.timeout = timeout
+        self.requestTimeout = requestTimeout
+    }
+
+    deinit {
+        listener.cancel()
+        for connection in connections.values { connection.cancel() }
     }
 
     static func start(openURL: @escaping LoopbackAuthorizationInteraction.OpenURL, presenter: (any AuthorizationPresenting)? = nil,
-                      completionScheme: String = "timetug-oauth", timeout: Duration) async throws -> LoopbackSession {
+                      completionScheme: String = "timetug-oauth", timeout: Duration,
+                      requestTimeout: Duration = .seconds(5)) async throws -> LoopbackSession {
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = NWEndpoint.hostPort(host: .ipv4(.loopback), port: .any)
         let listener: NWListener
         do { listener = try NWListener(using: parameters) } catch { throw LoopbackError.listenerFailed(String(describing: error)) }
-        let session = LoopbackSession(listener: listener, openURL: openURL, presenter: presenter, completionScheme: completionScheme, timeout: timeout)
+        let session = LoopbackSession(listener: listener, openURL: openURL, presenter: presenter,
+                                      completionScheme: completionScheme, timeout: timeout, requestTimeout: requestTimeout)
         listener.newConnectionHandler = { [weak session] connection in session?.accept(connection) }
         let port: UInt16 = try await withCheckedThrowingContinuation { continuation in
             let once = Once()
-            listener.stateUpdateHandler = { state in
+            listener.stateUpdateHandler = { [weak session, weak listener] state in
                 switch state {
                 case .ready:
-                    if let raw = listener.port?.rawValue {
+                    if let raw = listener?.port?.rawValue {
                         once.run {
-                            session.publish(port: raw)
+                            session?.publish(port: raw)
                             continuation.resume(returning: raw)
                         }
                     }
@@ -137,6 +155,35 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
     }
 
     func authorize(at authorizationURL: URL) async throws -> URL {
+        guard let authorization = URLComponents(url: authorizationURL, resolvingAgainstBaseURL: false),
+              let items = authorization.queryItems,
+              items.filter({ $0.name == "state" }).count == 1,
+              let state = items.first(where: { $0.name == "state" })?.value, !state.isEmpty,
+              items.filter({ $0.name == "redirect_uri" }).count == 1,
+              let redirectText = items.first(where: { $0.name == "redirect_uri" })?.value,
+              let redirect = URLComponents(string: redirectText),
+              redirect.scheme == "http", redirect.host == "127.0.0.1", redirect.port == Int(port),
+              redirect.query == nil, redirect.fragment == nil else {
+            throw LoopbackError.listenerFailed("invalid authorization redirect")
+        }
+        let path = redirect.path.isEmpty ? "/" : redirect.path
+        let (claimed, early) = lock.withLock { () -> (Bool, [Data]) in
+            guard !waitClaimed else { return (false, []) }
+            waitClaimed = true
+            expectedPath = path
+            expectedState = state
+            defer { earlyRequests.removeAll() }
+            return (true, earlyRequests)
+        }
+        // The session is single-use: a second caller must not replace the active callback state.
+        guard claimed else { throw LoopbackError.alreadyWaiting }
+        for request in early {
+            if let callback = LoopbackRequest.redirectURL(from: request, port: port,
+                                                           expectedPath: path, expectedState: state) {
+                deliver(.success(callback))
+                break
+            }
+        }
         var presented = false
         if let presenter {
             // Armed before `present`, so a request the sheet makes immediately already gets the 302.
@@ -185,7 +232,13 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
 
     func close() async {
         if claimDismissal() { await presenter?.dismiss() }
+        let active = lock.withLock { () -> [NWConnection] in
+            closed = true
+            defer { connections.removeAll() }
+            return Array(connections.values)
+        }
         listener.cancel()
+        for connection in active { connection.cancel() }
         deliver(.failure(LoopbackError.cancelled))
     }
 
@@ -200,10 +253,6 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
     }
 
     private func waitForRedirect() async throws -> URL {
-        lock.lock()
-        if waitClaimed { lock.unlock(); throw LoopbackError.alreadyWaiting }
-        waitClaimed = true
-        lock.unlock()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
                 lock.lock()
@@ -230,8 +279,26 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
     private static let maxRequestBytes = 16_384
 
     private func accept(_ connection: NWConnection) {
+        lock.lock()
+        let accepted = !closed && connections.count < 8
+        if accepted { connections[ObjectIdentifier(connection)] = connection }
+        lock.unlock()
+        guard accepted else { connection.cancel(); return }
         connection.start(queue: queue)
+        let requestTimeout = requestTimeout
+        Task { [weak self, weak connection] in
+            try? await Task.sleep(for: requestTimeout)
+            guard let self, let connection else { return }
+            self.finish(connection)
+        }
         receiveRequest(on: connection, buffer: Data())
+    }
+
+    private func finish(_ connection: NWConnection) {
+        lock.lock()
+        let active = connections.removeValue(forKey: ObjectIdentifier(connection)) != nil
+        lock.unlock()
+        if active { connection.cancel() }
     }
 
     private func receiveRequest(on connection: NWConnection, buffer: Data) {
@@ -239,8 +306,8 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
             guard let self else { connection.cancel(); return }
             var buffer = buffer
             if let data { buffer.append(data) }
-            let lineComplete = buffer.range(of: Data("\r\n".utf8)) != nil
-            if !lineComplete {
+            let headersComplete = buffer.range(of: Data("\r\n\r\n".utf8)) != nil
+            if !headersComplete {
                 if error != nil || isComplete || buffer.count >= Self.maxRequestBytes {
                     self.respond(on: connection, redirect: nil)
                 } else {
@@ -248,7 +315,17 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
                 }
                 return
             }
-            let redirect = LoopbackRequest.redirectURL(from: buffer, port: self.port)
+            self.lock.lock()
+            let path = self.expectedPath
+            let state = self.expectedState
+            let active = !self.closed && self.connections[ObjectIdentifier(connection)] != nil
+            if active && path == nil && buffer.count < Self.maxRequestBytes && self.earlyRequests.count < 8 {
+                self.earlyRequests.append(buffer)
+            }
+            self.lock.unlock()
+            let redirect: URL? = if active, let path, let state, buffer.count < Self.maxRequestBytes {
+                LoopbackRequest.redirectURL(from: buffer, port: self.port, expectedPath: path, expectedState: state)
+            } else { nil }
             self.respond(on: connection, redirect: redirect)
             if let redirect { self.deliver(.success(redirect)) }
         }
@@ -259,13 +336,13 @@ final class LoopbackSession: OAuthRedirectSession, @unchecked Sendable {
         if redirect != nil, let completion {
             let head = "HTTP/1.1 302 Found\r\nLocation: \(completion.absoluteString)\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
             connection.send(content: Data(head.utf8), contentContext: .finalMessage, isComplete: true,
-                            completion: .contentProcessed { _ in connection.cancel() })
+                            completion: .contentProcessed { [weak self] _ in self?.finish(connection) })
             return
         }
         let status = redirect == nil ? "404 Not Found" : "200 OK"
         let body = redirect == nil ? "" : Self.page
         let head = "HTTP/1.1 \(status)\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n"
         connection.send(content: Data((head + body).utf8), contentContext: .finalMessage, isComplete: true,
-                        completion: .contentProcessed { _ in connection.cancel() })
+                        completion: .contentProcessed { [weak self] _ in self?.finish(connection) })
     }
 }

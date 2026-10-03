@@ -6,17 +6,17 @@ import XCTest
 final class FakeCoreSource: TimeTugCore.CalendarSource, @unchecked Sendable {
     let id: String
     let displayName: String
-    let continuation: AsyncStream<Void>.Continuation
-    private let stream: AsyncStream<Void>
+    let continuation: AsyncStream<SourceChange>.Continuation
+    private let stream: AsyncStream<SourceChange>
     private(set) var listenerStarted = 0
     init(id: String) {
         self.id = id
         displayName = id
-        (stream, continuation) = AsyncStream.makeStream(of: Void.self)
+        (stream, continuation) = AsyncStream.makeStream(of: SourceChange.self)
     }
     func calendars() async throws -> [CalendarInfo] { [] }
     func events(in interval: DateInterval) async throws -> [TimeTugCalendarEvent] { [] }
-    func changes() -> AsyncStream<Void> { listenerStarted += 1; return stream }
+    func changes() -> AsyncStream<SourceChange> { listenerStarted += 1; return stream }
 }
 
 @MainActor
@@ -36,7 +36,7 @@ final class SourceReconcilerTests: XCTestCase {
                 return s
             },
             buildEventKit: { FakeCoreSource(id: "eventkit") },
-            onChange: { [unowned self] in changeCount += 1 })
+            onChange: { [unowned self] _ in changeCount += 1 })
     }
 
     func testBuildsEventKitFirstThenAccountsAndKeysBySourceID() {
@@ -65,7 +65,7 @@ final class SourceReconcilerTests: XCTestCase {
         _ = r.reconcile(connections: [a], eventKitEnabled: false)
         let source = built["1"]!
         _ = r.reconcile(connections: [], eventKitEnabled: false)
-        source.continuation.yield()
+        source.continuation.yield(.eventsChanged(sourceID: source.id, calendarIDs: nil))
         try await Task.sleep(for: .milliseconds(50))
         XCTAssertEqual(changeCount, 0)
     }
@@ -74,7 +74,7 @@ final class SourceReconcilerTests: XCTestCase {
         let r = makeReconciler()
         _ = r.reconcile(connections: [a], eventKitEnabled: false)
         try await Task.sleep(for: .milliseconds(50))
-        built["1"]!.continuation.yield()
+        built["1"]!.continuation.yield(.eventsChanged(sourceID: a.sourceID, calendarIDs: nil))
         try await Task.sleep(for: .milliseconds(50))
         XCTAssertEqual(changeCount, 1)
     }
@@ -95,7 +95,7 @@ final class SourceReconcilerTests: XCTestCase {
         XCTAssertFalse(old === new)
         XCTAssertTrue((update.sources.first as AnyObject) === new)
         try await Task.sleep(for: .milliseconds(50))
-        new.continuation.yield()
+        new.continuation.yield(.eventsChanged(sourceID: new.id, calendarIDs: nil))
         try await Task.sleep(for: .milliseconds(50))
         XCTAssertEqual(changeCount, 1)
     }
@@ -110,7 +110,7 @@ final class SourceReconcilerTests: XCTestCase {
         XCTAssertEqual(update.sources.count, 1)
         XCTAssertTrue((update.sources.first as AnyObject) === old)
         XCTAssertNotNil(update.failures["1"])
-        old.continuation.yield()
+        old.continuation.yield(.eventsChanged(sourceID: old.id, calendarIDs: nil))
         try await Task.sleep(for: .milliseconds(50))
         XCTAssertEqual(changeCount, 1)
     }

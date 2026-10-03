@@ -1,3 +1,4 @@
+import CalendarCore
 import SwiftUI
 import TimeTugCore
 import WidgetKit
@@ -65,7 +66,7 @@ struct TodayView: View {
         }
         .opacity(row.state == .past ? 0.45 : 1)
         return Group {
-            if let url = event.joinURL, row.state != .past { Link(destination: url) { label } } else { label }
+            if let url = event.joinURL, JoinURLPolicy.isAllowed(url), row.state != .past { Link(destination: url) { label } } else { label }
         }
     }
 }

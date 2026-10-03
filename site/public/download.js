@@ -9,10 +9,25 @@ if (download) {
       return response.json();
     })
     .then(release => {
-      const dmg = release.assets?.find(asset => /^TimeTug-.*\.dmg$/.test(asset.name) && !asset.name.endsWith('-unsigned.dmg'));
-      if (dmg?.browser_download_url) download.href = dmg.browser_download_url;
+      const dmg = release.assets?.find(asset => /^TimeTug-.*\.dmg$/.test(asset.name) && !asset.name.endsWith('-unsigned.dmg') && isTrustedDownloadURL(asset.browser_download_url));
+      if (dmg) download.href = dmg.browser_download_url;
     })
     .catch(() => {
       // The initial link still opens GitHub's latest release if the lookup is unavailable.
     });
+}
+
+function isTrustedDownloadURL(value) {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' &&
+      url.hostname === 'github.com' &&
+      !url.username && !url.password &&
+      url.port === '' &&
+      url.pathname.startsWith('/darkarena1/timetug/releases/download/') &&
+      url.pathname.length > '/darkarena1/timetug/releases/download/'.length;
+  } catch {
+    return false;
+  }
 }

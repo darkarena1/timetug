@@ -81,6 +81,12 @@ private struct FailingRemovalCredentials: CredentialStore {
         try await inner.setSecrets(secrets, for: connectionID)
     }
     func removeSecrets(for connectionID: ConnectionID) async throws { throw Failure() }
+    func credentialSnapshot(for connectionID: ConnectionID) async throws -> CredentialSnapshot? {
+        try await inner.credentialSnapshot(for: connectionID)
+    }
+    func updateRefreshToken(_ token: String, for connectionID: ConnectionID, expectedRevision: UUID) async throws -> Bool {
+        try await inner.updateRefreshToken(token, for: connectionID, expectedRevision: expectedRevision)
+    }
 }
 
 @MainActor
@@ -115,7 +121,7 @@ final class AccountsControllerTests: XCTestCase {
                 return FakeCoreSource(id: c.sourceID)
             },
             buildEventKit: { FakeCoreSource(id: "eventkit") },
-            onChange: {})
+            onChange: { _ in })
     }
 
     override func tearDown() async throws {
