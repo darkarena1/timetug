@@ -63,7 +63,7 @@ extension MicrosoftCalendarSource: WritableCalendarSource {
                 }
                 return event
             }
-            let (targetID, useVersion) = target(ref, scope: scope)
+            let (targetID, useVersion) = ref.writeTarget(scope: scope)
             let targetIsMaster = ref.seriesID == targetID
             if scope == .allInSeries, patch.timing != nil, targetID != ref.eventID {
                 try await requireFirstOccurrence(ref, seriesID: targetID)
@@ -103,7 +103,7 @@ extension MicrosoftCalendarSource: WritableCalendarSource {
                 _ = try await splitSeries(ref, calendar: calendar, patch: nil, notify: notify)
                 return
             }
-            let (targetID, _) = target(ref, scope: scope)
+            let (targetID, _) = ref.writeTarget(scope: scope)
             _ = try await api.send(method: "DELETE", url: api.url(path: GraphAPIClient.eventPath(ref.calendarID, targetID)))
         }
     }
@@ -118,7 +118,7 @@ extension MicrosoftCalendarSource: WritableCalendarSource {
             try Self.requireOccurrence(ref, scope: scope)
             let action = try GraphWriteMapper.respondAction(response)
             let calendar = try await writableCalendar(ref.calendarID)
-            let (targetID, _) = target(ref, scope: scope)
+            let (targetID, _) = ref.writeTarget(scope: scope)
             _ = try await api.send(
                 method: "POST", url: api.url(path: GraphAPIClient.eventPath(ref.calendarID, targetID) + "/\(action)"),
                 body: try GraphWriteMapper.data(["sendResponse": notify != .none]))
@@ -193,13 +193,6 @@ extension MicrosoftCalendarSource: WritableCalendarSource {
         }
         if json["isCancelled"] as? Bool == true { throw WriteError.notFound }
         return RawEvent(data: data, json: json)
-    }
-
-    /// The id a write addresses: the instance, or the series master for `.allInSeries` (whose version differs from the
-    /// instance's, so the caller's version cannot lock it; a master ref's own version can).
-    private func target(_ ref: EventRef, scope: RecurrenceScope) -> (id: String, useVersion: Bool) {
-        guard let series = ref.seriesID, !series.isEmpty else { return (ref.eventID, true) }
-        return scope == .allInSeries ? (series, series == ref.eventID) : (ref.eventID, true)
     }
 
     /// Where a recurrence set by `patch` starts: the patch's own timing, else the event as fetched.
