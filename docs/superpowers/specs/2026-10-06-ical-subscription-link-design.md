@@ -1,6 +1,6 @@
 # Calendar connectors, Phase 6: iCal subscription link connector
 
-Status: design approved in brainstorming (2026-10-06), revised the same day to links only; awaiting spec review. Phases 1 to 5 are merged; the API contract is in `docs/calendar-connectors-api.md`. The Phase 5 spec listed "No ICS subscription connector (the `ICalendar` product makes one cheap later)" as a non-goal; this phase builds it.
+Status: implemented on the branch that adds `docs/superpowers/plans/2026-10-06-calendar-connectors-phase6-ical-link.md`; see that plan. Phases 1 to 5 are merged; the API contract is in `docs/calendar-connectors-api.md`. The Phase 5 spec listed "No ICS subscription connector (the `ICalendar` product makes one cheap later)" as a non-goal; this phase builds it.
 
 ## Goal
 
@@ -32,7 +32,7 @@ Made with the user during brainstorming:
 | `CalendarConnectors` → `Sources/ICalSubscription` (new target and library product; depends on `CalendarCore` and `ICalendar`; pure Swift, builds on Linux) | `ICalSubscriptionKind`, `FeedLocation` (input parsing), `ICalSubscriptionSource`, `FeedParser` (groups events by UID) |
 | `CalendarConnectors` → `Tests/ICalSubscriptionTests` | see Testing |
 | `CalendarTestSupport` | reused as is |
-| App (`Apps/macOS`) | `AppConnectors` registers the kind; Settings search keywords |
+| App (`Apps/macOS`) | `AppConnectors` registers the kind; Settings search keywords, `ProviderIcon` style, the Meetup "Soon" tile removed, sign-in error text for a one-field kind |
 | Docs and site | API contract part 14, ADR 0018, `site/public/privacy.html`, `docs/PROGRESS.md` |
 
 ## The kind
@@ -80,7 +80,7 @@ Made with the user during brainstorming:
 
 ## Change detection
 
-15-minute poll (injectable, as for the other connectors). Each poll refetches the feed (or sends the conditional request) and compares a SHA-256 digest of the body with the stored one (`SyncStateStore` scope `digest`); a difference returns `.eventsChanged(calendarIDs: ["feed"])`. The first call establishes the baseline and returns nil. A 401/403/404/410 finishes `changes()` with `.sourceFailed`/`authExpired`.
+15-minute poll (injectable, as for the other connectors). Each poll refetches the feed (or sends the conditional request) and compares the body with the last one it read; a difference returns `.eventsChanged(calendarIDs: ["feed"])`. The first check with nothing loaded is the baseline and returns nil; a feed loaded earlier by `events(in:)` counts as the baseline. Nothing is persisted: the app reloads events at launch anyway. A 401/403/404/410 finishes `changes()` with `.sourceFailed`/`authExpired`.
 
 ## Capabilities
 
@@ -95,14 +95,14 @@ Made with the user during brainstorming:
 ## Security and privacy
 
 - The link is sent only to the host it names, over HTTPS, and is never logged or placed in an error or a crash report. Request logs omit the URL's path and query.
-- The link is held in the Keychain through the existing `CredentialStore`. Only the change-detection digest lives in the app's support folder, like other sync state. Calendar contents are read in memory only, as for every other connector.
-- The privacy policy gets a new bullet: what the feed connector reads (the feed's events, titles, times, places, descriptions and links), what is stored (the link in the Keychain, and a digest to spot changes), that a link is a private address anyone holding it could read, that the user can revoke it at the provider, and that nothing is ever written back. The summary of "what we store" (the account list) gains the feed type and host.
+- The link is held in the Keychain through the existing `CredentialStore`. Nothing else about the feed is stored. Calendar contents are read in memory only, as for every other connector.
+- The privacy policy gets a new bullet: what the feed connector reads (the feed's events, titles, times, places, descriptions and links), what is stored (the link in the Keychain), that a link is a private address anyone holding it could read, that the user can revoke it at the provider, and that nothing is ever written back. The summary of "what we store" (the account list) gains the feed type and host.
 
 ## Testing
 
 1. **`FeedLocation`:** `webcal` and `webcals` mapping, `https` accepted with and without an `.ics` ending, `http` refused (and allowed for loopback), embedded credentials refused, and `file://`, a path and junk text refused.
 2. **`FeedParser`:** a scrubbed fixture shaped like a real Meetup feed (two events, a recurring one with an `RRULE`, one `VTIMEZONE`, an event page `URL`), built from structure only with invented data; a feed with two events sharing a time zone; a feed with no events; an event without a `UID`; a recurring event with an override; all-day events through `AllDayConformance`; `ProvidedFieldsConformance`.
-3. **`ICalSubscriptionSource` over `FakeTransport`:** the first fetch and poll baseline, a changed digest, an unchanged feed, conditional request when `ETag` is present, 401/403/404/410 mapped to `authExpired`, 429 and 5xx to `server`, redirect to `http` refused, oversized body refused, a body that is not a calendar refused at sign-in, reauthorize keeping the `connectionID`, and that no thrown error or description contains the URL (a test greps the error text for the secret path).
+3. **`ICalSubscriptionSource` over `FakeTransport`:** the first fetch and poll baseline, a changed body, an unchanged feed, conditional request when `ETag` is present, 401/403/404/410 mapped to `authExpired`, 429 and 5xx to `server`, redirect to `http` refused, oversized body refused, a body that is not a calendar refused at sign-in, reauthorize keeping the `connectionID`, and that no thrown error or description contains the URL (a test greps the error text for the secret path).
 4. **Linux:** the `core-linux` job builds and tests `ICalSubscription`.
 5. **App tests:** the registry contains `icalsub` and its help has a link.
 6. **Live (opt-in, never in CI):** `TIMETUG_LIVE_ICALSUB=1` reads a feed link from the git-ignored `~/.config/timetug/icalsub-live` (one line), loads it through the real transport, and prints counts and field coverage only, never the link or event text.

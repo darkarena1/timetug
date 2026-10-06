@@ -2,7 +2,7 @@
 
 Status: parts 1 to 10 describe the code on `master` once Phase 3 (write capabilities) has merged; part 11 lists the known gaps;
 part 12 describes the Microsoft connector (Phase 4); part 13 describes `ICalendar` and the CalDAV
-and iCloud connector (Phase 5).
+and iCloud connector (Phase 5); part 14 describes the iCal subscription connector (Phase 6).
 The library is pre-1.0 and lives in this repository; it is meant to be extracted into its own repository once a
 second provider (Microsoft, Phase 4) has proved the API is provider-neutral: the connector exists, and the extraction
 waits for its live checks (part 12). Until then, anything here can change with a matching change to this document.
@@ -20,6 +20,7 @@ providers behind one model, plus the small amount of host-specific glue TimeTug 
 | `CalendarConnectors` / `MicrosoftCalendar` | Microsoft (Outlook) connector over Microsoft Graph v1.0 | `CalendarCore`, `CalendarOAuth` | Portable |
 | `CalendarConnectors` / `ICalendar` | iCalendar (RFC 5545) parser and writer, time zones, `VEVENT`/`VALARM` mapping, series editing | `CalendarCore` | Portable |
 | `CalendarConnectors` / `CalDAVCalendar` | CalDAV connector (iCloud and other servers) over a small WebDAV client | `CalendarCore`, `ICalendar` | Portable; `FoundationXML` on Linux |
+| `CalendarConnectors` / `ICalSubscription` | iCal subscription link connector: one private feed, read-only | `CalendarCore`, `ICalendar` | Portable |
 | `CalendarConnectors` / `CalendarTestSupport` | Fakes and conformance helpers for connector tests | `CalendarCore` | Test-only product |
 | `CalendarApple` | Apple-only adapters: Keychain credentials, loopback and web-auth-session OAuth interaction, CryptoKit hashing | `CalendarCore`, `CalendarOAuth` | macOS |
 | `EventKitSource` | Apple Calendar via EventKit as a connector | `CalendarCore` | macOS |
@@ -30,7 +31,7 @@ Network.framework, EventKit, AuthenticationServices) lives in a separate adapter
 protocol, so another host can supply its own.
 
 Dependency direction: `GoogleCalendar` and `MicrosoftCalendar` → `CalendarOAuth` → `CalendarCore`;
-`CalDAVCalendar` → `ICalendar` → `CalendarCore`; adapters and the bridge depend on
+`CalDAVCalendar` → `ICalendar` → `CalendarCore`; `ICalSubscription` → `ICalendar` → `CalendarCore`; adapters and the bridge depend on
 `CalendarCore`; nothing in `CalendarConnectors` depends on an adapter.
 
 ## 2. Conventions every part of the contract relies on
@@ -702,6 +703,18 @@ client, XML and discovery are internal.
   never runs in CI: `TIMETUG_LIVE_ICLOUD=1 swift test --package-path Packages/CalendarConnectors --filter iCloudLiveSmoke`
   (credentials from `~/.config/timetug/icloud-live`; writes only to a calendar named "TimeTug Live Test" and deletes only
   the events it made, whose titles start with "TimeTug write smoke").
+
+## 14. `ICalSubscription` (Phase 6)
+
+One connector kind, `icalsub` ("iCal link"), reads a private calendar subscription link: a `webcal://` or `https://` address that serves a `VCALENDAR` (Meetup's Add to calendar links, a Google secret address, an Outlook published calendar). Design: `docs/superpowers/specs/2026-10-06-ical-subscription-link-design.md`; the credential decision is ADR 0018.
+
+- **Sign-in.** One secret field, `link`. `FeedLocation.url(from:)` maps `webcal`/`webcals` to `https`, allows plain `http` only for the loopback host, and refuses a link with a user name or password, a `file://` URL and a path. The feed is fetched and parsed before anything is stored; a feed with no events is valid.
+- **What is stored.** The link, in the `CredentialStore` under `link`. `Connection.config` is `["host": <host>]` and the display name is `"<calendar name> (<host>)"`, or the host alone. The link never appears in a message, `description` or log.
+- **Source.** `ICalSubscriptionSource` is a read-only `PollingCalendarSource` with one calendar, id `feed` (service `icalsub`, provider `.subscription`, kind `.subscribed`). The parsed feed is reused while younger than the poll interval (15 minutes). A feed is one `VCALENDAR`, so events are grouped by `UID` into one `EventResource` each and read with `EventReader`; an event without a `UID` gets a stable made-up one from its start and title.
+- **Fetching.** `FeedFetcher` follows redirects itself (at most 5, only to `https`), caps the body at 10 MB and sends `If-None-Match` / `If-Modified-Since` when the server gave validators, and only when a conditional request was sent does a 304 count as unchanged. 401, 403, 404 and 410 are `SourceError.authExpired` (the link was revoked or regenerated); 429 and 5xx are `SourceError.server(status:)`; a 200 that is not a calendar is `SourceError.invalidResponse`, and the last good feed is kept.
+- **Change detection.** Each poll refetches the feed and compares the body, in memory, with the last body it read; a difference is `.eventsChanged(calendarIDs: ["feed"])`. The first check with nothing loaded is the baseline; a feed loaded earlier by `events(in:)` counts as the baseline. Nothing is persisted (`SyncStateStore` is not used by this kind), so after an app relaunch the first check re-baselines.
+- **Capabilities.** `canWrite = false`, `syncKind = .token`. Provided fields: `series`, `uidScope`, `provider`, `calendarTimeZone`. `participation`, `visibility`, `availability` and `reminders` are not declared: a feed may or may not carry them.
+- **Not supported.** A downloaded `.ics` file (a one-time copy that would go stale), writes and RSVP, more than one feed per account.
 
 ## Calendar identity and permissions
 
