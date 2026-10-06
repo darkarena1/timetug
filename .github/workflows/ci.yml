@@ -114,7 +114,7 @@ jobs:
           if-no-files-found: error
 
   # The layering rules from AGENTS.md that the compiler does not enforce (imports, Package.swift
-  # dependencies, no clock reads in Core), plus the tests of the check and of scripts/dev/affected-tests.sh.
+  # dependencies, no clock reads in Core), plus the tests of the check, of scripts/dev/affected-tests.sh and of the release preflight.
   architecture:
     runs-on: ubuntu-latest
     steps:
@@ -125,6 +125,7 @@ jobs:
         run: |
           scripts/ci/tests/test-check-architecture.sh
           scripts/dev/tests/test-affected-tests.sh
+          scripts/release/tests/test-preflight.sh
 
   # Core and the connector library are meant to be portable (no Apple-only imports). This job checks that on Linux.
   # It is allowed to fail (continue-on-error) until Linux support is confirmed; once it is
