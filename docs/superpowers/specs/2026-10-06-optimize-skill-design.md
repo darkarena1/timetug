@@ -147,6 +147,7 @@ Hard rules:
 - Never act on `low` confidence candidates without an explicit confirm step.
 - No optimization mixed into a feature or bug-fix change.
 - Public API, entry points, and anything reached by reflection or dynamic dispatch (`@objc`, Discord command registries, dynamic `require`) is flagged `review-by-hand`, not offered for removal.
+- Test code (XCTest, pytest, jest) is found by the test framework by reflection, so it is exempt from dead-code and single-use detection, and clones made entirely of test code are down-ranked.
 
 Secrets: files that look like they contain credentials are skipped and listed (reusing the pattern set from the `index` skill). `scan` is read-only, writes only to `.optimize/` (added to `.gitignore` after asking), makes no network calls, and embeds locally.
 
