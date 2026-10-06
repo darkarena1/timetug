@@ -14,13 +14,15 @@ public struct ICalSubscriptionKind: ConnectorKind, CredentialPromptHelp {
     private let pollInterval: Duration
     private let defaultZone: TimeZone
     private let retention: RetentionWindow?
+    private let diagnostics: any DiagnosticLog
 
     public init(
         transport: (any HTTPTransport)? = nil, now: @escaping @Sendable () -> Date = { Date() },
         sleep: @escaping Sleeper = defaultSleeper, pollInterval: Duration = .seconds(900), defaultZone: TimeZone = .current,
-        retention: RetentionWindow? = nil
+        retention: RetentionWindow? = nil, diagnostics: any DiagnosticLog = NullDiagnosticLog()
     ) {
         self.retention = retention
+        self.diagnostics = diagnostics
         self.transport = transport ?? Self.makeDefaultTransport()
         self.now = now
         self.sleep = sleep
@@ -91,16 +93,37 @@ public struct ICalSubscriptionKind: ConnectorKind, CredentialPromptHelp {
                 return url
             },
             transport: transport, monitor: ChangeMonitor(interval: pollInterval, sleep: sleep),
-            maxAge: Double(pollInterval.components.seconds), now: now, defaultZone: defaultZone, retention: retention)
+            maxAge: Double(pollInterval.components.seconds), now: now, defaultZone: defaultZone, retention: retention, diagnostics: diagnostics)
     }
 
     /// Nothing is stored here: callers store the link only after the feed has loaded and parsed.
     private func signIn(using interaction: any AuthorizationInteraction) async throws -> (URL, ParsedFeed) {
         let values = try await interaction.promptCredentials(Self.fields)
-        let url = try FeedLocation.url(from: values[Self.linkKey] ?? "")
-        guard case .body(let data, _) = try await FeedFetcher(transport: transport).fetch(url) else {
-            throw SourceError.invalidResponse("the feed did not answer")
+        do {
+            let url = try FeedLocation.url(from: values[Self.linkKey] ?? "")
+            let fetcher = FeedFetcher(transport: transport, diagnostics: diagnostics, now: now)
+            guard case .body(let data, _) = try await fetcher.fetch(url) else {
+                throw SourceError.invalidResponse("the feed did not answer")
+            }
+            let feed = try FeedParser.parse(data, diagnostics: diagnostics)
+            diagnostics.record(.info, "icalsub", "signInAccepted", [.string("reason", "feedLoaded", private: false)])
+            return (url, feed)
+        } catch {
+            if !(error is CancellationError) {
+                diagnostics.record(.warning, "icalsub", "signInRejected", [.string("reason", Self.rejection(error), private: false)])
+            }
+            throw error
         }
-        return (url, try FeedParser.parse(data))
+    }
+
+    /// A fixed token for why sign-in failed; never the error's message, which a feed server could shape.
+    private static func rejection(_ error: any Error) -> String {
+        switch error as? SourceError {
+        case .authExpired: "authExpired"
+        case .network: "network"
+        case .server: "server"
+        case .invalidResponse(let message): message == FeedLocation.invalidMessage || message.hasPrefix("enter the link") ? "invalidLink" : "invalidResponse"
+        default: "other"
+        }
     }
 }

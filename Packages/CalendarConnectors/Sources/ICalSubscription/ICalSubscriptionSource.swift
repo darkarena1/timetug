@@ -82,18 +82,20 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
     private let now: @Sendable () -> Date
     private let defaultZone: TimeZone
     private let retention: RetentionWindow?
+    private let diagnostics: any DiagnosticLog
     private let state = FeedState()
 
     /// `link` is read on every fetch, so a replaced link (after `reauthorize`) is picked up without rebuilding the source.
     init(
         connection: Connection, link: @escaping @Sendable () async throws -> URL, transport: any HTTPTransport,
         monitor: ChangeMonitor, maxAge: TimeInterval, now: @escaping @Sendable () -> Date, defaultZone: TimeZone,
-        retention: RetentionWindow? = nil
+        retention: RetentionWindow? = nil, diagnostics: any DiagnosticLog = NullDiagnosticLog()
     ) {
         self.retention = retention
+        self.diagnostics = diagnostics
         self.connection = connection
         self.link = link
-        self.fetcher = FeedFetcher(transport: transport)
+        self.fetcher = FeedFetcher(transport: transport, diagnostics: diagnostics, now: now)
         self.monitor = monitor
         self.maxAge = maxAge
         self.now = now
@@ -135,6 +137,11 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
         let prior = await state.fingerprint
         let fetched = try await refresh()
         let changed = await state.report(fetched.fingerprint, generation: fetched.generation, prior: prior)
+        if changed {
+            diagnostics.record(.info, "icalsub", "changeReported", [.bool("bodyChanged", fetched.bodyChanged)])
+        } else if fetched.bodyChanged {
+            diagnostics.record(.info, "icalsub", "changeSuppressed", [.string("reason", "outsideWindowOrVolatile", private: false)])
+        }
         return changed ? .eventsChanged(calendarIDs: [Self.calendarID]) : nil
     }
 
@@ -150,7 +157,7 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
     /// has come into the window since is noticed. A body that is not a calendar throws and leaves the last good feed in
     /// place; a fetch that finishes after a newer one does not replace what that one stored.
     @discardableResult
-    private func refresh() async throws -> (fingerprint: Data, generation: Int) {
+    private func refresh() async throws -> (fingerprint: Data, generation: Int, bodyChanged: Bool) {
         let url = try await link()
         let generation = await state.nextGeneration()
         let (previousBody, previousFingerprint, heldValidators) = await state.snapshot()
@@ -168,7 +175,7 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
             newValidators = received
         }
         let at = now()
-        let feed = try FeedParser.parse(data, retention: retention.map { ($0.interval(at: at), defaultZone) })
+        let feed = try FeedParser.parse(data, retention: retention.map { ($0.interval(at: at), defaultZone) }, diagnostics: diagnostics)
         let fingerprint = feed.fingerprint
         if fingerprint == previousFingerprint {
             await state.unchanged(validators: newValidators, body: newBody, generation: generation, at: at)
@@ -176,6 +183,7 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
             let kept = await state.validators ?? FeedValidators()
             await state.store(feed: feed, body: data, fingerprint: fingerprint, validators: newValidators ?? kept, generation: generation, at: at)
         }
-        return (fingerprint, generation)
+        let bodyChanged = previousBody != nil && newBody != nil && newBody != previousBody
+        return (fingerprint, generation, bodyChanged)
     }
 }

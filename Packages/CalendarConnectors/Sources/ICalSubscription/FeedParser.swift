@@ -24,29 +24,56 @@ enum FeedParser {
     /// A feed is one `VCALENDAR` holding many events, while `EventResource` holds one UID's events. Events are grouped by
     /// `UID` (first-seen order); each group shares the calendar's header and `VTIMEZONE`s. A feed with no events is valid.
     /// With `retention`, a UID group with no occurrence overlapping the window (read in `zone`) is dropped; any other group
-    /// is kept whole.
-    static func parse(_ data: Data, retention: (window: DateInterval, zone: TimeZone)? = nil) throws -> ParsedFeed {
+    /// is kept whole, and so is a group whose recurrence rule cannot be read (its occurrences are unknown, so it cannot be
+    /// shown to be outside the window). `diagnostics` gets counts and fixed tokens only: never text from the feed.
+    static func parse(
+        _ data: Data, retention: (window: DateInterval, zone: TimeZone)? = nil, diagnostics: any DiagnosticLog = NullDiagnosticLog()
+    ) throws -> ParsedFeed {
         let calendar: ICalComponent
-        do { calendar = try ICalParser.parse(data) } catch { throw SourceError.invalidResponse(notACalendar) }
-        guard calendar.name == "VCALENDAR" else { throw SourceError.invalidResponse(notACalendar) }
+        do { calendar = try ICalParser.parse(data) } catch {
+            diagnostics.record(.warning, "icalsub", "feedNotCalendar")
+            throw SourceError.invalidResponse(notACalendar)
+        }
+        guard calendar.name == "VCALENDAR" else {
+            diagnostics.record(.warning, "icalsub", "feedNotCalendar")
+            throw SourceError.invalidResponse(notACalendar)
+        }
 
         let zones = calendar.components(named: "VTIMEZONE")
         var order: [String] = []
         var groups: [String: [ICalComponent]] = [:]
+        var eventsInFeed = 0, withoutUID = 0
         for event in calendar.components(named: "VEVENT") {
-            let uid = event.property("UID")?.text.nonEmpty ?? syntheticUID(for: event)
+            eventsInFeed += 1
+            let uid: String
+            if let given = event.property("UID")?.text.nonEmpty { uid = given } else {
+                withoutUID += 1
+                uid = syntheticUID(for: event)
+            }
             if groups[uid] == nil { order.append(uid) }
             groups[uid, default: []].append(event)
         }
         var resources: [FeedResource] = []
         let feedZone = calendar.property("X-WR-TIMEZONE").flatMap { TimeZone(identifier: $0.value) }
+        var dropped = 0
         for uid in order {
             let wrapper = ICalComponent(name: "VCALENDAR", properties: calendar.properties, components: zones + (groups[uid] ?? []))
             guard let resource = try? EventResource(calendar: wrapper) else { continue }
             let item = FeedResource(name: resourceName(for: uid), resource: resource)
-            if let retention, !isKept(item, window: retention.window, zone: feedZone ?? retention.zone) { continue }
+            let zone = feedZone ?? retention?.zone ?? .gmt
+            let unreadable = hasUnreadableRule(item, zone: zone)
+            if unreadable { diagnostics.record(.notice, "icalsub", "rruleUnreadable", [.string("uid", uid)]) }
+            if let retention, !unreadable, !isKept(item, window: retention.window, zone: zone) {
+                dropped += 1
+                continue
+            }
             resources.append(item)
         }
+        if withoutUID > 0 { diagnostics.record(.info, "icalsub", "syntheticUID", [.int("count", withoutUID)]) }
+        diagnostics.record(.info, "icalsub", "feedParsed", [
+            .int("eventsInFeed", eventsInFeed), .int("groupsKept", resources.count), .int("groupsDropped", dropped),
+            .bool("retentionActive", retention != nil),
+        ])
         let feed = ParsedFeed(
             name: calendar.property("X-WR-CALNAME")?.text.nonEmpty,
             colorHex: colorText(calendar.property("X-APPLE-CALENDAR-COLOR")?.value ?? calendar.property("COLOR")?.value),
@@ -61,6 +88,14 @@ enum FeedParser {
     private static func isKept(_ item: FeedResource, window: DateInterval, zone: TimeZone) -> Bool {
         let context = EventReadContext(calendarID: "feed", resourceName: item.name, etag: nil, sourceID: "", calendarZone: zone, selfAddresses: [])
         return !EventReader.events(in: item.resource, overlapping: window, context: context).isEmpty
+    }
+
+    /// True when the group's series master has an `RRULE` the shared reader could not read.
+    private static func hasUnreadableRule(_ item: FeedResource, zone: TimeZone) -> Bool {
+        guard let master = item.resource.master,
+              let timing = EventReader.timing(of: master, resolver: item.resource.resolver, calendarZone: zone) else { return false }
+        return EventReader.recurrenceSet(of: master, zone: timing.zone, isAllDay: timing.isAllDay, resolver: item.resource.resolver)?
+            .hasUnreadableRule ?? false
     }
 
     /// Properties a feed may rewrite on every request without the event having changed.
