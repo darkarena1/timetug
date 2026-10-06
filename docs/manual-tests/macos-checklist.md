@@ -113,4 +113,4 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] A Meetup link you have regenerated or revoked: the account shows it needs signing in; "Sign in again" with the new link restores it; the sheet says "iCal link was not accepted." for a dead link.
 - [ ] RSVP to a new Meetup: after at most 15 minutes the event appears without relaunching.
 - [ ] Removing the account removes its calendars and the Keychain item (Keychain Access: no TimeTug entry for it).
-- [ ] Events further than a week ahead do not appear for an iCal link account; recurring events (a weekly Meetup) still show their next occurrences within the week.
+- [ ] Events further than a week ahead do not appear for an iCal link account; a weekly Meetup shows its occurrences within the week, and a series that has ended or has not started yet does not appear.

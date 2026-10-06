@@ -1,8 +1,8 @@
 import Foundation
 
-/// How far from now a feed's one-off events are kept. Events entirely outside `[now - daysBack, now + daysAhead]` are
-/// dropped when the feed is read, and edits to them are not reported as changes. Recurring events are always kept: their
-/// occurrences are expanded when asked for. A day is 24 hours, so across a daylight-saving change an edge can shift by an
+/// How far from now a feed's events are kept. A UID group (one event, or a recurring series with its overrides) with no
+/// occurrence overlapping `[now - daysBack, now + daysAhead]` is dropped when the feed is read, and edits to it are not
+/// reported as changes. A group with at least one occurrence in the window is kept whole. A day is 24 hours, so across a daylight-saving change an edge can shift by an
 /// hour. Without a window (the library default) everything is kept.
 public struct RetentionWindow: Sendable, Equatable {
     public var daysBack: Int

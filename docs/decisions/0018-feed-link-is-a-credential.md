@@ -13,7 +13,7 @@ Meetup's API needs a paid Pro subscription, but its Add to calendar menu offers 
 - **A link the provider no longer honors (401, 403, 404, 410) is `authExpired`**, so the app asks for a new link through the existing sign-in-again flow. A temporary 404 from a provider can cause one needless prompt; that is accepted.
 - **Redirects are followed by the library, only to `https`**, so a feed cannot send the link on to a plain-HTTP address.
 
-- **A retention window limits what is kept**: the library default keeps everything, TimeTug keeps 1 day back and 7 days ahead for one-off events, and change detection ignores the rest.
+- **A retention window limits what is kept**: the library default keeps everything, TimeTug keeps 3 days back and 7 days ahead (an event or series with no occurrence in that window is dropped), and change detection ignores the rest.
 
 ## Consequences
 

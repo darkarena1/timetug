@@ -23,8 +23,8 @@ enum FeedParser {
 
     /// A feed is one `VCALENDAR` holding many events, while `EventResource` holds one UID's events. Events are grouped by
     /// `UID` (first-seen order); each group shares the calendar's header and `VTIMEZONE`s. A feed with no events is valid.
-    /// With `retention`, one-off events entirely outside the window (read in `zone`) are dropped; a UID group that recurs or
-    /// has overrides is always kept whole.
+    /// With `retention`, a UID group with no occurrence overlapping the window (read in `zone`) is dropped; any other group
+    /// is kept whole.
     static func parse(_ data: Data, retention: (window: DateInterval, zone: TimeZone)? = nil) throws -> ParsedFeed {
         let calendar: ICalComponent
         do { calendar = try ICalParser.parse(data) } catch { throw SourceError.invalidResponse(notACalendar) }
@@ -55,15 +55,12 @@ enum FeedParser {
         return feed
     }
 
-    /// Recurring groups (a recurrence rule or date, or any override) are kept whatever their date; a one-off is kept when
-    /// the shared reader finds it overlapping the window (which also decides zero-length and all-day events).
+    /// A group is kept when the shared reader finds at least one event or occurrence overlapping the window. The reader
+    /// expands rules, dates and exceptions only inside the window (skipping straight to it, with an instance limit), applies
+    /// overrides, and decides zero-length and all-day events, so an unbounded series stays cheap.
     private static func isKept(_ item: FeedResource, window: DateInterval, zone: TimeZone) -> Bool {
-        let resource = item.resource
-        if !resource.overrides.isEmpty { return true }
-        guard let master = resource.master else { return true }
-        if master.property("RRULE") != nil || master.property("RDATE") != nil { return true }
         let context = EventReadContext(calendarID: "feed", resourceName: item.name, etag: nil, sourceID: "", calendarZone: zone, selfAddresses: [])
-        return !EventReader.events(in: resource, overlapping: window, context: context).isEmpty
+        return !EventReader.events(in: item.resource, overlapping: window, context: context).isEmpty
     }
 
     /// Properties a feed may rewrite on every request without the event having changed.

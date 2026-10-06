@@ -80,7 +80,7 @@ Made with the user during brainstorming:
 
 ## Retention window
 
-`ICalSubscriptionKind(retention: RetentionWindow?)` takes an optional window (library default: none, everything is kept). With one, one-off events entirely outside `[now - daysBack, now + daysAhead]` are dropped right after parsing (by the injected clock at each fetch) and recurring groups (`RRULE`, `RDATE`, any override) are always kept whole. TimeTug keeps 1 day back and 7 days ahead, so a Meetup account does not carry months of events nobody will see. Sign-in accepts a feed whose events are all outside the window.
+`ICalSubscriptionKind(retention: RetentionWindow?)` takes an optional window (library default: none, everything is kept). With one, a UID group (event or series with its overrides) with no occurrence overlapping `[now - daysBack, now + daysAhead]` is dropped right after parsing (by the injected clock at each fetch, using the shared reader, which expands rules, `RDATE`, `EXDATE` and overrides inside the window only); a group with one is kept whole. TimeTug keeps 3 days back (padding for multi-day events and time zone edges) and 7 days ahead, so a Meetup account does not carry months of events nobody will see. Sign-in accepts a feed whose events are all outside the window.
 
 ## Change detection
 

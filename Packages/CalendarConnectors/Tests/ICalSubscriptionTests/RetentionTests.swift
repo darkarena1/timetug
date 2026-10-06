@@ -157,3 +157,89 @@ private func titles(_ source: ICalSubscriptionSource) async throws -> Set<String
     #expect(try await source.checkForChanges() == nil)
     #expect(try await source.checkForChanges() == .eventsChanged(calendarIDs: ["feed"]))
 }
+
+// MARK: recurring groups are kept only when an occurrence overlaps the window
+
+private func series(_ title: String, start: String, rule: String, extra: [String] = []) -> [String] {
+    vevent(uid: "\(title.replacingOccurrences(of: " ", with: "-"))@example.test", title: title, start: start,
+           end: String(start.prefix(9)) + "110000", extra: ["RRULE:\(rule)"] + extra)
+}
+
+private func override(of title: String, slot: String, start: String, as newTitle: String) -> [String] {
+    vevent(uid: "\(title.replacingOccurrences(of: " ", with: "-"))@example.test", title: newTitle, start: start,
+           end: String(start.prefix(9)) + "110000", extra: ["RECURRENCE-ID;TZID=America/Los_Angeles:\(slot)"])
+}
+
+private func readTitles(_ events: [[String]]) async throws -> Set<String> {
+    let transport = FakeTransport()
+    await serve(transport, [ics(events)])
+    return try await titles(makeSource(transport, now: TestNow()))
+}
+
+@Test func aWeeklySeriesWithAnOldStartAndAnOccurrenceInTheWindowIsKept() async throws {
+    #expect(try await readTitles([oldWeekly]) == ["Old weekly"])
+}
+
+@Test func aSeriesThatEndedBeforeTheWindowIsDropped() async throws {
+    let untilDate = series("Ended by date", start: "20260901T100000", rule: "FREQ=WEEKLY;UNTIL=20261201T000000Z")
+    let byCount = series("Ended by count", start: "20260901T100000", rule: "FREQ=WEEKLY;COUNT=3")
+    #expect(try await readTitles([untilDate, byCount, inWindow]) == ["In window"])
+}
+
+@Test func aSeriesThatStartsAfterTheWindowIsDropped() async throws {
+    #expect(try await readTitles([series("Later series", start: "20270301T100000", rule: "FREQ=WEEKLY"), inWindow]) == ["In window"])
+}
+
+@Test func anUnboundedDailySeriesFromManyYearsAgoIsCheap() async throws {
+    // Expansion skips to the window, so a decade of daily instances is not walked.
+    let transport = FakeTransport()
+    await serve(transport, [ics([series("Daily forever", start: "20170101T100000", rule: "FREQ=DAILY")])])
+    let found = try await titles(makeSource(transport, now: TestNow()))
+    #expect(found == ["Daily forever"])
+}
+
+@Test func aSeriesWhoseOnlyInWindowOccurrenceIsAnOverrideMovedInIsKept() async throws {
+    let master = series("Moved in series", start: "20261001T100000", rule: "FREQ=WEEKLY;COUNT=2")
+    let moved = override(of: "Moved in series", slot: "20261008T100000", start: "20270118T100000", as: "Moved in")
+    // The whole group is kept, so its out-of-window occurrence is readable too.
+    #expect(try await readTitles([master + moved]) == ["Moved in", "Moved in series"])
+}
+
+@Test func anOverrideMovedOutOfTheWindowDropsTheGroupWhenNothingElseIsInside() async throws {
+    // Occurrences Jan 12 and Jan 19; the Jan 19 slot (the only one in the window) is moved to March.
+    let master = series("Moved out series", start: "20270112T100000", rule: "FREQ=WEEKLY;COUNT=2")
+    let moved = override(of: "Moved out series", slot: "20270119T100000", start: "20270301T100000", as: "Moved out")
+    #expect(try await readTitles([master + moved]).isEmpty)
+}
+
+@Test func anExdateThatRemovesTheOnlyInWindowOccurrenceDropsTheGroup() async throws {
+    let master = series("Excluded series", start: "20270112T100000", rule: "FREQ=WEEKLY;COUNT=2",
+                        extra: ["EXDATE;TZID=America/Los_Angeles:20270119T100000"])
+    #expect(try await readTitles([master]).isEmpty)
+}
+
+@Test func anEditToADroppedSeriesIsNotAChange() async throws {
+    let transport = FakeTransport()
+    await serve(transport, [
+        ics([series("Later series", start: "20270301T100000", rule: "FREQ=WEEKLY"), inWindow]),
+        ics([series("Later series renamed", start: "20270301T100000", rule: "FREQ=WEEKLY"), inWindow]),
+    ])
+    let source = makeSource(transport, now: TestNow())
+    #expect(try await source.checkForChanges() == nil)
+    #expect(try await source.checkForChanges() == nil)
+}
+
+@Test func aSeriesWhoseFirstOccurrenceComesIntoTheWindowIsPickedUp() async throws {
+    let later = series("Starts soon", start: "20270125T100000", rule: "FREQ=WEEKLY")
+    for useNotModified in [false, true] {
+        let now = TestNow()
+        let transport = FakeTransport()
+        await serve(transport, [ics([later], etag: "\"v1\""), useNotModified ? HTTPResponse(status: 304) : ics([later], etag: "\"v1\"")])
+        let source = makeSource(transport, now: now)
+        #expect(try await source.checkForChanges() == nil)
+        #expect(try await titles(source).isEmpty)
+        now.advance(5 * 86_400)
+        #expect(try await source.checkForChanges() == .eventsChanged(calendarIDs: ["feed"]), "304: \(useNotModified)")
+        #expect(try await titles(source) == ["Starts soon"])
+    }
+}
