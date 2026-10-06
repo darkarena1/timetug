@@ -163,4 +163,12 @@ Secrets: files that look like they contain credentials are skipped and listed (r
 
 ## Follow-ups
 
-None yet. The acceptance run adds entries here.
+Acceptance run, 2026-10-06 (library at `~/Source/optimize-skill`, 74 tests passing):
+
+- **TimeTug (Swift, ~310 files, about 3 s):** 0 dead symbols, 84 clone groups, 25 hotspots, 18 single-use wrappers, 14 review-by-hand. The sanity examples were all found: `checkForChanges` duplicated between the Google and Microsoft sources, `normalizedHex` duplicated across `Model.swift` and `CalendarInfo.swift`, `expectWriteError` defined in three helper files.
+- **Discord bot + Django backend + React frontend (about 600 files, about 2 s, broken `.git` so file-walk discovery):** all of the top 25 candidates were real duplication (for example the two `getArgs` in `commands/5th/hunter.js` and `mortal.js`, repeated `serialize` methods across the character classes, `get_serializer`/`get_deserializer` twins). `discord_bots/dist` was correctly absent.
+- **Fixed during the run (tests first):** Django-style `tests.py` was not recognized as test code (74 false "dead" test classes led the report); methods of Python classes with base classes (for example DRF `validate_<field>`) are now routed to review-by-hand like Swift protocol witnesses. False dead dropped from 124 to 24.
+- **Native tool output formats are still unverified against real tools.** Periphery, knip, vulture and jscpd are not installed on this machine, and installing them needs the user's agreement, so their parsers are tested only against sample output. Re-check each against the real tool's output when it is first installed, and add the real output as a test.
+- **Known false-positive patterns left open:** Django `apps.py` `AppConfig` classes (discovered by the framework), duck-typed test fakes (for example `FakeOptions.getNumber` in the simulator harness) and property-style getters can still show as dead at `medium` confidence; each carries a `zero-references` confirm step. Historic migration files (`*/migrations/*.py`) appear in clone results and should probably be excluded from clone detection.
+- **Credential-skip is conservative:** config modules holding constants such as `API_KEY = 'SOME_CONFIG_NAME'` are skipped as credential-like (5 backend files) and listed in the report. Cost: a few config files are not analysed.
+- **Semantic tier not exercised against real embeddings or a live Qdrant collection.** It is covered by fake-embedder and fake-client tests only; run `OS scan` once with `fastembed` installed and an indexed project.
