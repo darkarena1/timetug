@@ -12,7 +12,7 @@ enum AppConnectors {
         registry.register(EventKitConnectorKind(source: eventKit))
         registry.register(ICloudConnectorKind())
         registry.register(CalDAVConnectorKind())
-        registry.register(ICalSubscriptionKind())
+        registry.register(ICalSubscriptionKind(retention: RetentionWindow(daysBack: 1, daysAhead: 7)))
         if let google { registry.register(GoogleConnectorKind(config: google, hasher: CryptoKitSHA256())) }
         if let microsoft { registry.register(MicrosoftConnectorKind(config: microsoft, hasher: CryptoKitSHA256())) }
         return registry

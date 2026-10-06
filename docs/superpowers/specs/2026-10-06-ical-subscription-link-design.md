@@ -78,9 +78,13 @@ Made with the user during brainstorming:
 - Caching: the parsed feed is kept in memory with its fetch time. `events(in:)` reuses it while it is younger than the poll interval, so opening the popup does not trigger a request. A conditional request is used when the server gave an `ETag` or `Last-Modified`.
 - Errors never include the URL: the message names the host at most.
 
+## Retention window
+
+`ICalSubscriptionKind(retention: RetentionWindow?)` takes an optional window (library default: none, everything is kept). With one, one-off events entirely outside `[now - daysBack, now + daysAhead]` are dropped right after parsing (by the injected clock at each fetch) and recurring groups (`RRULE`, `RDATE`, any override) are always kept whole. TimeTug keeps 1 day back and 7 days ahead, so a Meetup account does not carry months of events nobody will see. Sign-in accepts a feed whose events are all outside the window.
+
 ## Change detection
 
-15-minute poll (injectable, as for the other connectors). Each poll refetches the feed (or sends the conditional request) and compares the body with the last one it read; a difference returns `.eventsChanged(calendarIDs: ["feed"])`. The first check with nothing loaded is the baseline and returns nil; a feed loaded earlier by `events(in:)` counts as the baseline. Nothing is persisted: the app reloads events at launch anyway. A 401/403/404/410 finishes `changes()` with `.sourceFailed`/`authExpired`.
+Change detection compares the retained events (a deterministic serialization of the header and the kept resources), not the raw body, so edits outside the window are ignored. The raw body is held in memory so that a 304, or a later poll, can be re-filtered as time moves the window. 15-minute poll (injectable, as for the other connectors). Each poll refetches the feed (or sends the conditional request) and compares the retained events with those the last check saw; a difference returns `.eventsChanged(calendarIDs: ["feed"])`. The first check with nothing loaded is the baseline and returns nil; a feed loaded earlier by `events(in:)` counts as the baseline. Nothing is persisted: the app reloads events at launch anyway. A 401/403/404/410 finishes `changes()` with `.sourceFailed`/`authExpired`.
 
 ## Capabilities
 

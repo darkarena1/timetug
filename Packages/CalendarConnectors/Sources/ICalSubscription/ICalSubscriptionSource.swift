@@ -7,6 +7,8 @@ import ICalendar
 actor FeedState {
     private(set) var feed: ParsedFeed?
     private(set) var body: Data?
+    /// What the retained part of the feed looks like; this, not the raw body, decides whether anything changed.
+    private(set) var fingerprint: Data?
     private(set) var validators: FeedValidators?
     private(set) var fetchedAt: Date?
     private var issued = 0
@@ -27,6 +29,7 @@ actor FeedState {
         storedGeneration = generation
         self.feed = feed
         self.body = body
+        fingerprint = feed.fingerprint
         self.validators = validators
         fetchedAt = date
     }
@@ -52,8 +55,9 @@ actor FeedState {
 
     /// The feed is unchanged: keep what is held and restart its age. A fetch older than the stored feed is ignored: what it
     /// found is no longer news, and its validators would replace newer ones.
-    func unchanged(validators: FeedValidators?, generation: Int, at date: Date) {
+    func unchanged(validators: FeedValidators?, body: Data?, generation: Int, at date: Date) {
         guard generation > storedGeneration else { return }
+        if let body { self.body = body }
         if let validators, validators.etag != nil || validators.lastModified != nil { self.validators = validators }
         fetchedAt = date
     }
@@ -70,13 +74,16 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
     private let maxAge: TimeInterval
     private let now: @Sendable () -> Date
     private let defaultZone: TimeZone
+    private let retention: RetentionWindow?
     private let state = FeedState()
 
     /// `link` is read on every fetch, so a replaced link (after `reauthorize`) is picked up without rebuilding the source.
     init(
         connection: Connection, link: @escaping @Sendable () async throws -> URL, transport: any HTTPTransport,
-        monitor: ChangeMonitor, maxAge: TimeInterval, now: @escaping @Sendable () -> Date, defaultZone: TimeZone
+        monitor: ChangeMonitor, maxAge: TimeInterval, now: @escaping @Sendable () -> Date, defaultZone: TimeZone,
+        retention: RetentionWindow? = nil
     ) {
+        self.retention = retention
         self.connection = connection
         self.link = link
         self.fetcher = FeedFetcher(transport: transport)
@@ -118,9 +125,9 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
     /// Re-reads the feed. The first check with nothing loaded yet is the baseline and reports nothing; a feed loaded
     /// earlier by `events(in:)` counts as the baseline, so a change since then is reported.
     public func checkForChanges() async throws -> CalendarChange? {
-        let prior = await state.body
+        let prior = await state.fingerprint
         let fetched = try await refresh()
-        let changed = await state.report(fetched.body, generation: fetched.generation, prior: prior)
+        let changed = await state.report(fetched.fingerprint, generation: fetched.generation, prior: prior)
         return changed ? .eventsChanged(calendarIDs: [Self.calendarID]) : nil
     }
 
@@ -131,27 +138,37 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
         return feed
     }
 
-    /// Fetches the feed (conditionally when the server gave validators) and returns the body the server holds, with the
-    /// generation the fetch started under. A body that is not a calendar throws and leaves the last good feed in place; a
-    /// fetch that finishes after a newer one does not replace what that one stored.
+    /// Fetches the feed (conditionally when the server gave validators), keeps what the retention window allows, and returns
+    /// a fingerprint of that with the generation the fetch started under. A 304 re-reads the held body, so an event that
+    /// has come into the window since is noticed. A body that is not a calendar throws and leaves the last good feed in
+    /// place; a fetch that finishes after a newer one does not replace what that one stored.
     @discardableResult
-    private func refresh() async throws -> (body: Data, generation: Int) {
+    private func refresh() async throws -> (fingerprint: Data, generation: Int) {
         let url = try await link()
         let generation = await state.nextGeneration()
-        let previous = await state.body
+        let previousBody = await state.body
+        let previousFingerprint = await state.fingerprint
         let validators = await state.validators.flatMap { $0.etag != nil || $0.lastModified != nil ? $0 : nil }
-        switch try await fetcher.fetch(url, validators: previous == nil ? nil : validators) {
+        let data: Data
+        var newValidators: FeedValidators?
+        var newBody: Data?
+        switch try await fetcher.fetch(url, validators: previousBody == nil ? nil : validators) {
         case .notModified:
-            await state.unchanged(validators: nil, generation: generation, at: now())
-            return (previous ?? Data(), generation)
-        case .body(let data, let newValidators):
-            if let previous, previous == data {
-                await state.unchanged(validators: newValidators, generation: generation, at: now())
-                return (data, generation)
-            }
-            let feed = try FeedParser.parse(data)
-            await state.store(feed: feed, body: data, validators: newValidators, generation: generation, at: now())
-            return (data, generation)
+            guard let previousBody else { throw SourceError.invalidResponse("the feed has not loaded") }
+            data = previousBody
+        case .body(let body, let received):
+            data = body
+            newBody = body
+            newValidators = received
         }
+        let at = now()
+        let feed = try FeedParser.parse(data, retention: retention.map { ($0.interval(at: at), defaultZone) })
+        if feed.fingerprint == previousFingerprint {
+            await state.unchanged(validators: newValidators, body: newBody, generation: generation, at: at)
+        } else {
+            let kept = await state.validators ?? FeedValidators()
+            await state.store(feed: feed, body: data, validators: newValidators ?? kept, generation: generation, at: at)
+        }
+        return (feed.fingerprint, generation)
     }
 }

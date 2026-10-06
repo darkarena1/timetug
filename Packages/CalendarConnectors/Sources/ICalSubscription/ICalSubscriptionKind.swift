@@ -13,11 +13,14 @@ public struct ICalSubscriptionKind: ConnectorKind, CredentialPromptHelp {
     private let sleep: Sleeper
     private let pollInterval: Duration
     private let defaultZone: TimeZone
+    private let retention: RetentionWindow?
 
     public init(
         transport: (any HTTPTransport)? = nil, now: @escaping @Sendable () -> Date = { Date() },
-        sleep: @escaping Sleeper = defaultSleeper, pollInterval: Duration = .seconds(900), defaultZone: TimeZone = .current
+        sleep: @escaping Sleeper = defaultSleeper, pollInterval: Duration = .seconds(900), defaultZone: TimeZone = .current,
+        retention: RetentionWindow? = nil
     ) {
+        self.retention = retention
         self.transport = transport ?? Self.makeDefaultTransport()
         self.now = now
         self.sleep = sleep
@@ -88,7 +91,7 @@ public struct ICalSubscriptionKind: ConnectorKind, CredentialPromptHelp {
                 return url
             },
             transport: transport, monitor: ChangeMonitor(interval: pollInterval, sleep: sleep),
-            maxAge: Double(pollInterval.components.seconds), now: now, defaultZone: defaultZone)
+            maxAge: Double(pollInterval.components.seconds), now: now, defaultZone: defaultZone, retention: retention)
     }
 
     /// Nothing is stored here: callers store the link only after the feed has loaded and parsed.

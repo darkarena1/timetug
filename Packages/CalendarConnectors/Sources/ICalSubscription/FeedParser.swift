@@ -13,6 +13,9 @@ struct ParsedFeed: Sendable {
     var colorHex: String?
     var timeZone: TimeZone?
     var resources: [FeedResource]
+    /// A deterministic form of what was kept (header and retained events), to tell a real change from an edit outside
+    /// the retention window.
+    var fingerprint = Data()
 }
 
 enum FeedParser {
@@ -20,7 +23,9 @@ enum FeedParser {
 
     /// A feed is one `VCALENDAR` holding many events, while `EventResource` holds one UID's events. Events are grouped by
     /// `UID` (first-seen order); each group shares the calendar's header and `VTIMEZONE`s. A feed with no events is valid.
-    static func parse(_ data: Data) throws -> ParsedFeed {
+    /// With `retention`, one-off events entirely outside the window (read in `zone`) are dropped; a UID group that recurs or
+    /// has overrides is always kept whole.
+    static func parse(_ data: Data, retention: (window: DateInterval, zone: TimeZone)? = nil) throws -> ParsedFeed {
         let calendar: ICalComponent
         do { calendar = try ICalParser.parse(data) } catch { throw SourceError.invalidResponse(notACalendar) }
         guard calendar.name == "VCALENDAR" else { throw SourceError.invalidResponse(notACalendar) }
@@ -37,13 +42,38 @@ enum FeedParser {
         for uid in order {
             let wrapper = ICalComponent(name: "VCALENDAR", properties: calendar.properties, components: zones + (groups[uid] ?? []))
             guard let resource = try? EventResource(calendar: wrapper) else { continue }
-            resources.append(FeedResource(name: resourceName(for: uid), resource: resource))
+            let item = FeedResource(name: resourceName(for: uid), resource: resource)
+            let zone = calendar.property("X-WR-TIMEZONE").flatMap { TimeZone(identifier: $0.value) }
+            if let retention, !isKept(item, window: retention.window, zone: zone ?? retention.zone) { continue }
+            resources.append(item)
         }
-        return ParsedFeed(
+        var feed = ParsedFeed(
             name: calendar.property("X-WR-CALNAME")?.text.nonEmpty,
             colorHex: colorText(calendar.property("X-APPLE-CALENDAR-COLOR")?.value ?? calendar.property("COLOR")?.value),
             timeZone: calendar.property("X-WR-TIMEZONE").flatMap { TimeZone(identifier: $0.value) },
             resources: resources)
+        feed.fingerprint = fingerprint(of: feed)
+        return feed
+    }
+
+    /// Recurring groups (a recurrence rule or date, or any override) are kept whatever their date; a one-off is kept when
+    /// the shared reader finds it overlapping the window (which also decides zero-length and all-day events).
+    private static func isKept(_ item: FeedResource, window: DateInterval, zone: TimeZone) -> Bool {
+        let resource = item.resource
+        if !resource.overrides.isEmpty { return true }
+        guard let master = resource.master else { return true }
+        if master.property("RRULE") != nil || master.property("RDATE") != nil { return true }
+        let context = EventReadContext(calendarID: "feed", resourceName: item.name, etag: nil, sourceID: "", calendarZone: zone, selfAddresses: [])
+        return !EventReader.events(in: resource, overlapping: window, context: context).isEmpty
+    }
+
+    private static func fingerprint(of feed: ParsedFeed) -> Data {
+        var data = Data("\(feed.name ?? "")|\(feed.colorHex ?? "")|\(feed.timeZone?.identifier ?? "")\n".utf8)
+        for item in feed.resources {
+            data.append(Data("#\(item.name)\n".utf8))
+            data.append(item.resource.serialized())
+        }
+        return data
     }
 
     /// The UID as one URL-safe path segment: it is the base of every event id, which joins an occurrence's start with `#`.
