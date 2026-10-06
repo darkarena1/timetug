@@ -14,7 +14,6 @@ struct AccountsPane: View {
     /// know they're coming rather than assuming TimeTug only ever talks to Google.
     private static let placeholderProviders: [PlaceholderProvider] = [
         .init(name: "Fastmail", systemImage: "at"),
-        .init(name: "Meetup", systemImage: "person.3"),
         .init(name: "Todoist", systemImage: "checklist"),
         .init(name: "Zoom", systemImage: "video"),
         .init(name: "Webex", systemImage: "video.fill"),

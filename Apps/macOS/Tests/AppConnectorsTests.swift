@@ -29,4 +29,12 @@ final class AppConnectorsTests: XCTestCase {
         guard case .password? = registry.kind(id: "icloud")?.authorization else { return XCTFail("iCloud signs in with a password") }
         XCTAssertNotNil((registry.kind(id: "icloud") as? CredentialPromptHelp)?.credentialHelp?.url)
     }
+
+    func testICalLinkIsAlwaysRegistered() {
+        let registry = AppConnectors.makeRegistry(google: nil, microsoft: nil, eventKit: EventKitSource())
+        XCTAssertEqual(registry.kind(id: "icalsub")?.displayName, "iCal link")
+        guard case .password(let fields)? = registry.kind(id: "icalsub")?.authorization else { return XCTFail("the iCal link kind uses the credential sheet") }
+        XCTAssertEqual(fields.map(\.key), ["link"])
+        XCTAssertNotNil((registry.kind(id: "icalsub") as? CredentialPromptHelp)?.credentialHelp?.url)
+    }
 }

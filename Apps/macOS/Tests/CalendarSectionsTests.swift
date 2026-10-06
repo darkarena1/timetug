@@ -57,6 +57,7 @@ final class CalendarSectionsTests: XCTestCase {
         XCTAssertEqual(ProviderIcon.displayName(forKindID: "google"), "Google")
         XCTAssertEqual(ProviderIcon.displayName(forKindID: "icloud"), "iCloud")
         XCTAssertEqual(ProviderIcon.displayName(forKindID: "caldav"), "CalDAV")
+        XCTAssertEqual(ProviderIcon.displayName(forKindID: "icalsub"), "iCal link")
         XCTAssertEqual(ProviderIcon.displayName(forKindID: "zoom"), "Zoom")
     }
 }

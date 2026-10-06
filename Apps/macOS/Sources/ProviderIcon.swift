@@ -3,7 +3,7 @@ import SwiftUI
 /// The small mark shown beside an internet account. Drawn here (no bundled brand artwork); unknown providers get a person icon.
 struct ProviderIcon: View {
     enum Style: Equatable {
-        case google, microsoft, icloud, caldav, generic
+        case google, microsoft, icloud, caldav, feed, generic
 
         static func forKind(_ kindID: String) -> Style {
             switch kindID {
@@ -11,6 +11,7 @@ struct ProviderIcon: View {
             case "microsoft": .microsoft
             case "icloud": .icloud
             case "caldav": .caldav
+            case "icalsub": .feed
             default: .generic
             }
         }
@@ -24,6 +25,7 @@ struct ProviderIcon: View {
         switch kindID {
         case "icloud": "iCloud"
         case "caldav": "CalDAV"
+        case "icalsub": "iCal link"
         default: kindID.prefix(1).uppercased() + kindID.dropFirst()
         }
     }
@@ -39,6 +41,9 @@ struct ProviderIcon: View {
             case .caldav:
                 Image(systemName: "calendar")
                     .resizable().scaledToFit().foregroundStyle(Color(white: 0.35)).padding(size * 0.2)
+            case .feed:
+                Image(systemName: "link")
+                    .resizable().scaledToFit().foregroundStyle(Color(white: 0.35)).padding(size * 0.24)
             case .generic:
                 Image(systemName: "person.crop.circle")
                     .resizable().scaledToFit().foregroundStyle(.secondary).padding(size * 0.1)
