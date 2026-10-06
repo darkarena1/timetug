@@ -1,5 +1,8 @@
 import CalendarCore
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// A calendar subscription link (Meetup's Add to calendar links, a Google secret address, ...). One secret field: the
 /// link. It is the credential, so it is stored only in the `CredentialStore`; the connection keeps just the host.
