@@ -11,7 +11,15 @@ struct FeedResource: Sendable {
 /// A group's UID and a hash of its `RRULE` lines (never the rule text), so an edited rule is a new entry.
 struct UnreadableRule: Hashable, Sendable {
     let uid: String
+    /// The UID was made up from the event's start and title (the feed gave none), so it must not be logged.
+    let isSynthetic: Bool
     let ruleHash: String
+
+    /// The diagnostic for this rule: the UID only when the feed supplied it.
+    var event: DiagnosticEvent {
+        DiagnosticEvent(level: .notice, category: "icalsub", name: "rruleUnreadable",
+                        fields: [isSynthetic ? .bool("syntheticUID", true) : .string("uid", uid)])
+    }
 }
 
 struct ParsedFeed: Sendable {
@@ -52,12 +60,14 @@ enum FeedParser {
         var order: [String] = []
         var groups: [String: [ICalComponent]] = [:]
         var eventsInFeed = 0, withoutUID = 0
+        var syntheticUIDs: Set<String> = []
         for event in calendar.components(named: "VEVENT") {
             eventsInFeed += 1
             let uid: String
             if let given = event.property("UID")?.text.nonEmpty { uid = given } else {
                 withoutUID += 1
                 uid = syntheticUID(for: event)
+                syntheticUIDs.insert(uid)
             }
             if groups[uid] == nil { order.append(uid) }
             groups[uid, default: []].append(event)
@@ -73,8 +83,9 @@ enum FeedParser {
             let zone = feedZone ?? retention?.zone ?? .gmt
             let isUnreadable = hasUnreadableRule(item, zone: zone)
             if isUnreadable {
-                unreadable.append(UnreadableRule(uid: uid, ruleHash: fnv1aHex(ruleText(of: item))))
-                if logsUnreadableRules { diagnostics.record(.notice, "icalsub", "rruleUnreadable", [.string("uid", uid)]) }
+                let rule = UnreadableRule(uid: uid, isSynthetic: syntheticUIDs.contains(uid), ruleHash: fnv1aHex(ruleText(of: item)))
+                unreadable.append(rule)
+                if logsUnreadableRules { diagnostics.record(rule.event) }
             }
             if let retention, !isUnreadable, !isKept(item, window: retention.window, zone: zone) {
                 dropped += 1

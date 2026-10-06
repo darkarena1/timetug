@@ -20,10 +20,14 @@ actor FeedState {
     private var previousReportedBody: Data?
     private var reportedGeneration = 0
     private var reportedUnreadable: Set<UnreadableRule> = []
+    private var unreadableGeneration = 0
 
     /// The unreadable-rule keys not reported yet; the set then becomes `current`, so a rule that was fixed and breaks
     /// again, or is edited, is new again.
-    func newUnreadable(_ current: [UnreadableRule]) -> Set<UnreadableRule> {
+    /// A fetch older than one already applied changes nothing, so the set never moves backwards.
+    func newUnreadable(_ current: [UnreadableRule], generation: Int) -> Set<UnreadableRule> {
+        guard generation > unreadableGeneration else { return [] }
+        unreadableGeneration = generation
         let fresh = Set(current).subtracting(reportedUnreadable)
         reportedUnreadable = Set(current)
         return fresh
@@ -142,6 +146,13 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
 
     public func changes() -> AsyncStream<CalendarChange> { monitor.changes(polling: self) }
 
+    /// Repeating events in the held feed whose rule could not be read (they show only their first occurrence and
+    /// exceptions). Empty when none, and empty before the first load.
+    public func notices() async -> [SourceNotice] {
+        let count = await state.feed?.unreadableRules.count ?? 0
+        return count > 0 ? [SourceNotice(kind: .unreadableRecurrence, count: count)] : []
+    }
+
     /// Re-reads the feed. The first check with nothing loaded yet is the baseline and reports nothing; a feed loaded
     /// earlier by `events(in:)` counts as the baseline, so a change since then is reported.
     public func checkForChanges() async throws -> CalendarChange? {
@@ -193,8 +204,8 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
         let feed = try FeedParser.parse(data, retention: retention.map { ($0.interval(at: at), defaultZone) }, diagnostics: diagnostics,
                                      logsUnreadableRules: false)
         let current = feed.unreadableRules
-        for rule in await state.newUnreadable(current).sorted(by: { ($0.uid, $0.ruleHash) < ($1.uid, $1.ruleHash) }) {
-            diagnostics.record(.notice, "icalsub", "rruleUnreadable", [.string("uid", rule.uid)])
+        for rule in await state.newUnreadable(current, generation: generation).sorted(by: { ($0.uid, $0.ruleHash) < ($1.uid, $1.ruleHash) }) {
+            diagnostics.record(rule.event)
         }
         let fingerprint = feed.fingerprint
         if fingerprint == previousFingerprint {

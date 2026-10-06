@@ -117,3 +117,5 @@ Change detection compares the retained events (a deterministic serialization of 
 - **A downloaded `.ics` pasted as a path** is refused with a message pointing at subscription links; the help text says why.
 - **Duplicate events** are handled by the existing UID duplicate merge; Meetup UIDs are Meetup's own, so a Meetup event that was also added to Google will not merge (different UIDs), which is accepted.
 - **Follow-ups, not in this phase:** a Meetup preset with a host check if people paste wrong links often, and file import if a real need appears.
+
+**Unreadable repeat rules.** A feed event whose `RRULE` cannot be read is kept (never dropped by the retention window) and shows only its first occurrence and exceptions. The source reports `SourceNotice(kind: .unreadableRecurrence, count:)` for the held feed so the app can show a subtle warning on the account; it clears when the feed is fixed. The diagnostic `rruleUnreadable` is logged once per rule (private `uid`, or `syntheticUID: true` when the feed gave no UID).
