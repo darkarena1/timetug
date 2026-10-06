@@ -164,7 +164,7 @@ extension MicrosoftCalendarSource: WritableCalendarSource {
     }
 
     func mapped(_ data: Data, calendar: CalendarDescriptor) throws -> CalendarEvent {
-        try mapped(dto: try api.decode(GraphEventDTO.self, from: data), calendar: calendar)
+        try mapped(dto: try decodeResponse(GraphEventDTO.self, from: data), calendar: calendar)
     }
 
     func mapped(dto: GraphEventDTO, calendar: CalendarDescriptor) throws -> CalendarEvent {
@@ -201,7 +201,7 @@ extension MicrosoftCalendarSource: WritableCalendarSource {
             let zone = timing.timeZone ?? fallback
             return RecurrenceAnchor(start: AllDay.date(of: timing.start, in: zone), zone: zone)
         }
-        guard let dto = try? api.decode(GraphEventDTO.self, from: raw.data), let times = GraphEventMapper.resolve(dto, fallbackZone: fallback)
+        guard let dto = try? decodeResponse(GraphEventDTO.self, from: raw.data), let times = GraphEventMapper.resolve(dto, fallbackZone: fallback)
         else { return RecurrenceAnchor(start: AllDay.date(of: Date(), in: fallback), zone: fallback) }
         return RecurrenceAnchor(start: AllDay.date(of: times.start, in: times.zone), zone: times.zone)
     }
@@ -210,7 +210,7 @@ extension MicrosoftCalendarSource: WritableCalendarSource {
     private func requireFirstOccurrence(_ ref: EventRef, seriesID: String) async throws {
         let raw = try await fetchRaw(ref.calendarID, seriesID)
         let zone = try await accountZone(refresh: false)
-        guard let dto = try? api.decode(GraphEventDTO.self, from: raw.data),
+        guard let dto = try? decodeResponse(GraphEventDTO.self, from: raw.data),
               let first = GraphEventMapper.resolve(dto, fallbackZone: zone.zone),
               let slot = ref.originalStart, abs(slot.timeIntervalSince(first.start)) < 1 else {
             throw WriteError.unsupported(fields: [.timing])

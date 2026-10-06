@@ -189,7 +189,7 @@ extension GoogleCalendarSource: WritableCalendarSource {
     }
 
     private func mapped(_ data: Data, calendar: CalendarDescriptor) throws -> CalendarEvent {
-        try mapped(dto: try api.decode(GoogleEventDTO.self, from: data), calendar: calendar)
+        try mapped(dto: try decodeResponse(GoogleEventDTO.self, from: data), calendar: calendar)
     }
 
     private func mapped(dto: GoogleEventDTO, calendar: CalendarDescriptor) throws -> CalendarEvent {
@@ -228,7 +228,7 @@ extension GoogleCalendarSource: WritableCalendarSource {
     /// The start of a raw event resource in the calendar's zone (a floating or all-day start reads in that zone). The one
     /// place series code reads a master's start.
     private func start(of raw: RawEvent, calendar: CalendarDescriptor) throws -> GoogleEventMapper.Resolved {
-        let dto = try api.decode(GoogleEventDTO.self, from: raw.data)
+        let dto = try decodeResponse(GoogleEventDTO.self, from: raw.data)
         guard let start = GoogleEventMapper.resolve(dto.start, calendarZone: calendar.timeZone ?? TimeZone(identifier: "UTC")!) else {
             throw SourceError.invalidResponse("google: unreadable event")
         }

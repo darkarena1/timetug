@@ -141,7 +141,7 @@ public struct MicrosoftConnectorKind: ConnectorKind {
         } catch let error as GraphAPIError {
             throw error.sourceError
         }
-        let me = try api.decode(MeDTO.self, from: data)
+        let me = try decodeResponse(MeDTO.self, from: data)
         guard let address = [me.mail, me.userPrincipalName].compactMap({ $0 }).first(where: { !$0.isEmpty }) else {
             throw SourceError.invalidResponse("the account has no email address")
         }
