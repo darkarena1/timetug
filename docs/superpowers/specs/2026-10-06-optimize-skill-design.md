@@ -149,7 +149,7 @@ Hard rules:
 - Public API, entry points, and anything reached by reflection or dynamic dispatch (`@objc`, Discord command registries, dynamic `require`) is flagged `review-by-hand`, not offered for removal.
 - Test code (XCTest, pytest, jest) is found by the test framework by reflection, so it is exempt from dead-code and single-use detection, and clones made entirely of test code are down-ranked.
 
-Secrets: files that look like they contain credentials are skipped and listed (reusing the pattern set from the `index` skill). `scan` is read-only, writes only to `.optimize/` (added to `.gitignore` after asking), makes no network calls, and embeds locally.
+Secrets: files that look like they contain credentials are skipped and listed (reusing the pattern set from the `index` skill). `scan` is read-only, writes only to `.optimize/` (added to `.gitignore` after asking), makes no network calls in its built-in tiers, and embeds locally. Two optional tiers have side effects the report and `SKILL.md` must state: Periphery builds the project (build output, possible package fetches) and the first use of local embeddings downloads the model.
 
 ## Testing
 
