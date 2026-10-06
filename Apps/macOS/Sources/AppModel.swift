@@ -1,3 +1,4 @@
+import CalendarCore
 import Foundation
 import TimeTugCore
 
@@ -7,6 +8,8 @@ final class AppModel: ObservableObject {
     @Published var agenda: DayAgenda = .empty
     @Published var calendars: [CalendarInfo] = []
     @Published var statuses: [String: SourceStatus] = [:]
+    /// Quiet per-source hints from the latest snapshot, keyed like `statuses`.
+    @Published var notices: [String: [SourceNotice]] = [:]
     @Published var sourceNames: [String: String] = [:]
     /// Takeover lead time, shown in the popup footer.
     @Published var leadTime: TimeInterval = 60

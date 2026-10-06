@@ -6,6 +6,7 @@ import TimeTugCore
 /// (that section is named more specifically to avoid redundant naming).
 enum SettingsText {
     static let accounts = "Accounts"
+    static let diagnostics = "Diagnostics"
     static let appleCalendar = "Apple Calendar"
     static let enableTug = "Enable Tug"
     static let leadTime = "Lead time"
@@ -37,7 +38,9 @@ enum SettingsSearch {
 
     static let catalog: [SettingsSearchItem] = [
         .init(id: "accounts", title: SettingsText.accounts,
-              keywords: ["google", "microsoft", "outlook", "office 365", "exchange", "account", "accounts", "sign in", "add account", "remove account", "apple calendar", "eventkit", "icloud", "caldav", "fastmail", "nextcloud", "connect"], pane: .accounts),
+              keywords: ["google", "microsoft", "outlook", "office 365", "exchange", "account", "accounts", "sign in", "add account", "remove account", "apple calendar", "eventkit", "icloud", "caldav", "fastmail", "nextcloud", "ical", "ics", "webcal", "feed", "subscription", "meetup", "connect"], pane: .accounts),
+        .init(id: "diagnostics", title: SettingsText.diagnostics,
+              keywords: ["log", "logs", "support", "debug", "copy diagnostics", "troubleshoot", "problem", "report"], pane: .accounts),
         .init(id: "software-update", title: SettingsText.checkForUpdates,
               keywords: ["update", "updates", "upgrade", "version", "software update", "sparkle"], pane: .general),
         .init(id: "automatic-updates", title: SettingsText.automaticUpdates,

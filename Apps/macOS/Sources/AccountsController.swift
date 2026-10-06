@@ -159,11 +159,12 @@ final class AccountsController: ObservableObject {
     }
 
     /// "Apple ID or app-specific password was not accepted." for a rejected password, in the kind's own words;
-    /// the usual description otherwise.
+    /// "iCal link was not accepted." for a kind whose only field is secret; the usual description otherwise.
     static func describeSignIn(_ error: Error, fields: [CredentialField]) -> String {
-        guard case CalendarCore.SourceError.authExpired = error,
-              let name = fields.first(where: { !$0.isSecret && $0.key == "username" }) ?? fields.first(where: { !$0.isSecret }),
-              let secret = fields.first(where: \.isSecret) else { return describe(error) }
+        guard case CalendarCore.SourceError.authExpired = error, let secret = fields.first(where: \.isSecret) else { return describe(error) }
+        guard let name = fields.first(where: { !$0.isSecret && $0.key == "username" }) ?? fields.first(where: { !$0.isSecret }) else {
+            return "\(secret.label) was not accepted."
+        }
         return "\(name.label) or \(secret.label.prefix(1).lowercased() + secret.label.dropFirst()) was not accepted."
     }
 
