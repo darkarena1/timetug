@@ -97,6 +97,31 @@ private func feedResponse(_ text: String = sampleFeed) -> HTTPResponse { HTTPRes
     #expect(try await store.secrets(for: first.connectionID) == ["link": newer])
 }
 
+@Test func reauthorizeToAnotherHostRebuildsTheNameForTheNewHostKeepingTheFeedName() async throws {
+    let store = InMemoryCredentialStore()
+    let first = try await ICalSubscriptionKind(transport: await serving([feedResponse()]))
+        .authorize(using: StubInteraction(["link": webcal]), credentials: store)
+    let transport = FakeTransport()
+    await transport.route("PRIVATE-PATH-4567", [feedResponse(feedICS([boardGames], header: ["X-WR-CALNAME:Renamed"]))])
+    let updated = try await ICalSubscriptionKind(transport: transport).reauthorize(
+        first, using: StubInteraction(["link": "https://calendar.example.org/x/PRIVATE-PATH-4567/going"]), credentials: store)
+    #expect(updated.config == ["host": "calendar.example.org"])
+    #expect(updated.displayName == "My Meetups (calendar.example.org)")
+    #expect(!updated.displayName.contains("PRIVATE-PATH"))
+}
+
+@Test func reauthorizeToAnotherHostForANamelessFeedUsesTheNewFeedNameOrTheHost() async throws {
+    let store = InMemoryCredentialStore()
+    let first = try await ICalSubscriptionKind(transport: await serving([feedResponse(feedICS([boardGames], header: []))]))
+        .authorize(using: StubInteraction(["link": webcal]), credentials: store)
+    #expect(first.displayName == "www.example.test")
+    let transport = FakeTransport()
+    await transport.route("PRIVATE-PATH-4567", [feedResponse(feedICS([boardGames], header: []))])
+    let updated = try await ICalSubscriptionKind(transport: transport).reauthorize(
+        first, using: StubInteraction(["link": "https://calendar.example.org/x/PRIVATE-PATH-4567/going"]), credentials: store)
+    #expect(updated.displayName == "calendar.example.org")
+}
+
 @Test func aFailedReauthorizeKeepsTheOldLink() async throws {
     let store = InMemoryCredentialStore()
     let first = try await ICalSubscriptionKind(transport: await serving([feedResponse()]))

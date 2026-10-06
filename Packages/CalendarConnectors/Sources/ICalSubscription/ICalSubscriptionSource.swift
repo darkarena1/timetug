@@ -9,12 +9,36 @@ actor FeedState {
     private(set) var body: Data?
     private(set) var validators: FeedValidators?
     private(set) var fetchedAt: Date?
+    private var issued = 0
+    private var storedGeneration = 0
+    private var reportedBody: Data?
+    private var reportedGeneration = 0
 
-    func store(feed: ParsedFeed, body: Data, validators: FeedValidators, at date: Date) {
+    /// Taken when a fetch starts, so a fetch that finishes after a newer one can be told apart.
+    func nextGeneration() -> Int {
+        issued += 1
+        return issued
+    }
+
+    /// Keeps the feed only if no newer fetch has stored one already.
+    func store(feed: ParsedFeed, body: Data, validators: FeedValidators, generation: Int, at date: Date) {
+        guard generation > storedGeneration else { return }
+        storedGeneration = generation
         self.feed = feed
         self.body = body
         self.validators = validators
         fetchedAt = date
+    }
+
+    /// What `checkForChanges` last saw, independent of what `events(in:)` loaded. The first report has no earlier one, so
+    /// `prior` (the body held when the check began) stands in for it. A check whose fetch is older than one already
+    /// reported says nothing, so overlapping checks report a change once and never report one backwards.
+    func report(_ body: Data, generation: Int, prior: Data?) -> Bool {
+        guard generation > reportedGeneration else { return false }
+        reportedGeneration = generation
+        let last = reportedBody ?? prior
+        reportedBody = body
+        return last != nil && last != body
     }
 
     /// The feed is unchanged: keep what is held and restart its age.
@@ -83,9 +107,10 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
     /// Re-reads the feed. The first check with nothing loaded yet is the baseline and reports nothing; a feed loaded
     /// earlier by `events(in:)` counts as the baseline, so a change since then is reported.
     public func checkForChanges() async throws -> CalendarChange? {
-        let hadBaseline = await state.body != nil
-        let changed = try await refresh()
-        return hadBaseline && changed ? .eventsChanged(calendarIDs: [Self.calendarID]) : nil
+        let prior = await state.body
+        let fetched = try await refresh()
+        let changed = await state.report(fetched.body, generation: fetched.generation, prior: prior)
+        return changed ? .eventsChanged(calendarIDs: [Self.calendarID]) : nil
     }
 
     private func currentFeed() async throws -> ParsedFeed {
@@ -95,25 +120,27 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
         return feed
     }
 
-    /// Fetches the feed (conditionally when the server gave validators). True when the content changed or was loaded for the
-    /// first time. A body that is not a calendar throws and leaves the last good feed in place.
+    /// Fetches the feed (conditionally when the server gave validators) and returns the body the server holds, with the
+    /// generation the fetch started under. A body that is not a calendar throws and leaves the last good feed in place; a
+    /// fetch that finishes after a newer one does not replace what that one stored.
     @discardableResult
-    private func refresh() async throws -> Bool {
+    private func refresh() async throws -> (body: Data, generation: Int) {
         let url = try await link()
+        let generation = await state.nextGeneration()
         let previous = await state.body
         let validators = await state.validators.flatMap { $0.etag != nil || $0.lastModified != nil ? $0 : nil }
         switch try await fetcher.fetch(url, validators: previous == nil ? nil : validators) {
         case .notModified:
             await state.unchanged(validators: nil, at: now())
-            return false
+            return (previous ?? Data(), generation)
         case .body(let data, let newValidators):
             if let previous, previous == data {
                 await state.unchanged(validators: newValidators, at: now())
-                return false
+                return (data, generation)
             }
             let feed = try FeedParser.parse(data)
-            await state.store(feed: feed, body: data, validators: newValidators, at: now())
-            return true
+            await state.store(feed: feed, body: data, validators: newValidators, generation: generation, at: now())
+            return (data, generation)
         }
     }
 }

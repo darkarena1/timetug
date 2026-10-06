@@ -62,10 +62,18 @@ public struct ICalSubscriptionKind: ConnectorKind, CredentialPromptHelp {
 
     /// Replaces the stored link (after the provider revoked or regenerated it). The old link stays if the new one fails.
     public func reauthorize(_ connection: Connection, using interaction: any AuthorizationInteraction, credentials: any CredentialStore) async throws -> Connection {
-        let (url, _) = try await signIn(using: interaction)
+        let (url, feed) = try await signIn(using: interaction)
         try await credentials.setSecrets([Self.linkKey: url.absoluteString], for: connection.connectionID)
         var updated = connection
-        updated.config["host"] = url.host ?? ""
+        let host = url.host ?? ""
+        let oldHost = connection.config["host"] ?? ""
+        updated.config["host"] = host
+        if host != oldHost {
+            // Keep the name the feed had (the part before the old host); a link to another service names that service.
+            let suffix = " (\(oldHost))"
+            let oldName = connection.displayName.hasSuffix(suffix) ? String(connection.displayName.dropLast(suffix.count)) : nil
+            updated.displayName = (oldName ?? feed.name).map { "\($0) (\(host))" } ?? host
+        }
         return updated
     }
 

@@ -197,7 +197,7 @@ public struct Reminder: Hashable, Sendable {
     }
 }
 
-/// The connector a calendar is read through (`ConnectorKind.id`): "eventkit", "google", "microsoft", "caldav".
+/// The connector a calendar is read through (`ConnectorKind.id`): "eventkit", "google", "microsoft", "caldav", "icalsub".
 /// A string-backed value so a host can add its own without changing the library.
 public struct CalendarService: RawRepresentable, Hashable, Sendable {
     public let rawValue: String

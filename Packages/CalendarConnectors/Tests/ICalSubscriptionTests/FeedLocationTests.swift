@@ -22,6 +22,8 @@ import Testing
     #expect(throws: SourceError.self) { try FeedLocation.url(from: "http://example.test/feed.ics") }
     #expect(try FeedLocation.url(from: "http://localhost:8008/feed.ics").absoluteString == "http://localhost:8008/feed.ics")
     #expect(try FeedLocation.url(from: "http://127.0.0.1:8008/feed.ics").host == "127.0.0.1")
+    #expect(try FeedLocation.url(from: "http://[::1]:8008/feed.ics").absoluteString == "http://[::1]:8008/feed.ics")
+    #expect(try FeedLocation.url(from: "http://[::1]/feed.ics").absoluteString == "http://[::1]/feed.ics")
 }
 
 @Test func linksWithEmbeddedCredentialsAreRefused() {

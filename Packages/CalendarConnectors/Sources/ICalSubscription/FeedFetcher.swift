@@ -17,6 +17,7 @@ enum FeedResponse: Sendable {
 struct FeedFetcher: Sendable {
     static let maxBytes = 10 * 1024 * 1024
     static let maxRedirects = 5
+    private static let unreachable = "the feed could not be reached"
     private static let refusedRedirect = "the feed moved somewhere TimeTug will not follow"
 
     let transport: any HTTPTransport
@@ -31,7 +32,7 @@ struct FeedFetcher: Sendable {
                 if let modified = validators?.lastModified { headers["If-Modified-Since"] = modified }
             }
             let conditional = headers["If-None-Match"] != nil || headers["If-Modified-Since"] != nil
-            let response = try await transport.send(HTTPRequest(url: current, headers: headers))
+            let response = try await send(HTTPRequest(url: current, headers: headers))
             switch response.status {
             case 200:
                 guard response.body.count <= Self.maxBytes else { throw SourceError.invalidResponse("the feed is too large") }
@@ -40,7 +41,7 @@ struct FeedFetcher: Sendable {
                 return .notModified
             case 301, 302, 303, 307, 308:
                 guard let location = response.header("location"), let next = URL(string: location, relativeTo: current)?.absoluteURL,
-                      next.scheme?.lowercased() == "https" else { throw SourceError.invalidResponse(Self.refusedRedirect) }
+                      next.scheme?.lowercased() == "https", next.user == nil, next.password == nil else { throw SourceError.invalidResponse(Self.refusedRedirect) }
                 current = next
             case 401, 403, 404, 410:
                 throw SourceError.authExpired
@@ -51,5 +52,18 @@ struct FeedFetcher: Sendable {
             }
         }
         throw SourceError.invalidResponse("the feed redirected too many times")
+    }
+
+    /// The transport's failure, without the link. `SourceError.network` is the transport's contract, but a message (or a
+    /// stray error such as a `URLError`) can carry the address, and the address is a credential.
+    private func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        do { return try await transport.send(request) }
+        catch is CancellationError { throw CancellationError() }
+        catch SourceError.network(let message) {
+            let path = request.url.path
+            let leaks = message.contains(request.url.absoluteString) || (path.count > 1 && message.contains(path))
+            throw SourceError.network(leaks ? Self.unreachable : message)
+        } catch let error as SourceError { throw error }
+        catch { throw SourceError.network(Self.unreachable) }
     }
 }

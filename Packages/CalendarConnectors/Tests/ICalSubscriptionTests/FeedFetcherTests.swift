@@ -90,6 +90,21 @@ private func ok(_ text: String = sampleFeed, headers: [String: String] = [:]) ->
     }
 }
 
+@Test func aRedirectToAnAddressWithAUserNameOrPasswordIsRefused() async {
+    for location in ["https://me:pw@other.example.test/feed.ics", "https://me@other.example.test/feed.ics"] {
+        let transport = FakeTransport()
+        await transport.route(privatePath, [HTTPResponse(status: 302, headers: ["Location": location])])
+        do {
+            _ = try await FeedFetcher(transport: transport).fetch(feedURL)
+            Issue.record("expected a refusal for \(location)")
+        } catch {
+            #expect(error as? SourceError == .invalidResponse("the feed moved somewhere TimeTug will not follow"))
+            #expect(!"\(error)".contains("other.example.test") && !"\(error)".contains(privatePath))
+        }
+        #expect(await transport.requests.count == 1)
+    }
+}
+
 @Test func aRedirectWithNoLocationIsRefused() async {
     let transport = FakeTransport()
     await transport.route(privatePath, [HTTPResponse(status: 302)])
