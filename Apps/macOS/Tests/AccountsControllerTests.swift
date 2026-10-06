@@ -265,6 +265,13 @@ final class AccountsControllerTests: XCTestCase {
                        "Sign-in failed (server(status: 500)).")
     }
 
+    func testRejectedLinkIsDescribedForAKindWithOnlyASecretField() {
+        let link = [CredentialField(key: "link", label: "iCal link", isSecret: true)]
+        XCTAssertEqual(AccountsController.describeSignIn(CalendarCore.SourceError.authExpired, fields: link), "iCal link was not accepted.")
+        XCTAssertEqual(AccountsController.describeSignIn(CalendarCore.SourceError.invalidResponse("that link did not return a calendar"), fields: link),
+                       "Sign-in failed: that link did not return a calendar.")
+    }
+
     func testAddPersistsAppliesAndTracksTheAccount() async {
         let controller = makeController()
         await controller.addAccount(kindID: "google")

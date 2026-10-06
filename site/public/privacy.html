@@ -77,6 +77,12 @@
         is never needed. For any other CalDAV provider (for example Fastmail or Nextcloud), you give TimeTug the
         provider's server address, your user name and your password. TimeTug uses them to ask that provider for
         your events, and only sends them to that provider.</li>
+      <li><strong>Calendar subscription links, if you add one.</strong> You can paste an iCal link (a
+        <code>webcal://</code> or <code>https://</code> address) that a service such as Meetup gives you for
+        your events. TimeTug downloads that address every 15 minutes and reads the events in it: their titles,
+        times, places, descriptions and links. It only reads; it cannot change anything at the service. Anyone
+        who has the link can read the same feed, so treat it like a password, and revoke or replace it at the
+        service if it leaks. TimeTug only sends the link to the address it names.</li>
       <li><strong>An on-device Apple Intelligence model, only if you turn it on.</strong> Settings › Calendars
         has an opt-in, off-by-default, Beta feature that asks your Mac's own on-device model whether two
         ambiguous events are the same meeting, to avoid double-tugging you. It requires macOS 26 on a
@@ -99,6 +105,7 @@
       <li>For Google and Microsoft: the token that keeps TimeTug signed in. It is not your password.</li>
       <li>For iCloud and other CalDAV providers: the user name and the app-specific password or password you
         entered.</li>
+      <li>For calendar subscription links: the link you pasted.</li>
     </ul>
 
     <h3>Saved as ordinary files (not encrypted by TimeTug)</h3>
@@ -108,8 +115,9 @@
       with its widgets. In everyday terms, here is what is in them.</p>
     <ul>
       <li><strong>Your list of accounts.</strong> Each connected account's type (Google, Microsoft, iCloud,
-        CalDAV), its email address, Apple ID or user name, and, for CalDAV, the server address, the web
-        addresses of your calendars on that server, and the email addresses your account uses on invitations.
+        CalDAV, iCal link), its email address, Apple ID or user name, and, for CalDAV, the server address, the web
+        addresses of your calendars on that server, and the email addresses your account uses on invitations. For an iCal link, the calendar's own name (if the
+        feed has one) and the web site name are kept in this file; the link itself is only in the Keychain.
         No passwords or tokens are in this file.</li>
       <li><strong>Sync bookmarks.</strong> Short markers that let TimeTug ask a provider for only what changed
         since the last check, plus a list of your calendars (their IDs and, for CalDAV, their names and colours)
@@ -147,12 +155,21 @@
       and they are gone when you quit TimeTug. Event titles that appear in macOS's system logs are marked
       private.</p>
 
+    <h3>Diagnostics log</h3>
+    <p>TimeTug keeps a short log in memory of what it has been doing, the last few hundred events: counts,
+      status codes and kinds of error. It never contains calendar links, event titles or event contents. The same
+      entries are written to the macOS system log, where values that come from your calendar data are marked private.
+      Nothing is sent anywhere. The log is gone when you quit TimeTug, and it is copied only if you press
+      <strong>Copy Diagnostics</strong> in Settings and choose to share it.</p>
+
     <h2 id="protection">How we protect your data</h2>
     <ul>
       <li><strong>Encrypted in transit.</strong> TimeTug talks to Google, Microsoft, iCloud and other CalDAV
         providers over HTTPS/TLS. For CalDAV it refuses any server address that isn't <code>https://</code>
         (a local test machine is the only exception) and refuses addresses that have a password typed into
-        them. Apple Calendar events come through macOS itself.</li>
+        them. For calendar subscription links it likewise refuses any address that isn't <code>https://</code>
+        (<code>webcal://</code> is treated as <code>https://</code>, and a local test machine is the only
+        exception) and will not follow a redirect to a web address that isn't <code>https://</code>. Apple Calendar events come through macOS itself.</li>
       <li><strong>Secrets in the Keychain, not in files.</strong> The Keychain encrypts sign-in tokens and
         passwords at rest, as described above. The plain files on your Mac never contain them.</li>
       <li><strong>Safer sign-in.</strong> Google and Microsoft sign-in use OAuth with PKCE (a one-time secret

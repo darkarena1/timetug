@@ -104,3 +104,20 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] A meeting present in both Apple Calendar and a direct Google account merges into one popup entry.
 - [ ] Calendar write smoke (before releasing a change to the write API): `TIMETUG_LIVE_EVENTKIT=1 swift test --package-path Packages/EventKitSource --filter eventKit` passes (the filter is `eventKit`, not `Live`), and the Google smoke test (see [operations](../development/runbooks/operations.md)) passes and leaves no "TimeTug write smoke" events behind.
 - [ ] Google sign-in opens the system sign-in sheet by default. After `defaults write com.timetug.app oauth.useBrowser.v1 -bool true`, the next sign-in opens the default browser with the client ID in the address bar and ends on the "You're signed in" page; `defaults delete com.timetug.app oauth.useBrowser.v1` restores the sheet.
+
+## iCal link accounts
+- [ ] Settings > Accounts > Add an Account shows an "iCal link" tile with a link icon, and no "Meetup / Soon" tile.
+- [ ] Clicking it opens the credential sheet with one masked "iCal link" field and the Meetup help text and link.
+- [ ] A link copied from Meetup (Your events > Add to calendar) signs in; the account is named "My Meetups (www.meetup.com)" and its RSVP'd events appear in the popup, with recurring ones expanded.
+- [ ] A bad address (`file:///...`, plain `http://`, a pasted file path) shows a plain message in the sheet and adds no account.
+- [ ] A Meetup link you have regenerated or revoked: the account shows it needs signing in; "Sign in again" with the new link restores it; the sheet says "iCal link was not accepted." for a dead link.
+- [ ] RSVP to a new Meetup: after at most 15 minutes the event appears without relaunching.
+- [ ] Removing the account removes its calendars and the Keychain item (Keychain Access: no TimeTug entry for it).
+- [ ] Events further than a week ahead do not appear for an iCal link account; a weekly Meetup shows its occurrences within the week, and a series that has ended or has not started yet does not appear.
+
+## Diagnostics
+- [ ] With an iCal link account added, Settings > Accounts > Diagnostics > Copy Diagnostics, then paste: the text starts with the app version, macOS version and generation time, and shows `icalsub.fetchCompleted` and `icalsub.feedParsed` lines. It contains no link (nor part of one) and no event titles.
+- [ ] Clear, then Copy Diagnostics and paste: only the header remains.
+- [ ] `log show --predicate 'subsystem == "com.timetug.app" AND category == "icalsub"' --info --last 5m` lists the same entries (private values show as `<private>`).
+- [ ] An iCal link feed with an unreadable RRULE shows a small subdued warning triangle after the status text of that account in Settings > Accounts; hovering it shows "Some repeating events from this link use a rule TimeTug can't read, so they may not appear." (VoiceOver reads the same). A clean feed shows no triangle; after the feed is fixed and refreshed it disappears.
+- [ ] Searching Settings for "diagnostics" or "logs" opens the Accounts pane.

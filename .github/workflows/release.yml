@@ -1,19 +1,21 @@
-# Release workflow. Two ways to cut a release; the owner writes the title and notes in the GitHub UI either way:
-#   1. Save a DRAFT release for a new `v*` tag (do not publish) and run this workflow manually
-#      (workflow_dispatch with the `tag` input). Drafts fire no release events, so a saved draft does nothing
-#      by itself. The workflow builds, uploads the assets to the draft and publishes it, creating the tag at
-#      the built commit if needed.
-#   2. PUBLISH the release in the UI (`release: published`, tags starting with `v`). The workflow then builds
-#      the tag's commit and attaches the assets to the published release; the release is visible without
-#      assets for the roughly 30 minutes the build takes.
-# There is no tag-push trigger: publishing a release in the UI creates the tag and would fire both.
-# With no release at all, a manual run creates it with generated notes. Releases for other tags (for example
-# beta-*) are ignored.
+# Release workflow. The owner writes the title and notes in the GitHub UI (or `gh release create --draft`):
+#   1. PUBLISH the release (`release: published`, tags starting with `v`). The workflow then builds the tag's
+#      commit and attaches the assets to the published release; the release is visible without assets for the
+#      roughly 30 minutes the build takes. This is the normal way. Publishing as an admin creates the tag, which the
+#      "Protect release tags" ruleset does not let this workflow's token do.
+#   2. Recovery: run this workflow manually (workflow_dispatch with the `tag` input) for a tag that ALREADY exists,
+#      for example to redo a release that failed after its tag was created. A saved draft fires no event. The workflow
+#      builds the tag's commit, uploads the assets to the draft and publishes it. A manual run for a tag that does not
+#      exist fails at once (scripts/release/preflight-release.sh).
+# A stable release's notes must list every change since the previous stable release (GitHub's "Generate release
+# notes"): they become the appcast text the update window shows. The same preflight step checks them; a tag with a `-`
+# suffix is exempt. There is no tag-push trigger. Releases for other tags (for example beta-*) are ignored.
 #
 # Immutable releases: if the repository's GitHub "immutable releases" setting is on, a published release's
-# assets and tag are locked and nothing can be uploaded to it (upload fails with HTTP 422). Only the draft
-# flow can work then. The setting is currently OFF. An early step (scripts/release/release-state.sh) fails the
-# run immediately when the tag is published AND immutable, instead of after a 30 minute build.
+# assets and tag are locked and nothing can be uploaded to it (upload fails with HTTP 422). Only a release that
+# is still a draft can then take assets. The setting is currently OFF. An early step
+# (scripts/release/release-state.sh) fails the run immediately when the tag is published AND immutable,
+# instead of after a 30 minute build.
 #
 # One macOS job builds the app in Release (scripts/ci/build-release.sh), then:
 #   - With ALL Apple signing secrets set (see docs/release.md): signs, notarizes and staples the app,
@@ -65,6 +67,11 @@ jobs:
           fetch-depth: 0
       - name: Validate the tag
         run: scripts/ci/compute-versions.sh stable "$TAG" >/dev/null
+      - name: Check the tag and the release notes
+        # Fails now, not after a 30 minute build: a manual run needs an existing tag (the workflow cannot create a v* tag),
+        # and a stable release's notes must list every change since the previous stable release (they become the update
+        # window's text). Tags with a `-` suffix skip the notes check.
+        run: scripts/release/preflight-release.sh "$TAG" "$GITHUB_EVENT_NAME"
       - name: Refuse an immutable published release
         run: |
           # Assets cannot be added to a published immutable release: fail now, not after a 30 minute build.
@@ -77,8 +84,8 @@ jobs:
       - name: Build the tag's commit when the tag exists
         if: github.event_name == 'workflow_dispatch'
         run: |
-          # A manual run for an existing tag must build that tag; otherwise it builds the selected commit
-          # and publishing the draft creates the tag at that commit.
+          # A manual run for an existing tag must build that tag (the preflight check refuses a manual run for a tag
+          # that does not exist).
           if git rev-parse -q --verify "refs/tags/$TAG^{commit}" >/dev/null; then
             git checkout --detach "refs/tags/$TAG"
           fi

@@ -14,7 +14,6 @@ struct AccountsPane: View {
     /// know they're coming rather than assuming TimeTug only ever talks to Google.
     private static let placeholderProviders: [PlaceholderProvider] = [
         .init(name: "Fastmail", systemImage: "at"),
-        .init(name: "Meetup", systemImage: "person.3"),
         .init(name: "Todoist", systemImage: "checklist"),
         .init(name: "Zoom", systemImage: "video"),
         .init(name: "Webex", systemImage: "video.fill"),
@@ -37,6 +36,8 @@ struct AccountsPane: View {
                 Text("Add an Account").font(.headline).padding(.top, 4)
                 providerGrid
                 if !accounts.unconfiguredKindIDs.isEmpty { configurationWarning }
+
+                diagnosticsSection
             }
             .padding(16)
         }
@@ -107,12 +108,21 @@ struct AccountsPane: View {
     private func accountRow(_ connection: Connection) -> some View {
         let status = model.statuses[accounts.statusKey(for: connection)]
         let failure = accounts.buildFailures[connection.connectionID]
+        let noticeText = AccountNoticeText.make(model.notices[accounts.statusKey(for: connection)])
         return HStack(spacing: 10) {
             ProviderIcon(kindID: connection.kindID)
             VStack(alignment: .leading, spacing: 2) {
                 Text(connection.displayName)
-                Text(failure == nil ? AccountStatusText.make(status) : "Can't start this account")
-                    .font(.caption).foregroundStyle(status == .authExpired || failure != nil ? .orange : .secondary)
+                HStack(spacing: 4) {
+                    Text(failure == nil ? AccountStatusText.make(status) : "Can't start this account")
+                        .font(.caption).foregroundStyle(status == .authExpired || failure != nil ? .orange : .secondary)
+                    if let noticeText {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.caption).foregroundStyle(.orange.opacity(0.7))
+                            .help(noticeText)
+                            .accessibilityLabel(noticeText)
+                    }
+                }
             }
             Spacer()
             if status == .authExpired || failure != nil {
@@ -162,6 +172,23 @@ struct AccountsPane: View {
                 .accessibilityLabel("\(provider.name), coming soon")
             }
         }
+    }
+
+    private var diagnosticsSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(SettingsText.diagnostics).font(.headline)
+            HStack(spacing: 8) {
+                Button("Copy Diagnostics") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(AppDiagnostics.shared.report(), forType: .string)
+                }
+                Button("Clear") { AppDiagnostics.shared.clear() }
+            }
+            Text("A short log of recent calendar activity to share when reporting a problem. It contains no feed links or event titles.")
+                .font(.footnote).foregroundStyle(.secondary)
+        }
+        .padding(.top, 8)
+        .settingsHighlight("diagnostics", navigation: navigation)
     }
 
     private var configurationWarning: some View {

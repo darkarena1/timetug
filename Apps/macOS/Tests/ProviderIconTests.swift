@@ -19,4 +19,8 @@ final class ProviderIconTests: XCTestCase {
         XCTAssertEqual(ProviderIcon.Style.forKind("zoom"), .generic)
         XCTAssertEqual(ProviderIcon.Style.forKind(""), .generic)
     }
+
+    func testICalLinkAccountsGetTheirOwnMark() {
+        XCTAssertEqual(ProviderIcon.Style.forKind("icalsub"), .feed)
+    }
 }

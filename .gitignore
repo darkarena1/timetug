@@ -30,3 +30,4 @@ buildServer.json
 Apps/macOS/Config/Local.xcconfig
 Apps/macOS/Config/GoogleOAuth.xcconfig
 Apps/macOS/Config/MicrosoftOAuth.xcconfig
+.optimize/

@@ -51,6 +51,8 @@ targets:
         product: MicrosoftCalendar
       - package: CalendarConnectors
         product: CalDAVCalendar
+      - package: CalendarConnectors
+        product: ICalSubscription
       - package: CalendarBridge
         product: CalendarBridge
       - package: CalendarApple
@@ -126,6 +128,8 @@ targets:
         product: MicrosoftCalendar
       - package: CalendarConnectors
         product: CalDAVCalendar
+      - package: CalendarConnectors
+        product: ICalSubscription
       - package: CalendarBridge
         product: CalendarBridge
       - package: CalendarApple

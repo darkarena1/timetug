@@ -222,4 +222,11 @@ final class SettingsSearchTests: XCTestCase {
             XCTAssertTrue(ids(query).contains("accounts"), query)
         }
     }
+
+    func testDiagnosticsIsFoundByTitleAndKeywords() {
+        for query in ["diagnostics", "logs", "support", "debug"] {
+            XCTAssertTrue(ids(query).contains("diagnostics"), query)
+        }
+        XCTAssertEqual(SettingsSearch.results(for: "diagnostics", calendars: []).first?.pane, .accounts)
+    }
 }

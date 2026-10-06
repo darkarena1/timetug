@@ -49,7 +49,7 @@ final class AppCoordinator {
     private let overlay = OverlayController()
     private lazy var googleOAuthConfig = GoogleOAuthSettings.config()
     private lazy var microsoftOAuthConfig = MicrosoftOAuthSettings.config()
-    private lazy var registry = AppConnectors.makeRegistry(google: googleOAuthConfig, microsoft: microsoftOAuthConfig, eventKit: eventKit)
+    private lazy var registry = AppConnectors.makeRegistry(google: googleOAuthConfig, microsoft: microsoftOAuthConfig, eventKit: eventKit, diagnostics: AppDiagnostics.shared.log)
     /// Kinds TimeTug supports in code but this build couldn't register — see `AccountsController.unconfiguredKindIDs`.
     private lazy var unconfiguredKindIDs: [String] =
         (googleOAuthConfig == nil ? ["google"] : []) + (microsoftOAuthConfig == nil ? ["microsoft"] : [])
@@ -176,6 +176,7 @@ final class AppCoordinator {
         snapshot = newSnapshot
         model.calendars = snapshot.calendars
         model.statuses = snapshot.statuses
+        model.notices = snapshot.notices
         model.sourceNames = snapshot.sourceNames
         model.candidates = snapshot.candidates
         if ledger.prune(now: Date()) { persistLedger() }

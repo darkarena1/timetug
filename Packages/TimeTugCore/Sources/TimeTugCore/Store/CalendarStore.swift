@@ -13,12 +13,16 @@ public struct CalendarSnapshot: Sendable {
     public let fetchedAt: Date
     /// Increases only when the store accepts a new publication, including a local settings/lesson change.
     public let revision: UInt64
+    /// Quiet hints per source (a warning icon), keyed by `CalendarSource.id`; a source with none has no entry.
+    public let notices: [String: [SourceNotice]]
     /// Look-alike events kept separate (event id -> other events), for a manual "Merge".
     public let candidates: [String: [TimeTugCalendarEvent]]
 
     public init(events: [TimeTugCalendarEvent], calendars: [CalendarInfo], statuses: [String: SourceStatus],
                 sourceNames: [String: String], fetchedAt: Date, candidates: [String: [TimeTugCalendarEvent]] = [:],
-                revision: UInt64 = 0, widgetEvents: [TimeTugCalendarEvent] = []) {
+                revision: UInt64 = 0, widgetEvents: [TimeTugCalendarEvent] = [],
+                notices: [String: [SourceNotice]] = [:]) {
+        self.notices = notices
         self.events = events
         self.widgetEvents = widgetEvents
         self.calendars = calendars
@@ -70,6 +74,7 @@ public actor CalendarStore {
     private var lastEvents: [String: [TimeTugCalendarEvent]] = [:]
     private var lastCalendars: [String: [CalendarInfo]] = [:]
     private var statuses: [String: SourceStatus] = [:]
+    private var lastNotices: [String: [SourceNotice]] = [:]
 
     private static let maxPendingPerPass = 20
     private let adjudicator: (any DuplicateAdjudicator)?
@@ -101,6 +106,7 @@ public actor CalendarStore {
         lastCalendars = lastCalendars.filter { keep.contains($0.key) }
         statuses = statuses.filter { keep.contains($0.key) }
         sourceRequestRevisions = sourceRequestRevisions.filter { keep.contains($0.key) }
+        lastNotices = lastNotices.filter { keep.contains($0.key) }
         sources = newSources
         generation += 1
         invalidateInference()
@@ -150,7 +156,7 @@ public actor CalendarStore {
         }
 
         return await withTaskGroup(
-            of: (String, UInt64, Result<([CalendarInfo], [TimeTugCalendarEvent]), Error>).self
+            of: (String, UInt64, Result<([CalendarInfo], [TimeTugCalendarEvent], [SourceNotice]), Error>).self
         ) { group in
             for source in current {
                 let revision = (sourceRequestRevisions[source.id] ?? 0) &+ 1
@@ -159,7 +165,7 @@ public actor CalendarStore {
                     do {
                         let calendars = try await source.calendars()
                         let events = try await source.events(in: queryWindow)
-                        return (source.id, revision, .success((calendars, events)))
+                        return (source.id, revision, .success((calendars, events, await source.notices())))
                     } catch {
                         return (source.id, revision, .failure(error))
                     }
@@ -169,11 +175,13 @@ public actor CalendarStore {
                 guard generation == startedGeneration, refreshRevision == startedRefresh,
                       sourceRequestRevisions[sourceID] == revision else { continue }
                 switch result {
-                case .success(let (calendars, events)):
+                case .success(let (calendars, events, notices)):
                     lastCalendars[sourceID] = calendars
                     lastEvents[sourceID] = events
+                    lastNotices[sourceID] = notices
                     statuses[sourceID] = .ok
                 case .failure(let error):
+                    lastNotices[sourceID] = nil
                     switch error {
                     case SourceError.needsPermission: statuses[sourceID] = .needsPermission
                     case SourceError.authExpired: statuses[sourceID] = .authExpired
@@ -339,7 +347,8 @@ public actor CalendarStore {
             events: resolution.events, calendars: calendars, statuses: statuses.filter { ids.contains($0.key) },
             sourceNames: Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0.displayName) }),
             fetchedAt: now, candidates: resolution.candidates, revision: publicationRevision,
-            widgetEvents: widgetResolution.events)
+            widgetEvents: widgetResolution.events,
+            notices: lastNotices.filter { ids.contains($0.key) && !$0.value.isEmpty })
         latestSnapshot = snapshot
         return snapshot
     }
