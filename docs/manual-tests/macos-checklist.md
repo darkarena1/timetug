@@ -119,4 +119,5 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] With an iCal link account added, Settings > Accounts > Diagnostics > Copy Diagnostics, then paste: the text starts with the app version, macOS version and generation time, and shows `icalsub.fetchCompleted` and `icalsub.feedParsed` lines. It contains no link (nor part of one) and no event titles.
 - [ ] Clear, then Copy Diagnostics and paste: only the header remains.
 - [ ] `log show --predicate 'subsystem == "com.timetug.app" AND category == "icalsub"' --info --last 5m` lists the same entries (private values show as `<private>`).
+- [ ] An iCal link feed with an unreadable RRULE shows a small subdued warning triangle after the status text of that account in Settings > Accounts; hovering it shows "Some repeating events from this link use a rule TimeTug can't read, so they may not appear." (VoiceOver reads the same). A clean feed shows no triangle; after the feed is fixed and refreshed it disappears.
 - [ ] Searching Settings for "diagnostics" or "logs" opens the Accounts pane.

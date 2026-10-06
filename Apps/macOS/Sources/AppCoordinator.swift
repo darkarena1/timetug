@@ -169,6 +169,7 @@ final class AppCoordinator {
         snapshot = newSnapshot
         model.calendars = snapshot.calendars
         model.statuses = snapshot.statuses
+        model.notices = snapshot.notices
         model.sourceNames = snapshot.sourceNames
         model.candidates = snapshot.candidates
         if ledger.prune(now: Date()) { persistLedger() }

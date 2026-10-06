@@ -108,12 +108,21 @@ struct AccountsPane: View {
     private func accountRow(_ connection: Connection) -> some View {
         let status = model.statuses[accounts.statusKey(for: connection)]
         let failure = accounts.buildFailures[connection.connectionID]
+        let noticeText = AccountNoticeText.make(model.notices[accounts.statusKey(for: connection)])
         return HStack(spacing: 10) {
             ProviderIcon(kindID: connection.kindID)
             VStack(alignment: .leading, spacing: 2) {
                 Text(connection.displayName)
-                Text(failure == nil ? AccountStatusText.make(status) : "Can't start this account")
-                    .font(.caption).foregroundStyle(status == .authExpired || failure != nil ? .orange : .secondary)
+                HStack(spacing: 4) {
+                    Text(failure == nil ? AccountStatusText.make(status) : "Can't start this account")
+                        .font(.caption).foregroundStyle(status == .authExpired || failure != nil ? .orange : .secondary)
+                    if let noticeText {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.caption).foregroundStyle(.orange.opacity(0.7))
+                            .help(noticeText)
+                            .accessibilityLabel(noticeText)
+                    }
+                }
             }
             Spacer()
             if status == .authExpired || failure != nil {
