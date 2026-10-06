@@ -23,13 +23,24 @@ private let laTimeZone = [
 
 /// A feed shaped like a Meetup "going" feed: one calendar name, one `VTIMEZONE`, and the given events.
 func feedICS(_ events: [[String]], header: [String] = ["X-WR-CALNAME:My Meetups"]) -> String {
-    (["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Example//Feed 1.0//EN", "METHOD:PUBLISH"] + header + laTimeZone
-        + events.flatMap { $0 } + ["END:VCALENDAR"]).joined(separator: "\r\n") + "\r\n"
+    var lines: [String] = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Example//Feed 1.0//EN", "METHOD:PUBLISH"]
+    lines += header
+    lines += laTimeZone
+    for event in events { lines += event }
+    lines.append("END:VCALENDAR")
+    return lines.joined(separator: "\r\n") + "\r\n"
 }
 
 func vevent(uid: String?, title: String, start: String, end: String, extra: [String] = []) -> [String] {
-    ["BEGIN:VEVENT"] + (uid.map { ["UID:\($0)"] } ?? []) + ["DTSTAMP:20260901T000000Z", "SUMMARY:\(title)",
-        "DTSTART;TZID=America/Los_Angeles:\(start)", "DTEND;TZID=America/Los_Angeles:\(end)"] + extra + ["END:VEVENT"]
+    var lines: [String] = ["BEGIN:VEVENT"]
+    if let uid { lines.append("UID:\(uid)") }
+    lines.append("DTSTAMP:20260901T000000Z")
+    lines.append("SUMMARY:\(title)")
+    lines.append("DTSTART;TZID=America/Los_Angeles:\(start)")
+    lines.append("DTEND;TZID=America/Los_Angeles:\(end)")
+    lines += extra
+    lines.append("END:VEVENT")
+    return lines
 }
 
 let boardGames = vevent(uid: "event_board@example.test", title: "Board games night", start: "20260910T190000",
