@@ -126,3 +126,11 @@ private func feedResponse(_ text: String = sampleFeed) -> HTTPResponse { HTTPRes
         .makeSource(for: connection, credentials: InMemoryCredentialStore(), syncState: InMemorySyncStateStore())
     await #expect(throws: SourceError.authExpired) { _ = try await source.events(in: september) }
 }
+
+@Test func theDefaultSessionKeepsNothingOnDisk() {
+    let configuration = ICalSubscriptionKind.feedSessionConfiguration
+    #expect(configuration.urlCache == nil)
+    #expect(configuration.requestCachePolicy == .reloadIgnoringLocalCacheData)
+    #expect(configuration.httpShouldSetCookies == false)
+    #expect(configuration.httpCookieStorage == nil)
+}

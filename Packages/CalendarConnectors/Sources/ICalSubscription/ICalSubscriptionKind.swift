@@ -15,14 +15,29 @@ public struct ICalSubscriptionKind: ConnectorKind, CredentialPromptHelp {
     private let defaultZone: TimeZone
 
     public init(
-        transport: any HTTPTransport = URLSessionTransport(followsRedirects: false), now: @escaping @Sendable () -> Date = { Date() },
+        transport: (any HTTPTransport)? = nil, now: @escaping @Sendable () -> Date = { Date() },
         sleep: @escaping Sleeper = defaultSleeper, pollInterval: Duration = .seconds(900), defaultZone: TimeZone = .current
     ) {
-        self.transport = transport
+        self.transport = transport ?? Self.makeDefaultTransport()
         self.now = now
         self.sleep = sleep
         self.pollInterval = pollInterval
         self.defaultZone = defaultZone
+    }
+
+    /// The session the feed is fetched with. The link is a credential, so nothing about a request may reach disk: no URL
+    /// cache (it is keyed by the full link and keeps the body), and no cookies.
+    static var feedSessionConfiguration: URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.httpShouldSetCookies = false
+        configuration.httpCookieStorage = nil
+        return configuration
+    }
+
+    static func makeDefaultTransport() -> URLSessionTransport {
+        URLSessionTransport(configuration: feedSessionConfiguration, followsRedirects: false)
     }
 
     public var id: String { Self.kindID }

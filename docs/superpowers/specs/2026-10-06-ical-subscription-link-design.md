@@ -73,7 +73,7 @@ Made with the user during brainstorming:
 **Fetch rules.**
 
 - `GET` with `Accept: text/calendar`, following redirects, but only to `https` (a redirect to `http` or any other scheme is `SourceError.invalidResponse`).
-- The body is capped at 10 MB (`SourceError.invalidResponse("the feed is too large")`).
+- A body larger than 10 MB is refused once it has arrived, not aborted while streaming (`SourceError.invalidResponse("the feed is too large")`). The default session is ephemeral with no URL cache and no cookies, so neither the link nor the body is written to disk.
 - Status mapping: 200 reads; 401, 403, 404 and 410 map to `SourceError.authExpired`, because for a private link "gone" usually means the link was revoked or regenerated, and the app then asks for a new one (a temporary 404 from a provider can cause one needless prompt, which is accepted); 429 and 5xx map to `SourceError.server(status:)`.
 - Caching: the parsed feed is kept in memory with its fetch time. `events(in:)` reuses it while it is younger than the poll interval, so opening the popup does not trigger a request. A conditional request is used when the server gave an `ETag` or `Last-Modified`.
 - Errors never include the URL: the message names the host at most.
