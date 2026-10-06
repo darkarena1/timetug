@@ -206,6 +206,8 @@ public struct CalendarService: RawRepresentable, Hashable, Sendable {
     public static let google = CalendarService(rawValue: "google")
     public static let microsoft = CalendarService(rawValue: "microsoft")
     public static let calDAV = CalendarService(rawValue: "caldav")
+    /// An iCalendar subscription link (Meetup's Add to calendar links, a Google secret address, ...).
+    public static let iCalSubscription = CalendarService(rawValue: "icalsub")
 }
 
 /// Who hosts a calendar, which can differ from the service reading it: a Google calendar read directly has service
