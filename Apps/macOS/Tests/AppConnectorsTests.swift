@@ -37,4 +37,10 @@ final class AppConnectorsTests: XCTestCase {
         XCTAssertEqual(fields.map(\.key), ["link"])
         XCTAssertNotNil((registry.kind(id: "icalsub") as? CredentialPromptHelp)?.credentialHelp?.url)
     }
+
+    func testICalLinkKindIsRegisteredWithADiagnosticsLog() {
+        let diagnostics = AppDiagnostics(capacity: 5)
+        let registry = AppConnectors.makeRegistry(google: nil, microsoft: nil, eventKit: EventKitSource(), diagnostics: diagnostics.log)
+        XCTAssertNotNil(registry.kind(id: "icalsub"))
+    }
 }

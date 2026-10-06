@@ -114,3 +114,9 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] RSVP to a new Meetup: after at most 15 minutes the event appears without relaunching.
 - [ ] Removing the account removes its calendars and the Keychain item (Keychain Access: no TimeTug entry for it).
 - [ ] Events further than a week ahead do not appear for an iCal link account; a weekly Meetup shows its occurrences within the week, and a series that has ended or has not started yet does not appear.
+
+## Diagnostics
+- [ ] With an iCal link account added, Settings > Accounts > Diagnostics > Copy Diagnostics, then paste: the text starts with the app version, macOS version and generation time, and shows `icalsub.fetchCompleted` and `icalsub.feedParsed` lines. It contains no link (nor part of one) and no event titles.
+- [ ] Clear, then Copy Diagnostics and paste: only the header remains.
+- [ ] `log show --predicate 'subsystem == "com.timetug.app" AND category == "icalsub"' --info --last 5m` lists the same entries (private values show as `<private>`).
+- [ ] Searching Settings for "diagnostics" or "logs" opens the Accounts pane.

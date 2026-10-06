@@ -36,6 +36,8 @@ struct AccountsPane: View {
                 Text("Add an Account").font(.headline).padding(.top, 4)
                 providerGrid
                 if !accounts.unconfiguredKindIDs.isEmpty { configurationWarning }
+
+                diagnosticsSection
             }
             .padding(16)
         }
@@ -161,6 +163,23 @@ struct AccountsPane: View {
                 .accessibilityLabel("\(provider.name), coming soon")
             }
         }
+    }
+
+    private var diagnosticsSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(SettingsText.diagnostics).font(.headline)
+            HStack(spacing: 8) {
+                Button("Copy Diagnostics") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(AppDiagnostics.shared.report(), forType: .string)
+                }
+                Button("Clear") { AppDiagnostics.shared.clear() }
+            }
+            Text("A short log of recent calendar activity to share when reporting a problem. It contains no feed links or event titles.")
+                .font(.footnote).foregroundStyle(.secondary)
+        }
+        .padding(.top, 8)
+        .settingsHighlight("diagnostics", navigation: navigation)
     }
 
     private var configurationWarning: some View {

@@ -155,6 +155,13 @@
       and they are gone when you quit TimeTug. Event titles that appear in macOS's system logs are marked
       private.</p>
 
+    <h3>Diagnostics log</h3>
+    <p>TimeTug keeps a short log in memory of what it has been doing, the last few hundred events: counts,
+      status codes and kinds of error. It never contains calendar links, event titles or event contents. The same
+      entries are written to the macOS system log, where anything that could identify you is marked private.
+      Nothing is sent anywhere. The log is gone when you quit TimeTug, and it is copied only if you press
+      <strong>Copy Diagnostics</strong> in Settings and choose to share it.</p>
+
     <h2 id="protection">How we protect your data</h2>
     <ul>
       <li><strong>Encrypted in transit.</strong> TimeTug talks to Google, Microsoft, iCloud and other CalDAV
