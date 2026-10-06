@@ -23,16 +23,20 @@ struct FeedFetcher: Sendable {
 
     func fetch(_ url: URL, validators: FeedValidators? = nil) async throws -> FeedResponse {
         var current = url
-        for _ in 0...Self.maxRedirects {
+        for hop in 0...Self.maxRedirects {
             var headers = ["Accept": "text/calendar, text/plain;q=0.5, */*;q=0.1"]
-            if let etag = validators?.etag { headers["If-None-Match"] = etag }
-            if let modified = validators?.lastModified { headers["If-Modified-Since"] = modified }
+            // Validators describe the version the original link served; a redirect target never validated it.
+            if hop == 0 {
+                if let etag = validators?.etag { headers["If-None-Match"] = etag }
+                if let modified = validators?.lastModified { headers["If-Modified-Since"] = modified }
+            }
+            let conditional = headers["If-None-Match"] != nil || headers["If-Modified-Since"] != nil
             let response = try await transport.send(HTTPRequest(url: current, headers: headers))
             switch response.status {
             case 200:
                 guard response.body.count <= Self.maxBytes else { throw SourceError.invalidResponse("the feed is too large") }
                 return .body(response.body, FeedValidators(etag: response.header("etag"), lastModified: response.header("last-modified")))
-            case 304 where validators != nil:
+            case 304 where conditional:
                 return .notModified
             case 301, 302, 303, 307, 308:
                 guard let location = response.header("location"), let next = URL(string: location, relativeTo: current)?.absoluteURL,

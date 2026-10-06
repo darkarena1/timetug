@@ -128,3 +128,33 @@ private func ok(_ text: String = sampleFeed, headers: [String: String] = [:]) ->
         }
     }
 }
+
+@Test func a304WhenNoConditionalHeaderWasSentIsAnInvalidResponse() async {
+    let transport = FakeTransport()
+    await transport.route(privatePath, [HTTPResponse(status: 304)])
+    await #expect(throws: SourceError.invalidResponse("the feed server answered 304")) {
+        _ = try await FeedFetcher(transport: transport).fetch(feedURL, validators: FeedValidators(etag: nil, lastModified: nil))
+    }
+}
+
+@Test func validatorsAreNotSentToARedirectTarget() async throws {
+    let transport = FakeTransport()
+    await transport.route("other.example.test", [HTTPResponse(status: 304)])
+    await transport.route(privatePath, [HTTPResponse(status: 302, headers: ["Location": "https://other.example.test/feed.ics"])])
+    await #expect(throws: SourceError.invalidResponse("the feed server answered 304")) {
+        _ = try await FeedFetcher(transport: transport)
+            .fetch(feedURL, validators: FeedValidators(etag: "\"v1\"", lastModified: "Mon, 05 Oct 2026 10:00:00 GMT"))
+    }
+    let requests = await transport.requests
+    #expect(requests.count == 2)
+    #expect(requests[0].headers["If-None-Match"] == "\"v1\"")
+    #expect(requests[1].headers["If-None-Match"] == nil && requests[1].headers["If-Modified-Since"] == nil)
+}
+
+@Test func aChainOfExactlyFiveRedirectsIsFollowed() async throws {
+    let transport = FakeTransport()
+    let redirect = HTTPResponse(status: 302, headers: ["Location": feedURL.absoluteString])
+    await transport.route(privatePath, Array(repeating: redirect, count: FeedFetcher.maxRedirects) + [ok()])
+    #expect(body(of: try await FeedFetcher(transport: transport).fetch(feedURL)) != nil)
+    #expect(await transport.requests.count == FeedFetcher.maxRedirects + 1)
+}
