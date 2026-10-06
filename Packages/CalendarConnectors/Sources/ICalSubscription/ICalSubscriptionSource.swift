@@ -12,6 +12,7 @@ actor FeedState {
     private var issued = 0
     private var storedGeneration = 0
     private var reportedBody: Data?
+    private var previousReportedBody: Data?
     private var reportedGeneration = 0
 
     /// Taken when a fetch starts, so a fetch that finishes after a newer one can be told apart.
@@ -34,15 +35,25 @@ actor FeedState {
     /// `prior` (the body held when the check began) stands in for it. A check whose fetch is older than one already
     /// reported says nothing, so overlapping checks report a change once and never report one backwards.
     func report(_ body: Data, generation: Int, prior: Data?) -> Bool {
-        guard generation > reportedGeneration else { return false }
+        guard generation > reportedGeneration else {
+            // An older fetch can still be the first to see a change (the server answered a newer request with the old
+            // feed). Report a body that differs from the last two reported ones, once; never move the generation back.
+            guard let reportedBody, body != reportedBody, body != previousReportedBody else { return false }
+            previousReportedBody = reportedBody
+            self.reportedBody = body
+            return true
+        }
         reportedGeneration = generation
         let last = reportedBody ?? prior
+        if let reportedBody, reportedBody != body { previousReportedBody = reportedBody }
         reportedBody = body
         return last != nil && last != body
     }
 
-    /// The feed is unchanged: keep what is held and restart its age.
-    func unchanged(validators: FeedValidators?, at date: Date) {
+    /// The feed is unchanged: keep what is held and restart its age. A fetch older than the stored feed is ignored: what it
+    /// found is no longer news, and its validators would replace newer ones.
+    func unchanged(validators: FeedValidators?, generation: Int, at date: Date) {
+        guard generation > storedGeneration else { return }
         if let validators, validators.etag != nil || validators.lastModified != nil { self.validators = validators }
         fetchedAt = date
     }
@@ -131,11 +142,11 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
         let validators = await state.validators.flatMap { $0.etag != nil || $0.lastModified != nil ? $0 : nil }
         switch try await fetcher.fetch(url, validators: previous == nil ? nil : validators) {
         case .notModified:
-            await state.unchanged(validators: nil, at: now())
+            await state.unchanged(validators: nil, generation: generation, at: now())
             return (previous ?? Data(), generation)
         case .body(let data, let newValidators):
             if let previous, previous == data {
-                await state.unchanged(validators: newValidators, at: now())
+                await state.unchanged(validators: newValidators, generation: generation, at: now())
                 return (data, generation)
             }
             let feed = try FeedParser.parse(data)

@@ -59,9 +59,11 @@ struct FeedFetcher: Sendable {
     private func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         do { return try await transport.send(request) }
         catch is CancellationError { throw CancellationError() }
+        catch let error as URLError where error.code == .cancelled { throw CancellationError() }
         catch SourceError.network(let message) {
-            let path = request.url.path
-            let leaks = message.contains(request.url.absoluteString) || (path.count > 1 && message.contains(path))
+            let components = URLComponents(url: request.url, resolvingAgainstBaseURL: false)
+            let secrets = [request.url.absoluteString, request.url.path, components?.percentEncodedPath, components?.query, components?.percentEncodedQuery]
+            let leaks = secrets.contains { text in text.map { $0.count > 1 && message.contains($0) } ?? false }
             throw SourceError.network(leaks ? Self.unreachable : message)
         } catch let error as SourceError { throw error }
         catch { throw SourceError.network(Self.unreachable) }

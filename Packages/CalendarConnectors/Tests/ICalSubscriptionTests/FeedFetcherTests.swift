@@ -144,6 +144,31 @@ private func ok(_ text: String = sampleFeed, headers: [String: String] = [:]) ->
     }
 }
 
+private struct EchoingTransport: HTTPTransport {
+    let message: String
+    func send(_ request: HTTPRequest) async throws -> HTTPResponse { throw SourceError.network(message) }
+}
+
+@Test func aTransportMessageThatEchoesOnlyTheQueryOrTheEncodedPathIsReplaced() async {
+    let url = URL(string: "https://www.example.test/my%20events/PRIVATE%20X/going?token=QUERY-SECRET-77")!
+    let echoes = ["bad request ?token=QUERY-SECRET-77", "token=QUERY-SECRET-77", "failed at /my%20events/PRIVATE%20X/going", "failed at /my events/PRIVATE X/going"]
+    for echo in echoes {
+        do {
+            _ = try await FeedFetcher(transport: EchoingTransport(message: echo)).fetch(url)
+            Issue.record("expected a failure")
+        } catch {
+            #expect(error as? SourceError == .network("the feed could not be reached"), "\(echo)")
+        }
+    }
+}
+
+@Test func aCancelledURLErrorFromAnyTransportIsACancellation() async {
+    struct Cancelling: HTTPTransport {
+        func send(_ request: HTTPRequest) async throws -> HTTPResponse { throw URLError(.cancelled) }
+    }
+    await #expect(throws: CancellationError.self) { _ = try await FeedFetcher(transport: Cancelling()).fetch(feedURL) }
+}
+
 @Test func a304WhenNoConditionalHeaderWasSentIsAnInvalidResponse() async {
     let transport = FakeTransport()
     await transport.route(privatePath, [HTTPResponse(status: 304)])
