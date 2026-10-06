@@ -13,9 +13,9 @@ struct ParsedFeed: Sendable {
     var colorHex: String?
     var timeZone: TimeZone?
     var resources: [FeedResource]
-    /// A deterministic form of what was kept (header and retained events), to tell a real change from an edit outside
-    /// the retention window.
-    var fingerprint = Data()
+    /// A deterministic form of what the user sees (header and retained events), to tell a real change from an edit outside
+    /// the retention window or a feed that restamps itself on every request. Computed on demand.
+    var fingerprint: Data { FeedParser.fingerprint(of: self) }
 }
 
 enum FeedParser {
@@ -39,20 +39,19 @@ enum FeedParser {
             groups[uid, default: []].append(event)
         }
         var resources: [FeedResource] = []
+        let feedZone = calendar.property("X-WR-TIMEZONE").flatMap { TimeZone(identifier: $0.value) }
         for uid in order {
             let wrapper = ICalComponent(name: "VCALENDAR", properties: calendar.properties, components: zones + (groups[uid] ?? []))
             guard let resource = try? EventResource(calendar: wrapper) else { continue }
             let item = FeedResource(name: resourceName(for: uid), resource: resource)
-            let zone = calendar.property("X-WR-TIMEZONE").flatMap { TimeZone(identifier: $0.value) }
-            if let retention, !isKept(item, window: retention.window, zone: zone ?? retention.zone) { continue }
+            if let retention, !isKept(item, window: retention.window, zone: feedZone ?? retention.zone) { continue }
             resources.append(item)
         }
-        var feed = ParsedFeed(
+        let feed = ParsedFeed(
             name: calendar.property("X-WR-CALNAME")?.text.nonEmpty,
             colorHex: colorText(calendar.property("X-APPLE-CALENDAR-COLOR")?.value ?? calendar.property("COLOR")?.value),
-            timeZone: calendar.property("X-WR-TIMEZONE").flatMap { TimeZone(identifier: $0.value) },
+            timeZone: feedZone,
             resources: resources)
-        feed.fingerprint = fingerprint(of: feed)
         return feed
     }
 
@@ -67,11 +66,19 @@ enum FeedParser {
         return !EventReader.events(in: resource, overlapping: window, context: context).isEmpty
     }
 
-    private static func fingerprint(of feed: ParsedFeed) -> Data {
+    /// Properties a feed may rewrite on every request without the event having changed.
+    private static let volatile: Set<String> = ["DTSTAMP", "LAST-MODIFIED", "CREATED", "PRODID"]
+
+    static func fingerprint(of feed: ParsedFeed) -> Data {
         var data = Data("\(feed.name ?? "")|\(feed.colorHex ?? "")|\(feed.timeZone?.identifier ?? "")\n".utf8)
-        for item in feed.resources {
+        for item in feed.resources.sorted(by: { $0.name < $1.name }) {
             data.append(Data("#\(item.name)\n".utf8))
-            data.append(item.resource.serialized())
+            let events = item.resource.events.map { event in
+                ICalComponent(name: event.name, properties: event.properties.filter { !volatile.contains($0.name) }, components: event.components)
+            }
+            for event in events.sorted(by: { ($0.property("RECURRENCE-ID")?.value ?? "") < ($1.property("RECURRENCE-ID")?.value ?? "") }) {
+                data.append(Data(ICalSerializer.serialize(event).utf8))
+            }
         }
         return data
     }

@@ -119,16 +119,41 @@ private func titles(_ source: ICalSubscriptionSource) async throws -> Set<String
 
 @Test func aFeedWithEverythingOutsideTheWindowIsAValidSignInAndTheKindPassesTheWindowOn() async throws {
     let transport = FakeTransport()
-    await serve(transport, [ics([farPast, farFuture, inWindow])])
+    await serve(transport, [ics([farPast, farFuture])])
     let store = InMemoryCredentialStore()
     let kind = ICalSubscriptionKind(transport: transport, now: TestNow().provider, sleep: { _ in }, defaultZone: pacific, retention: window)
-    let onlyFar = FakeTransport()
-    await serve(onlyFar, [ics([farPast, farFuture])])
-    let connection = try await ICalSubscriptionKind(transport: onlyFar, now: TestNow().provider, retention: window)
-        .authorize(using: StubInteraction(["link": feedURL.absoluteString]), credentials: InMemoryCredentialStore())
+    let connection = try await kind.authorize(using: StubInteraction(["link": feedURL.absoluteString]), credentials: store)
     #expect(connection.displayName == "My Meetups (www.example.test)")
+    let source = try kind.makeSource(for: connection, credentials: store, syncState: InMemorySyncStateStore())
+    #expect(try await source.events(in: everything).isEmpty)
+}
 
-    let signedIn = try await kind.authorize(using: StubInteraction(["link": feedURL.absoluteString]), credentials: store)
-    let source = try kind.makeSource(for: signedIn, credentials: store, syncState: InMemorySyncStateStore())
-    #expect(try await source.events(in: everything).map(\.title) == ["In window"])
+@Test func aFeedThatRestampsItselfOnEveryRequestIsNotAChange() async throws {
+    func feed(stamp: String, modified: String) -> HTTPResponse {
+        let event = vevent(uid: "in@example.test", title: "In window", start: "20270118T100000", end: "20270118T110000",
+                           extra: ["LAST-MODIFIED:\(modified)", "CREATED:\(modified)"])
+        let text = feedICS([event]).replacingOccurrences(of: "DTSTAMP:20260901T000000Z", with: "DTSTAMP:\(stamp)")
+            .replacingOccurrences(of: "PRODID:-//Example//Feed 1.0//EN", with: "PRODID:-//Example//Feed \(stamp)//EN")
+        return HTTPResponse(status: 200, body: Data(text.utf8))
+    }
+    let transport = FakeTransport()
+    await serve(transport, [
+        feed(stamp: "20261001T000000Z", modified: "20260901T000000Z"), feed(stamp: "20261002T000000Z", modified: "20260901T000000Z"),
+        feed(stamp: "20261003T000000Z", modified: "20261003T000000Z"),
+    ])
+    let source = makeSource(transport, now: TestNow())
+    #expect(try await source.checkForChanges() == nil)
+    #expect(try await source.checkForChanges() == nil)
+    #expect(try await source.checkForChanges() == nil)
+}
+
+@Test func aRealEditStillReportsWhenOnlyTheStampsAlsoMoved() async throws {
+    let before = vevent(uid: "in@example.test", title: "In window", start: "20270118T100000", end: "20270118T110000")
+    let after = vevent(uid: "in@example.test", title: "In window", start: "20270118T110000", end: "20270118T120000",
+                       extra: ["LAST-MODIFIED:20261003T000000Z"])
+    let transport = FakeTransport()
+    await serve(transport, [ics([before]), ics([after])])
+    let source = makeSource(transport, now: TestNow())
+    #expect(try await source.checkForChanges() == nil)
+    #expect(try await source.checkForChanges() == .eventsChanged(calendarIDs: ["feed"]))
 }

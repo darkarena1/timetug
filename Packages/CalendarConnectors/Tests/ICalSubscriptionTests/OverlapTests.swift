@@ -34,11 +34,11 @@ private actor GatedTransport: HTTPTransport {
     }
 }
 
-private func makeSource(_ transport: any HTTPTransport) -> ICalSubscriptionSource {
+private func makeSource(_ transport: any HTTPTransport, now: TestNow = TestNow(), retention: RetentionWindow? = nil) -> ICalSubscriptionSource {
     ICalSubscriptionSource(
         connection: Connection(kindID: "icalsub", connectionID: "c1", displayName: "My Meetups (www.example.test)", config: ["host": "www.example.test"]),
         link: { feedURL }, transport: transport, monitor: ChangeMonitor(interval: .seconds(900), sleep: { _ in }),
-        maxAge: 900, now: TestNow().provider, defaultZone: TimeZone(identifier: "Europe/Berlin")!)
+        maxAge: 900, now: now.provider, defaultZone: TimeZone(identifier: "Europe/Berlin")!, retention: retention)
 }
 
 private func ics(_ text: String) -> HTTPResponse { HTTPResponse(status: 200, body: Data(text.utf8)) }
@@ -128,4 +128,33 @@ private func ics(_ text: String) -> HTTPResponse { HTTPResponse(status: 200, bod
     _ = try await source.checkForChanges()
     let last = try #require(await transport.requests.last)
     #expect(last.headers["If-None-Match"] == "\"e2\"")
+}
+
+@Test func anOlderFetchFinishingLateDoesNotPutAnOlderBodyBackAfterANewerUnchangedOne() async throws {
+    func far(_ title: String, etag: String? = nil) -> HTTPResponse {
+        let event = vevent(uid: "far@example.test", title: title, start: "20270125T100000", end: "20270125T110000")
+        return HTTPResponse(status: 200, headers: etag.map { ["ETag": $0] } ?? [:], body: Data(feedICS([event]).utf8))
+    }
+    // The window (1 day back, 7 ahead of the start) leaves the far event out, so every edit to it is "unchanged".
+    let now = TestNow()
+    let transport = GatedTransport([far("Far v0", etag: "\"e0\""), far("Far v1"), far("Far v2"), HTTPResponse(status: 304)])
+    let source = makeSource(transport, now: now, retention: RetentionWindow(daysBack: 1, daysAhead: 7))
+    let baseline = Task { try await source.checkForChanges() }
+    await transport.waitForArrivals(1)
+    await transport.release(0)
+    _ = try await baseline.value
+
+    let older = Task { try await source.checkForChanges() }
+    await transport.waitForArrivals(2)
+    let newer = Task { try await source.checkForChanges() }
+    await transport.waitForArrivals(3)
+    await transport.release(2)
+    _ = try await newer.value
+    await transport.release(1)
+    _ = try await older.value
+
+    now.advance(5 * 86_400)
+    await transport.release(3)
+    #expect(try await source.checkForChanges() == .eventsChanged(calendarIDs: ["feed"]))
+    #expect(try await source.events(in: DateInterval(start: now.date, duration: 30 * 86_400)).map(\.title) == ["Far v2"])
 }

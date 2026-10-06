@@ -13,6 +13,9 @@ actor FeedState {
     private(set) var fetchedAt: Date?
     private var issued = 0
     private var storedGeneration = 0
+    /// Newest fetch that found the feed unchanged. Kept apart from `storedGeneration` so that a newer "unchanged" answer
+    /// does not stop an older fetch that saw genuinely different content from being stored (see `report`).
+    private var unchangedGeneration = 0
     private var reportedBody: Data?
     private var previousReportedBody: Data?
     private var reportedGeneration = 0
@@ -24,12 +27,12 @@ actor FeedState {
     }
 
     /// Keeps the feed only if no newer fetch has stored one already.
-    func store(feed: ParsedFeed, body: Data, validators: FeedValidators, generation: Int, at date: Date) {
+    func store(feed: ParsedFeed, body: Data, fingerprint: Data, validators: FeedValidators, generation: Int, at date: Date) {
         guard generation > storedGeneration else { return }
         storedGeneration = generation
         self.feed = feed
         self.body = body
-        fingerprint = feed.fingerprint
+        self.fingerprint = fingerprint
         self.validators = validators
         fetchedAt = date
     }
@@ -53,10 +56,14 @@ actor FeedState {
         return last != nil && last != body
     }
 
+    /// What a fetch needs to know about the held feed, read together.
+    func snapshot() -> (body: Data?, fingerprint: Data?, validators: FeedValidators?) { (body, fingerprint, validators) }
+
     /// The feed is unchanged: keep what is held and restart its age. A fetch older than the stored feed is ignored: what it
     /// found is no longer news, and its validators would replace newer ones.
     func unchanged(validators: FeedValidators?, body: Data?, generation: Int, at date: Date) {
-        guard generation > storedGeneration else { return }
+        guard generation > max(storedGeneration, unchangedGeneration) else { return }
+        unchangedGeneration = generation
         if let body { self.body = body }
         if let validators, validators.etag != nil || validators.lastModified != nil { self.validators = validators }
         fetchedAt = date
@@ -146,9 +153,8 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
     private func refresh() async throws -> (fingerprint: Data, generation: Int) {
         let url = try await link()
         let generation = await state.nextGeneration()
-        let previousBody = await state.body
-        let previousFingerprint = await state.fingerprint
-        let validators = await state.validators.flatMap { $0.etag != nil || $0.lastModified != nil ? $0 : nil }
+        let (previousBody, previousFingerprint, heldValidators) = await state.snapshot()
+        let validators = heldValidators.flatMap { $0.etag != nil || $0.lastModified != nil ? $0 : nil }
         let data: Data
         var newValidators: FeedValidators?
         var newBody: Data?
@@ -163,12 +169,13 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
         }
         let at = now()
         let feed = try FeedParser.parse(data, retention: retention.map { ($0.interval(at: at), defaultZone) })
-        if feed.fingerprint == previousFingerprint {
+        let fingerprint = feed.fingerprint
+        if fingerprint == previousFingerprint {
             await state.unchanged(validators: newValidators, body: newBody, generation: generation, at: at)
         } else {
             let kept = await state.validators ?? FeedValidators()
-            await state.store(feed: feed, body: data, validators: newValidators ?? kept, generation: generation, at: at)
+            await state.store(feed: feed, body: data, fingerprint: fingerprint, validators: newValidators ?? kept, generation: generation, at: at)
         }
-        return (feed.fingerprint, generation)
+        return (fingerprint, generation)
     }
 }
