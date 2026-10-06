@@ -25,8 +25,9 @@ Made with the user during brainstorming:
 
 - **One generic kind** (`icalsub`, shown as "iCal link or file"), not a generic kind plus a Meetup kind. The help text carries the Meetup steps.
 - **Link or file in one sheet.** The credential sheet gets a Link / File segmented control (option B of the UI discussion); mixing a masked link field with a file button, or two entries in the "+" menu, were rejected.
-- **A file is a one-time import** copied into app storage, labelled "Imported file (won't update)", refreshed by re-importing through the existing reauthorize flow. A live reference to the path was rejected for now: it adds a failure mode (moved or deleted file) for a case links already cover.
+- **A file is a one-time import** copied into the Keychain, labelled "Imported file (won't update)", refreshed by re-importing through the existing reauthorize flow. A live reference to the path was rejected for now: it adds a failure mode (moved or deleted file) for a case links already cover.
 - **The link is a credential.** It is stored in the Keychain, shown masked, and never logged or put into an error message.
+- **An imported file lives in the Keychain, not on disk.** At import the file's text is copied into the account's Keychain item (the key `snapshot`), so the account never depends on the original file again: moving, renaming or deleting it changes nothing. The user asked for this explicitly.
 
 ## Placement
 
@@ -66,8 +67,10 @@ The field is a single text value. It holds either a link or a `file://` URL; the
 `authorize(using:credentials:)` prompts for the `feed` field, parses it with `FeedLocation`, loads the content once, and requires it to parse as a `VCALENDAR` with at least one calendar component (a feed with zero events is valid: a person may have no RSVPs yet). Nothing is stored until that succeeds.
 
 - **Link:** the URL goes to the `CredentialStore` under the key `feed`. `Connection.config` holds only `mode = "link"` and the host (for display). `displayName` is `"<calendar name> (<host>)"` where the calendar name is `X-WR-CALNAME` when present, else the host alone.
-- **File:** the file's bytes (UTF-8 text) go to `SyncStateStore` under the scope `snapshot`. They are not credentials, and `SyncStateStore.removeAll` already runs when an account is removed, so the snapshot goes with the account. `Connection.config` holds `mode = "file"` and the file name. `displayName` is `"<calendar name> (<file name>)"`. The size cap below applies. This reuses an existing store rather than adding a new one; the cost is that `FileSyncStateStore` rewrites its whole JSON file on a change, which for a snapshot of a few hundred kilobytes at most is acceptable. If snapshots prove large, a dedicated blob store is the follow-up.
-- **Reauthorize:** prompts again. A link replaces the stored link; a file replaces the snapshot. The mode may change (link to file or back); the `connectionID` is kept so calendar keys and sync state stay valid. There is no "different account" check, since a feed has no identity beyond its content.
+- **File:** the file's text (UTF-8, decoded once at import) goes to the `CredentialStore` under the key `snapshot`, in the same Keychain item as any other secret of that connection. The original file is never read again after sign-in. A calendar's events are private, so the Keychain is the right home, and `removeSecrets` already deletes it with the account. `Connection.config` holds only `mode = "file"` and the file name (for display). `displayName` is `"<calendar name> (<file name>)"`.
+  - **Size.** The Keychain is built for small items, so a file is limited to **1 MB** (`SourceError.invalidResponse("the file is too large to import")`), roughly 300 events of a typical RSVP feed. An opt-in Keychain test in `CalendarApple` writes and reads a snapshot at the cap on a real Keychain, and the cap is lowered if that fails. If real files turn out larger, the fallback is to drop properties the reader never uses (attendee lists, `X-` properties) before storing; that is a follow-up, not part of this phase.
+  - The source reads the snapshot once and keeps the parsed feed in memory, so the Keychain is not read on every `events(in:)` call.
+- **Reauthorize:** prompts again. A link replaces the stored link and removes any snapshot; a file replaces the snapshot and removes any stored link. The mode may change (link to file or back); the `connectionID` is kept so calendar keys and sync state stay valid. There is no "different account" check, since a feed has no identity beyond its content.
 
 ## Reads
 
@@ -108,15 +111,15 @@ The field is a single text value. It holds either a link or a `file://` URL; the
 ## Security and privacy
 
 - The link is sent only to the host it names, over HTTPS, and is never logged or placed in an error or a crash report. Request logs omit the URL's path and query.
-- The link is held in the Keychain through the existing `CredentialStore`. The snapshot and digest live in the app's support folder, like other sync state. Calendar contents are read in memory only, as for every other connector.
-- The privacy policy gets a new bullet: what the feed connector reads (the feed's events, titles, times, places, descriptions and links), what is stored (the link in the Keychain, or the imported file's text in app storage, and a digest to spot changes), that a link is a private address anyone holding it could read, that the user can revoke it at the provider, and that nothing is ever written back. The summary of "what we store" (the account list) gains the feed type and host.
+- The link, or an imported file's text, is held in the Keychain through the existing `CredentialStore`. Only the change-detection digest (for links) lives in the app's support folder, like other sync state. Other calendar contents are read in memory only, as for every other connector; an imported file is the one case where the events themselves are stored, which is why they go in the Keychain.
+- The privacy policy gets a new bullet: what the feed connector reads (the feed's events, titles, times, places, descriptions and links), what is stored (in the Keychain: the link, or the full text of an imported file, so that it no longer depends on the original file; plus a digest to spot changes), that a link is a private address anyone holding it could read, that the user can revoke it at the provider, and that nothing is ever written back. The summary of "what we store" (the account list) gains the feed type and host.
 
 ## Testing
 
 1. **`FeedLocation`:** `webcal` and `webcals` mapping, `https` accepted, `http` refused (and allowed for loopback), embedded credentials refused, `file://` accepted only for absolute regular files, and junk text refused.
 2. **`FeedParser`:** a scrubbed fixture shaped like a real Meetup feed (two events, a recurring one with an `RRULE`, one `VTIMEZONE`, an event page `URL`), built from structure only with invented data; a feed with two events sharing a time zone; a feed with no events; an event without a `UID`; a recurring event with an override; all-day events through `AllDayConformance`; `ProvidedFieldsConformance`.
 3. **`ICalSubscriptionSource` over `FakeTransport`:** the first fetch and poll baseline, a changed digest, an unchanged feed, conditional request when `ETag` is present, 401/403/404/410 mapped to `authExpired`, 429 and 5xx to `server`, redirect to `http` refused, oversized body refused, a body that is not a calendar refused at sign-in, and that no thrown error or description contains the URL (a test greps the error text for the secret path).
-4. **File mode:** the snapshot round-trips through an in-memory `SyncStateStore`; a file account never touches the transport; reauthorize with a new file replaces the snapshot and keeps the `connectionID`; mode switch both ways.
+4. **File mode:** the snapshot round-trips through an in-memory `CredentialStore`; a file account never touches the transport; **deleting or moving the original file after sign-in leaves the account reading the same events**; a file over 1 MB is refused before anything is stored; a feed link and a snapshot are never both left behind after reauthorize; reauthorize with a new file replaces the snapshot and keeps the `connectionID`; mode switch both ways.
 5. **Linux:** the `core-linux` job builds and tests `ICalSubscription`.
 6. **App tests:** the registry contains `icalsub` and its help has a link; `CredentialSheet` Link / File value rules (mode switch clears the value, `isComplete` follows the active mode); `AccountsPane` label for a file account.
 7. **Live (opt-in, never in CI):** `TIMETUG_LIVE_ICALSUB=1` reads a feed link from the git-ignored `~/.config/timetug/icalsub-live` (one line), loads it through the real transport, and prints counts and field coverage only, never the link or event text.
@@ -124,6 +127,6 @@ The field is a single text value. It holds either a link or a `file://` URL; the
 ## Risks and follow-ups
 
 - **A revoked or regenerated Meetup link** shows as `authExpired`; the user pastes the new link. This is the intended recovery.
-- **`SyncStateStore` as a snapshot home** is a pragmatic reuse; revisit if imported files are large.
+- **Keychain item size** for large files: bounded by the 1 MB cap and checked by a real-Keychain test (see Sign-in).
 - **Duplicate events** are handled by the existing UID duplicate merge; Meetup UIDs are Meetup's own, so a Meetup event that was also added to Google will not merge (different UIDs), which is accepted.
-- **Follow-ups, not in this phase:** a "watch this file" mode, a Meetup preset with a host check if people paste wrong links often, and a dedicated blob store.
+- **Follow-ups, not in this phase:** a "watch this file" mode, a Meetup preset with a host check if people paste wrong links often, and trimming stored files to the properties the reader uses.
