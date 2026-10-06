@@ -337,7 +337,7 @@ and the `CalendarSource` returned by `makeSource` (id `google-<connectionID>`).
 ## 8. `CalendarBridge` (TimeTug only)
 
 Core defines its own `CalendarSource` (`calendars() -> [CalendarInfo]`, `events(in:) -> [TimeTugCalendarEvent]`,
-`changes() -> AsyncStream<Void>`) and never sees library types.
+`changes() -> AsyncStream<Void>`, and an optional `notices()`) and sees only one library type, `SourceNotice`.
 
 - `ConnectedSource` wraps any library source. It maps calendars to `CalendarInfo`, events to `TimeTugCalendarEvent`
   (dropping cancelled ones), forwards every library change (including `.sourceFailed`) as a `Void` yield, and translates
