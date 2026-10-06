@@ -19,6 +19,15 @@ actor FeedState {
     private var reportedBody: Data?
     private var previousReportedBody: Data?
     private var reportedGeneration = 0
+    private var reportedUnreadable: Set<UnreadableRule> = []
+
+    /// The unreadable-rule keys not reported yet; the set then becomes `current`, so a rule that was fixed and breaks
+    /// again, or is edited, is new again.
+    func newUnreadable(_ current: [UnreadableRule]) -> Set<UnreadableRule> {
+        let fresh = Set(current).subtracting(reportedUnreadable)
+        reportedUnreadable = Set(current)
+        return fresh
+    }
 
     /// Taken when a fetch starts, so a fetch that finishes after a newer one can be told apart.
     func nextGeneration() -> Int {
@@ -40,21 +49,23 @@ actor FeedState {
     /// What `checkForChanges` last saw, independent of what `events(in:)` loaded. The first report has no earlier one, so
     /// `prior` (the body held when the check began) stands in for it. A check whose fetch is older than one already
     /// reported says nothing, so overlapping checks report a change once and never report one backwards.
-    func report(_ body: Data, generation: Int, prior: Data?) -> Bool {
+    func report(_ body: Data, generation: Int, prior: Data?) -> Report {
         guard generation > reportedGeneration else {
             // An older fetch can still be the first to see a change (the server answered a newer request with the old
             // feed). Report a body that differs from the last two reported ones, once; never move the generation back.
-            guard let reportedBody, body != reportedBody, body != previousReportedBody else { return false }
+            guard let reportedBody, body != reportedBody, body != previousReportedBody else { return .stale }
             previousReportedBody = reportedBody
             self.reportedBody = body
-            return true
+            return .changed
         }
         reportedGeneration = generation
         let last = reportedBody ?? prior
         if let reportedBody, reportedBody != body { previousReportedBody = reportedBody }
         reportedBody = body
-        return last != nil && last != body
+        return last != nil && last != body ? .changed : .unchanged
     }
+
+    enum Report { case changed, unchanged, stale }
 
     /// What a fetch needs to know about the held feed, read together.
     func snapshot() -> (body: Data?, fingerprint: Data?, validators: FeedValidators?) { (body, fingerprint, validators) }
@@ -136,13 +147,17 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
     public func checkForChanges() async throws -> CalendarChange? {
         let prior = await state.fingerprint
         let fetched = try await refresh()
-        let changed = await state.report(fetched.fingerprint, generation: fetched.generation, prior: prior)
-        if changed {
+        let outcome = await state.report(fetched.fingerprint, generation: fetched.generation, prior: prior)
+        switch outcome {
+        case .changed:
             diagnostics.record(.info, "icalsub", "changeReported", [.bool("bodyChanged", fetched.bodyChanged)])
-        } else if fetched.bodyChanged {
-            diagnostics.record(.info, "icalsub", "changeSuppressed", [.string("reason", "outsideWindowOrVolatile", private: false)])
+        case .unchanged where fetched.bodyChanged:
+            diagnostics.record(.info, "icalsub", "changeSuppressed", [.string("reason", "unchangedRetained", private: false)])
+        case .stale where fetched.bodyChanged:
+            diagnostics.record(.info, "icalsub", "changeSuppressed", [.string("reason", "staleFetch", private: false)])
+        default: break
         }
-        return changed ? .eventsChanged(calendarIDs: [Self.calendarID]) : nil
+        return outcome == .changed ? .eventsChanged(calendarIDs: [Self.calendarID]) : nil
     }
 
     private func currentFeed() async throws -> ParsedFeed {
@@ -175,7 +190,12 @@ public final class ICalSubscriptionSource: PollingCalendarSource {
             newValidators = received
         }
         let at = now()
-        let feed = try FeedParser.parse(data, retention: retention.map { ($0.interval(at: at), defaultZone) }, diagnostics: diagnostics)
+        let feed = try FeedParser.parse(data, retention: retention.map { ($0.interval(at: at), defaultZone) }, diagnostics: diagnostics,
+                                     logsUnreadableRules: false)
+        let current = feed.unreadableRules
+        for rule in await state.newUnreadable(current).sorted(by: { ($0.uid, $0.ruleHash) < ($1.uid, $1.ruleHash) }) {
+            diagnostics.record(.notice, "icalsub", "rruleUnreadable", [.string("uid", rule.uid)])
+        }
         let fingerprint = feed.fingerprint
         if fingerprint == previousFingerprint {
             await state.unchanged(validators: newValidators, body: newBody, generation: generation, at: at)

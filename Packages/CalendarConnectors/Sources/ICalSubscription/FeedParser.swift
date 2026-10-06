@@ -8,11 +8,19 @@ struct FeedResource: Sendable {
     let resource: EventResource
 }
 
+/// A group's UID and a hash of its `RRULE` lines (never the rule text), so an edited rule is a new entry.
+struct UnreadableRule: Hashable, Sendable {
+    let uid: String
+    let ruleHash: String
+}
+
 struct ParsedFeed: Sendable {
     var name: String?
     var colorHex: String?
     var timeZone: TimeZone?
     var resources: [FeedResource]
+    /// The kept groups whose recurrence rule could not be read, to tell "still broken" from "newly broken".
+    var unreadableRules: [UnreadableRule] = []
     /// A deterministic form of what the user sees (header and retained events), to tell a real change from an edit outside
     /// the retention window or a feed that restamps itself on every request. Computed on demand.
     var fingerprint: Data { FeedParser.fingerprint(of: self) }
@@ -27,7 +35,8 @@ enum FeedParser {
     /// is kept whole, and so is a group whose recurrence rule cannot be read (its occurrences are unknown, so it cannot be
     /// shown to be outside the window). `diagnostics` gets counts and fixed tokens only: never text from the feed.
     static func parse(
-        _ data: Data, retention: (window: DateInterval, zone: TimeZone)? = nil, diagnostics: any DiagnosticLog = NullDiagnosticLog()
+        _ data: Data, retention: (window: DateInterval, zone: TimeZone)? = nil, diagnostics: any DiagnosticLog = NullDiagnosticLog(),
+        logsUnreadableRules: Bool = true
     ) throws -> ParsedFeed {
         let calendar: ICalComponent
         do { calendar = try ICalParser.parse(data) } catch {
@@ -56,14 +65,18 @@ enum FeedParser {
         var resources: [FeedResource] = []
         let feedZone = calendar.property("X-WR-TIMEZONE").flatMap { TimeZone(identifier: $0.value) }
         var dropped = 0
+        var unreadable: [UnreadableRule] = []
         for uid in order {
             let wrapper = ICalComponent(name: "VCALENDAR", properties: calendar.properties, components: zones + (groups[uid] ?? []))
             guard let resource = try? EventResource(calendar: wrapper) else { continue }
             let item = FeedResource(name: resourceName(for: uid), resource: resource)
             let zone = feedZone ?? retention?.zone ?? .gmt
-            let unreadable = hasUnreadableRule(item, zone: zone)
-            if unreadable { diagnostics.record(.notice, "icalsub", "rruleUnreadable", [.string("uid", uid)]) }
-            if let retention, !unreadable, !isKept(item, window: retention.window, zone: zone) {
+            let isUnreadable = hasUnreadableRule(item, zone: zone)
+            if isUnreadable {
+                unreadable.append(UnreadableRule(uid: uid, ruleHash: fnv1aHex(ruleText(of: item))))
+                if logsUnreadableRules { diagnostics.record(.notice, "icalsub", "rruleUnreadable", [.string("uid", uid)]) }
+            }
+            if let retention, !isUnreadable, !isKept(item, window: retention.window, zone: zone) {
                 dropped += 1
                 continue
             }
@@ -72,13 +85,14 @@ enum FeedParser {
         if withoutUID > 0 { diagnostics.record(.info, "icalsub", "syntheticUID", [.int("count", withoutUID)]) }
         diagnostics.record(.info, "icalsub", "feedParsed", [
             .int("eventsInFeed", eventsInFeed), .int("groupsKept", resources.count), .int("groupsDropped", dropped),
+            .int("unreadableRules", unreadable.count),
             .bool("retentionActive", retention != nil),
         ])
         let feed = ParsedFeed(
             name: calendar.property("X-WR-CALNAME")?.text.nonEmpty,
             colorHex: colorText(calendar.property("X-APPLE-CALENDAR-COLOR")?.value ?? calendar.property("COLOR")?.value),
             timeZone: feedZone,
-            resources: resources)
+            resources: resources, unreadableRules: unreadable)
         return feed
     }
 
@@ -90,7 +104,13 @@ enum FeedParser {
         return !EventReader.events(in: item.resource, overlapping: window, context: context).isEmpty
     }
 
-    /// True when the group's series master has an `RRULE` the shared reader could not read.
+    /// The group's `RRULE` lines, to tell an edited rule from an unchanged one.
+    private static func ruleText(of item: FeedResource) -> String {
+        item.resource.master?.properties(named: "RRULE").map { ICalSerializer.contentLine($0) }.joined(separator: "\n") ?? ""
+    }
+
+    /// True when the group's series master has an `RRULE` the shared reader could not read. A group with no usable
+    /// `DTSTART` has no timing to expand from, so it is never checked (and never reported).
     private static func hasUnreadableRule(_ item: FeedResource, zone: TimeZone) -> Bool {
         guard let master = item.resource.master,
               let timing = EventReader.timing(of: master, resolver: item.resource.resolver, calendarZone: zone) else { return false }
@@ -129,7 +149,7 @@ enum FeedParser {
     }
 
     /// FNV-1a, 64 bit. Not for security: it only keeps a made-up UID the same from one read to the next.
-    private static func fnv1aHex(_ text: String) -> String {
+    static func fnv1aHex(_ text: String) -> String {
         var hash: UInt64 = 0xcbf2_9ce4_8422_2325
         for byte in text.utf8 {
             hash ^= UInt64(byte)

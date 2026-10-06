@@ -56,8 +56,8 @@ public struct DiagnosticField: Sendable, Equatable {
         DiagnosticField(name: name, value: .string(value), isPrivate: isPrivate)
     }
 
-    /// The value as report text (no privacy applied).
-    public var valueText: String {
+    /// The value as text, ignoring `isPrivate`. For tests and for a report that has already decided what to show.
+    public var unredactedText: String {
         switch value {
         case .int(let number): String(number)
         case .double(let number): String(number)
@@ -162,7 +162,7 @@ public final class RingBufferDiagnosticLog: DiagnosticLog, @unchecked Sendable {
     /// A string value with a space, quote, equals sign or line break is quoted so a line stays one line.
     private static func text(_ field: DiagnosticField) -> String {
         guard case .string(let value) = field.value,
-              value.contains(where: { $0.isWhitespace || $0 == "\"" || $0 == "=" }) else { return field.valueText }
+              value.contains(where: { $0.isWhitespace || $0 == "\"" || $0 == "=" }) else { return field.unredactedText }
         let escaped = value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
             .replacingOccurrences(of: "\n", with: "\\n").replacingOccurrences(of: "\r", with: "\\r")
         return "\"\(escaped)\""

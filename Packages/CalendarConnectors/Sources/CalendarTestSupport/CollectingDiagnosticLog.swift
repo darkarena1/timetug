@@ -19,7 +19,7 @@ public final class CollectingDiagnosticLog: DiagnosticLog, @unchecked Sendable {
     /// Every event as text, private fields included: what a leak test searches.
     public var transcript: String {
         events.map { event in
-            ([event.category, event.name, event.level.label] + event.fields.map { "\($0.name)=\($0.valueText)" }).joined(separator: " ")
+            ([event.category, event.name, event.level.label] + event.fields.map { "\($0.name)=\($0.unredactedText)" }).joined(separator: " ")
         }.joined(separator: "\n")
     }
 }

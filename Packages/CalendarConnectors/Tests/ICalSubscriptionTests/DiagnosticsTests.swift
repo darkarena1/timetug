@@ -152,6 +152,28 @@ private let inWindow = oneOff("In window", "20270118T100000", "20270118T110000")
     #expect(int(parsed, "groupsKept") == 2 && int(parsed, "groupsDropped") == 1)
 }
 
+private func broken(_ rule: String) -> [String] {
+    vevent(uid: "broken@example.test", title: "Odd series", start: "20260901T100000", end: "20260901T110000", extra: ["RRULE:\(rule)"])
+}
+
+@Test func anUnreadableRuleIsReportedOncePerPollRunAndAgainWhenEditedOrReBroken() async throws {
+    let log = CollectingDiagnosticLog()
+    let fixed = vevent(uid: "broken@example.test", title: "Odd series", start: "20260901T100000", end: "20260901T110000", extra: ["RRULE:FREQ=WEEKLY"])
+    let now = TestNow()
+    let responses = [ics([broken("INTERVAL=2")], etag: "\"v1\""), HTTPResponse(status: 304), ics([broken("INTERVAL=2")], etag: "\"v2\""),
+                     ics([broken("INTERVAL=3")]), ics([fixed]), ics([broken("INTERVAL=3")])]
+    let source = makeSource(await serve(responses), log, now: now, retention: window)
+    var counts: [Int] = []
+    for _ in responses {
+        _ = try await source.checkForChanges()
+        counts.append(log.events(named: "rruleUnreadable").count)
+    }
+    // first sight, 304 re-parse, same rule again, edited rule, fixed, broken again
+    #expect(counts == [1, 1, 1, 2, 2, 3])
+    #expect(int(log.events(named: "feedParsed").first, "unreadableRules") == 1)
+    #expect(int(log.events(named: "feedParsed")[4], "unreadableRules") == 0)
+}
+
 @Test func eventsWithoutAUIDAreCounted() async throws {
     let log = CollectingDiagnosticLog()
     let nameless = vevent(uid: nil, title: "Nameless one", start: "20260910T100000", end: "20260910T110000")
@@ -180,7 +202,7 @@ private let inWindow = oneOff("In window", "20270118T100000", "20270118T110000")
     #expect(log.events(named: "changeReported").isEmpty && log.events(named: "changeSuppressed").isEmpty)
     _ = try await source.checkForChanges()
     let suppressed = try #require(log.events(named: "changeSuppressed").first)
-    #expect(suppressed.level == .info && string(suppressed, "reason") == "outsideWindowOrVolatile")
+    #expect(suppressed.level == .info && string(suppressed, "reason") == "unchangedRetained")
     #expect(log.events(named: "changeReported").isEmpty)
     _ = try await source.checkForChanges()
     #expect(log.events(named: "changeReported").first?.level == .info)
