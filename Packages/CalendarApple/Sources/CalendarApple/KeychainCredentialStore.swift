@@ -13,11 +13,24 @@ public actor KeychainCredentialStore: CredentialStore {
     }
 
     private let service: String
-    public init(service: String) { self.service = service }
+    private let accessGroup: String?
+
+    /// `accessGroup` nil is the app's private item in the login keychain. A group id (the App Group id) uses the
+    /// data-protection keychain and shares the item with every app of the team that holds that group; it needs a
+    /// team-signed build, so ad-hoc builds pass nil.
+    public init(service: String, accessGroup: String? = nil) {
+        self.service = service
+        self.accessGroup = accessGroup
+    }
 
     private func query(_ connectionID: ConnectionID) -> [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-         kSecAttrAccount as String: connectionID]
+        var q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+                                kSecAttrAccount as String: connectionID]
+        if let accessGroup {
+            q[kSecUseDataProtectionKeychain as String] = true
+            q[kSecAttrAccessGroup as String] = accessGroup
+        }
+        return q
     }
 
     private func read(_ connectionID: ConnectionID) throws -> (credential: StoredCredential, isLegacy: Bool)? {

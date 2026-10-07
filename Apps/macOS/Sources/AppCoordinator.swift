@@ -53,7 +53,7 @@ final class AppCoordinator {
     /// Kinds TimeTug supports in code but this build couldn't register — see `AccountsController.unconfiguredKindIDs`.
     private lazy var unconfiguredKindIDs: [String] =
         (googleOAuthConfig == nil ? ["google"] : []) + (microsoftOAuthConfig == nil ? ["microsoft"] : [])
-    private let credentials = KeychainCredentialStore(service: "com.timetug.app.credentials")
+    private let credentials: any CredentialStore = AppCredentials.make()
     private let syncState = FileSyncStateStore(url: AppSupportFiles.url("sync-state.json"))
     private lazy var sourceRefreshes = SourceRefreshCoordinator { [weak self] ids in
         await self?.refresh(sourceIDs: ids)
