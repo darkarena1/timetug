@@ -114,8 +114,17 @@ final class StatusItemController: NSObject {
     }
 
     private func showMenu() {
-        item.menu = Self.makeMenu(target: self, about: #selector(openAbout),
-                                    checkForUpdates: #selector(checkForUpdates), settings: #selector(openSettings))
+        let menu = Self.makeMenu(target: self, about: #selector(openAbout),
+                                 checkForUpdates: #selector(checkForUpdates), settings: #selector(openSettings))
+        // With a menu bar on every display the item has one window per screen, and `performClick` or a popup anchored
+        // to `item.button` opens the menu on the active screen. Anchor it at the click instead: just under the menu bar
+        // of the display the pointer is on (`clicked()` already recorded it).
+        if let screen = lastClickedScreen {
+            NSApp.activate()
+            menu.popUp(positioning: nil, at: NSPoint(x: NSEvent.mouseLocation.x, y: screen.visibleFrame.maxY), in: nil)
+            return
+        }
+        item.menu = menu
         item.button?.performClick(nil)
         item.menu = nil
     }
