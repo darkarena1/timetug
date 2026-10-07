@@ -372,231 +372,15 @@ git commit -m "Store preferences in the App Group suite, copying known keys once
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 ```
 
-### Task 3: Credentials in the shared keychain group, migrated lazily
+### Task 3: Credentials in the shared keychain group (BLOCKED; deferred until a Developer ID profile exists)
 
-**Files:**
-- Modify: `Packages/CalendarApple/Sources/CalendarApple/KeychainCredentialStore.swift`
-- Create: `Packages/CalendarApple/Sources/CalendarApple/MigratingCredentialStore.swift`
-- Create: `Packages/CalendarApple/Tests/CalendarAppleTests/MigratingCredentialStoreTests.swift`
-- Create: `Apps/macOS/Sources/AppCredentials.swift`
-- Modify: `Apps/macOS/Sources/AppCoordinator.swift` (the `credentials` property)
-- Modify: `Apps/macOS/project.yml` (main app entitlements)
+**Status (2026-10-07):** the code was written and tried, then parked on the branch `app-store/keychain-group-wip` (`MigratingCredentialStore`, `KeychainCredentialStore.accessGroup`, `AppCredentials`, 9 passing tests). It does not ship in Phase 1.
 
-**Interfaces:**
-- Consumes: `CredentialStore` (`secrets(for:)`, `setSecrets(_:for:)`, `removeSecrets(for:)`, `ConnectionID`) and the `InMemoryCredentialStore` actor from `CalendarCore`.
-- Produces: `KeychainCredentialStore.init(service:accessGroup:)` (`accessGroup` defaults to `nil` = today's behaviour); `public struct MigratingCredentialStore: CredentialStore { init(primary:legacy:) }`; `AppCredentials.make(groupContainer:) -> any CredentialStore`.
+**Why blocked:** `kSecAttrAccessGroup` with the app group id fails with `errSecMissingEntitlement` (-34018), sandboxed or not. The explicit `keychain-access-groups` entitlement is needed, it is a restricted entitlement, and it needs a provisioning profile. The Developer ID release pipeline signs without one. Only `application-groups` works profile-less (team-prefixed id). ADR 0019 records this.
 
-- [ ] **Step 1: Write the failing tests**
+**What changed in the code since this task was written:** `CredentialStore` now has `secrets`, `setSecrets`, `removeSecrets`, `credentialSnapshot` and `updateRefreshToken(_:for:expectedRevision:)`, and `KeychainCredentialStore` is an actor with per-credential revisions. The parked branch predates that and must be rebased onto it. One process is the credential authority, so sharing a keychain group needs Phase 4 (single instance) first.
 
-Create `Packages/CalendarApple/Tests/CalendarAppleTests/MigratingCredentialStoreTests.swift`:
-
-```swift
-import CalendarCore
-import Testing
-@testable import CalendarApple
-
-private struct FailingWrites: CredentialStore {
-    struct Failure: Error {}
-    func secrets(for connectionID: ConnectionID) async throws -> [String: String]? { nil }
-    func setSecrets(_ secrets: [String: String], for connectionID: ConnectionID) async throws { throw Failure() }
-    func removeSecrets(for connectionID: ConnectionID) async throws {}
-}
-
-@Suite struct MigratingCredentialStoreTests {
-    @Test func readsThePrimaryWithoutTouchingTheLegacyStore() async throws {
-        let primary = InMemoryCredentialStore(), legacy = InMemoryCredentialStore()
-        try await primary.setSecrets(["t": "new"], for: "a")
-        try await legacy.setSecrets(["t": "old"], for: "a")
-        let store = MigratingCredentialStore(primary: primary, legacy: legacy)
-        #expect(try await store.secrets(for: "a") == ["t": "new"])
-        #expect(try await legacy.secrets(for: "a") == ["t": "old"])
-    }
-
-    @Test func movesALegacyItemIntoThePrimaryOnFirstRead() async throws {
-        let primary = InMemoryCredentialStore(), legacy = InMemoryCredentialStore()
-        try await legacy.setSecrets(["t": "old"], for: "a")
-        let store = MigratingCredentialStore(primary: primary, legacy: legacy)
-        #expect(try await store.secrets(for: "a") == ["t": "old"])
-        #expect(try await primary.secrets(for: "a") == ["t": "old"])
-        #expect(try await legacy.secrets(for: "a") == nil)
-    }
-
-    @Test func returnsNilWhenNeitherStoreHasTheItem() async throws {
-        let store = MigratingCredentialStore(primary: InMemoryCredentialStore(), legacy: InMemoryCredentialStore())
-        #expect(try await store.secrets(for: "a") == nil)
-    }
-
-    @Test func aFailedPrimaryWriteKeepsTheLegacyItemAndStillReturnsIt() async throws {
-        let legacy = InMemoryCredentialStore()
-        try await legacy.setSecrets(["t": "old"], for: "a")
-        let store = MigratingCredentialStore(primary: FailingWrites(), legacy: legacy)
-        #expect(try await store.secrets(for: "a") == ["t": "old"])
-        #expect(try await legacy.secrets(for: "a") == ["t": "old"])
-    }
-
-    @Test func writesGoToThePrimaryAndClearAStaleLegacyCopy() async throws {
-        let primary = InMemoryCredentialStore(), legacy = InMemoryCredentialStore()
-        try await legacy.setSecrets(["t": "old"], for: "a")
-        let store = MigratingCredentialStore(primary: primary, legacy: legacy)
-        try await store.setSecrets(["t": "fresh"], for: "a")
-        #expect(try await primary.secrets(for: "a") == ["t": "fresh"])
-        #expect(try await legacy.secrets(for: "a") == nil)
-    }
-
-    @Test func removeClearsBothStores() async throws {
-        let primary = InMemoryCredentialStore(), legacy = InMemoryCredentialStore()
-        try await primary.setSecrets(["t": "x"], for: "a")
-        try await legacy.setSecrets(["t": "y"], for: "a")
-        let store = MigratingCredentialStore(primary: primary, legacy: legacy)
-        try await store.removeSecrets(for: "a")
-        #expect(try await primary.secrets(for: "a") == nil)
-        #expect(try await legacy.secrets(for: "a") == nil)
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify it fails**
-
-Run: `swift test --package-path Packages/CalendarApple --filter MigratingCredentialStoreTests`
-Expected: FAIL to compile ("cannot find 'MigratingCredentialStore' in scope").
-
-- [ ] **Step 3: Implement `MigratingCredentialStore`**
-
-Create `Packages/CalendarApple/Sources/CalendarApple/MigratingCredentialStore.swift`:
-
-```swift
-import CalendarCore
-
-/// Reads from `primary` (the shared keychain group); an item found only in `legacy` (the app's old private keychain
-/// item) is copied into `primary` and then removed from `legacy`. If the copy fails the legacy item is kept and still
-/// returned, so a credential is never lost to a failed migration.
-public struct MigratingCredentialStore: CredentialStore {
-    private let primary: any CredentialStore
-    private let legacy: any CredentialStore
-
-    public init(primary: any CredentialStore, legacy: any CredentialStore) {
-        self.primary = primary
-        self.legacy = legacy
-    }
-
-    public func secrets(for connectionID: ConnectionID) async throws -> [String: String]? {
-        if let current = try await primary.secrets(for: connectionID) { return current }
-        guard let old = try await legacy.secrets(for: connectionID) else { return nil }
-        do {
-            try await primary.setSecrets(old, for: connectionID)
-            // Best effort: a leftover legacy item is harmless because the primary wins from now on.
-            try? await legacy.removeSecrets(for: connectionID)
-        } catch {
-            // Keep the legacy item; the next read tries again.
-        }
-        return old
-    }
-
-    public func setSecrets(_ secrets: [String: String], for connectionID: ConnectionID) async throws {
-        try await primary.setSecrets(secrets, for: connectionID)
-        try? await legacy.removeSecrets(for: connectionID)
-    }
-
-    public func removeSecrets(for connectionID: ConnectionID) async throws {
-        try await primary.removeSecrets(for: connectionID)
-        try await legacy.removeSecrets(for: connectionID)
-    }
-}
-```
-
-- [ ] **Step 4: Run to verify it passes**
-
-Run: `swift test --package-path Packages/CalendarApple --filter MigratingCredentialStoreTests`
-Expected: PASS (6 tests).
-
-- [ ] **Step 5: Let `KeychainCredentialStore` use a keychain group**
-
-In `KeychainCredentialStore.swift` replace the stored property, initializer and `query` with:
-
-```swift
-    private let service: String
-    private let accessGroup: String?
-
-    /// `accessGroup` nil is the app's private item in the login keychain. A group id (the App Group id) uses the
-    /// data-protection keychain and shares the item with every app of the team that holds that group; it needs a
-    /// team-signed build, so ad-hoc builds pass nil.
-    public init(service: String, accessGroup: String? = nil) {
-        self.service = service
-        self.accessGroup = accessGroup
-    }
-
-    private func query(_ connectionID: ConnectionID) -> [String: Any] {
-        var q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-                                kSecAttrAccount as String: connectionID]
-        if let accessGroup {
-            q[kSecUseDataProtectionKeychain as String] = true
-            q[kSecAttrAccessGroup as String] = accessGroup
-        }
-        return q
-    }
-```
-
-Run: `swift test --package-path Packages/CalendarApple`
-Expected: PASS.
-
-- [ ] **Step 6: Build the app-side factory and use it**
-
-Create `Apps/macOS/Sources/AppCredentials.swift`:
-
-```swift
-import CalendarApple
-import CalendarCore
-import Foundation
-
-/// The app's `CredentialStore`: the shared keychain group (migrating the old private items on first read) in a
-/// team-signed build, the old private keychain item in an ad-hoc build, which has no keychain group.
-enum AppCredentials {
-    static let service = "com.timetug.app.credentials"
-
-    static func make(groupContainer: URL? = AppGroup.containerURL) -> any CredentialStore {
-        let legacy = KeychainCredentialStore(service: service)
-        guard groupContainer != nil else { return legacy }
-        return MigratingCredentialStore(
-            primary: KeychainCredentialStore(service: service, accessGroup: AppGroup.identifier), legacy: legacy)
-    }
-}
-```
-
-In `AppCoordinator.swift` replace `private let credentials = KeychainCredentialStore(service: "com.timetug.app.credentials")` with:
-
-```swift
-    private let credentials: any CredentialStore = AppCredentials.make()
-```
-
-- [ ] **Step 7: Add the keychain group entitlement**
-
-In `Apps/macOS/project.yml`, under the `TimeTug` target's `entitlements.properties`, add:
-
-```yaml
-        keychain-access-groups: [YYA6ZKMD36.com.timetug.shared]
-```
-
-- [ ] **Step 8: Verify on builds (by hand)**
-
-1. Ad-hoc build: `xcodegen generate --spec Apps/macOS/project.yml && xcodebuild -project Apps/macOS/TimeTug.xcodeproj -scheme TimeTug -destination 'platform=macOS' build`, launch it. Expected: it starts. If macOS kills it for the restricted `keychain-access-groups` entitlement without a profile, move that one line into a second entitlements file that only team-signed builds use (set `CODE_SIGN_ENTITLEMENTS` from `Local.xcconfig`) and record the choice in ADR 0019.
-2. Team-signed build (`~/.config/timetug/signing.xcconfig` linked): add an "iCal link" account, quit, relaunch. Expected: the account still syncs.
-3. Existing user simulation: with a build from `master` before this change, add an account; install this build; launch. Expected: the account still syncs, and `security find-generic-password -s com.timetug.app.credentials` (login keychain) no longer finds the item after the first sync.
-4. If step 2 fails with `errSecMissingEntitlement` (-34018), the Developer ID profile lacks the keychain group: add it to the App ID in the developer portal, regenerate the profile, and record this in ADR 0019 before going on.
-
-- [ ] **Step 9: Run affected tests and commit**
-
-Run: `scripts/dev/affected-tests.sh --run`
-Expected: PASS.
-
-```bash
-git checkout Apps/macOS/Sources/Info.plist Apps/macOS/Widgets/Info.plist
-git add Packages/CalendarApple Apps/macOS
-git commit -m "Share credentials through the App Group keychain, moving old items on first read
-
-Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
-```
-
-- [ ] **Step 10: Open the phase 1 pull request**
+**Until then:** each build keeps its own keychain item and signs in once. To unblock: add a Developer ID provisioning profile (with Keychain Sharing) to the release pipeline (`sign-app.sh`, the release workflow secrets), rebase `app-store/keychain-group-wip`, and write this task fresh against the current protocol. Do not do this before the Apple team question below is settled, because the group id and access group are team-prefixed.
 
 Push the branch, open a PR to `master` titled "App Group state: files, preferences, credentials", wait for CI, squash-merge. Let the resulting beta reach your own Mac (Settings > Software Update > Beta updates) and confirm your accounts survive before starting phase 2.
 
@@ -610,10 +394,10 @@ Push the branch, open a PR to `master` titled "App Group state: files, preferenc
 - Modify: `Apps/macOS/project.yml` (main app entitlements and Info properties)
 - Modify: `scripts/release/sign-app.sh` (only if the check in Step 4 shows the XPC services lose their entitlements)
 - Modify: `docs/manual-tests/macos-checklist.md`
-- Create: `docs/decisions/0019-sandbox-and-shared-state.md`
+- Create: `docs/decisions/0019-shared-state-and-sandbox.md (created in PR #58, extended in PR #59)`
 
 **Interfaces:**
-- Consumes: Tasks 1 to 3 (state already in the group).
+- Consumes: Tasks 1 and 2 (state already in the group; Task 3 is deferred).
 - Produces: a sandboxed, Sparkle-capable direct build; the manual checklist section "Sandbox"; the ADR that Tasks 6 and 13 extend.
 
 - [ ] **Step 1: Turn on the sandbox**
@@ -625,9 +409,11 @@ In `project.yml`, `TimeTug` target `entitlements.properties`, add:
         com.apple.security.network.client: true
         com.apple.security.network.server: true
         com.apple.security.temporary-exception.mach-lookup.global-name:
-          - $(PRODUCT_BUNDLE_IDENTIFIER)-spks
-          - $(PRODUCT_BUNDLE_IDENTIFIER)-spki
+          - com.timetug.app-spks
+          - com.timetug.app-spki
 ```
+
+(Done in PR #59. The ids must be literal: the release pipeline re-signs with the raw checked-in entitlements file, which does not expand `$(PRODUCT_BUNDLE_IDENTIFIER)`, and the variable made a sandboxed to sandboxed Sparkle update fail. The same applies to the App Store target's own bundle id.)
 
 (`network.server` is for the OAuth loopback `NWListener` in `CalendarApple/LoopbackAuthorizationInteraction.swift`; the two `mach-lookup` names are Sparkle's installer-launcher and status services.) In the `info.properties` of the same target add `SUEnableInstallerLauncherService: true`. Before relying on these names, read Sparkle 2.10.0's "Sandboxing" documentation and correct any key that differs; note the source in the ADR.
 
@@ -668,7 +454,7 @@ Expected: the services are signed with the hardened runtime. `sign-app.sh` alrea
 
 - [ ] **Step 5: Write ADR 0019**
 
-Create `docs/decisions/0019-sandbox-and-shared-state.md` in the style of ADR 0010 (Status, Context, Decision, Consequences): Context = App Store needs the sandbox and a second app must share data; Decision = both builds sandboxed, all state in the group (files, suite, keychain group), separate bundle IDs, the per-build exceptions listed in Global Constraints, the entitlement list from Step 1 with its Sparkle source, and the outcome of Task 3 Step 8 and this task's checklist; Consequences = users move to the sandbox container on upgrade (their data is already in the group), the global shortcut is per build.
+Create `docs/decisions/0019-shared-state-and-sandbox.md (created in PR #58, extended in PR #59)` in the style of ADR 0010 (Status, Context, Decision, Consequences): Context = App Store needs the sandbox and a second app must share data; Decision = both builds sandboxed, all state in the group (files and suite now; keychain group once Task 3 is unblocked), separate bundle IDs, the per-build exceptions listed in Global Constraints, the entitlement list from Step 1 with its Sparkle source, and the outcome of this task's checklist; Consequences = users move to the sandbox container on upgrade (their data is already in the group), the global shortcut is per build.
 
 - [ ] **Step 6: Run affected tests, commit, PR**
 
@@ -2148,7 +1934,7 @@ Open the phase 4 PR (Tasks 8 to 12) to `master`, wait for CI, squash-merge.
 ### Task 13: Docs
 
 **Files:**
-- Modify: `docs/decisions/0019-sandbox-and-shared-state.md`
+- Modify: `docs/decisions/0019-shared-state-and-sandbox.md (created in PR #58, extended in PR #59)`
 - Create: `docs/decisions/0020-single-instance.md`
 - Modify: `AGENTS.md`, `docs/architecture.md`, `docs/release.md`, `README.md` (download and App Store notes), the privacy policy page under `site/` if it states where data is stored
 
@@ -2161,7 +1947,7 @@ Extend ADR 0019 with the outcomes of Tasks 3, 4 and 6 (keychain group findings, 
 
 - [ ] **Step 2: Update the guides**
 
-`AGENTS.md`: Layout lists `Distribution`, `GroupDefaults`, `AppSupportFiles` (group container), `AppCredentials`, `InstanceArbiter` and friends; Gotchas gain: state lives in the App Group (files, suite, keychain group), the per-build exceptions, ad-hoc fallbacks, "do not read the real home directory" (sandbox), and the single-instance rule. `docs/architecture.md`: a short "Builds and shared state" section with the same facts. `docs/release.md`: the App Store workflow is documented in Task 7; add that a direct and an App Store release of the same version must be cut together. Check the privacy policy source under `site/` (`grep -rn "Application Support\|stored" site`) and update any sentence about where data is stored.
+`AGENTS.md`: Layout lists `Distribution`, `GroupDefaults`, `AppSupportFiles` (group container), `AppCredentials`, `InstanceArbiter` and friends; Gotchas gain: state lives in the App Group (files and suite now; keychain group once Task 3 is unblocked), the per-build exceptions, ad-hoc fallbacks, "do not read the real home directory" (sandbox), and the single-instance rule. `docs/architecture.md`: a short "Builds and shared state" section with the same facts. `docs/release.md`: the App Store workflow is documented in Task 7; add that a direct and an App Store release of the same version must be cut together. Check the privacy policy source under `site/` (`grep -rn "Application Support\|stored" site`) and update any sentence about where data is stored.
 
 - [ ] **Step 3: Run the full verification**
 
@@ -2185,6 +1971,8 @@ The release itself (version, tag, notes, dispatching the `App Store` workflow, s
 
 ## Scott's checklist (cannot be done from the repository)
 
+- [ ] **Settle the Apple team first.** App group ids, keychain access groups and signing identities are team-prefixed (`YYA6ZKMD36`). Moving to the LLC changes the Team ID, so do it before the group-state build ships (PR #58), then update `AppGroup` and the entitlements to the new prefix.
+- [ ] Create a Developer ID provisioning profile with Keychain Sharing for `com.timetug.app` (needed to unblock Task 3).
 - [ ] Apple Developer portal: register App IDs `com.timetug.app.store` and `com.timetug.app.store.widgets` with the App Groups capability (`YYA6ZKMD36.com.timetug.shared`) and Keychain Sharing; add Keychain Sharing and the group to `com.timetug.app` and `com.timetug.app.widgets`.
 - [ ] Create the profiles: Developer ID profiles for the two direct IDs (refresh the existing ones), and Mac App Store profiles named `TimeTug App Store` and `TimeTug Widgets App Store`.
 - [ ] Create the Apple Distribution and Mac Installer certificates; export both as `.p12`.
@@ -2194,6 +1982,6 @@ The release itself (version, tag, notes, dispatching the `App Store` workflow, s
 
 ## Self-review (spec coverage)
 
-- Decision 1 (two targets, one template): Tasks 5, 6. Decision 2 (both sandboxed, Sparkle in the sandbox): Task 4. Decision 3 (bundle IDs, group sharing): Tasks 3, 6 (Step 3 proves the sharing). Decision 4 (state in the group before the sandbox, ad-hoc fallbacks): Tasks 1 to 3 and the phase order. Decision 5 (per-build state): Global Constraints and ADR 0019 (Task 13). Decisions 6 and 7 (single instance, notice): Tasks 8 to 12. Decision 8 (versioning): deliberately left to Scott's release; no task.
+- Decision 1 (two targets, one template): Tasks 5, 6. Decision 2 (both sandboxed, Sparkle in the sandbox): Task 4. Decision 3 (bundle IDs, group sharing): Tasks 6 (and 3 once unblocked) (Step 3 proves the sharing). Decision 4 (state in the group before the sandbox, ad-hoc fallbacks): Tasks 1 and 2 and the phase order (Task 3 is blocked on a profile). Decision 5 (per-build state): Global Constraints and ADR 0019 (Task 13). Decisions 6 and 7 (single instance, notice): Tasks 8 to 12. Decision 8 (versioning): deliberately left to Scott's release; no task.
 - Placeholder scan: no TBD/TODO; every code step shows code. Steps that depend on facts I could not verify here (Sparkle 2.10.0 sandbox key names, the Developer ID keychain-group profile, 14-digit App Store build numbers, ad-hoc launch with the keychain entitlement) say so and name the check and the fallback.
 - Type consistency: `InstanceInfo` (Task 9) is used unchanged in Tasks 10 to 12; `InstanceArbiter.init(me:files:signals:attempts:pause:)` matches its tests and the delegate's `InstanceArbiter()` defaults; `Distribution.label` (Task 5) feeds `CollisionNotice` (Task 12); `AppCoordinator.noteCollision(with:)` is stubbed in Task 11 and filled in Task 12; `UpdateController.isAvailable` (Task 5) is read by `GeneralPane` in the same task.
