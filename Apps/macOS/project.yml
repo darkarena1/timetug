@@ -87,8 +87,8 @@ targets:
         com.apple.security.network.client: true
         com.apple.security.network.server: true
         com.apple.security.temporary-exception.mach-lookup.global-name:
-          - $(PRODUCT_BUNDLE_IDENTIFIER)-spks
-          - $(PRODUCT_BUNDLE_IDENTIFIER)-spki
+          - com.timetug.app-spks
+          - com.timetug.app-spki
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.timetug.app
