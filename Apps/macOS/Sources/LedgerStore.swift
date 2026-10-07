@@ -5,14 +5,8 @@ import TimeTugCore
 struct LedgerStore {
     let url: URL
 
-    /// `~/Library/Application Support/TimeTug/takeover-ledger.json`
-    static var defaultURL: URL {
-        let base = (try? FileManager.default.url(
-            for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true))
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
-        return base.appendingPathComponent("TimeTug", isDirectory: true)
-            .appendingPathComponent("takeover-ledger.json")
-    }
+    /// `AppSupportFiles.url("takeover-ledger.json")`
+    static var defaultURL: URL { AppSupportFiles.url("takeover-ledger.json") }
 
     init(url: URL = LedgerStore.defaultURL) { self.url = url }
 

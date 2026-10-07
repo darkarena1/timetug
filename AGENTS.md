@@ -54,6 +54,7 @@ When you move guidance between this file and a skill, keep one copy: skills hold
 - Window/status-item behavior is verified by hand: `docs/manual-tests/macos-checklist.md`.
 
 ## Gotchas
+- App state lives in the App Group (ADR 0019): files in `<group container>/TimeTug/` through `AppSupportFiles.url(_:)`, preferences in `GroupDefaults.suite`, both copied once from the old locations at launch. Never build a path under the real home directory (a sandboxed app cannot read it). Ad-hoc builds have no group container and fall back to `~/Library/Application Support/TimeTug/`. Credentials stay in the app's own Keychain item.
 - App and EventKitSource use Swift 5 language mode; Core uses Swift 6.
 - Generated `*.xcodeproj` is git-ignored; regenerate after editing `project.yml`.
 - The app depends on the remote package KeyboardShortcuts, pinned exactly in `Apps/macOS/project.yml`; regenerate the project after changing it (the first build needs the network). Keep it at 3.1.0 or newer: 2.x silently drops modifier key combos in the Settings recorder on macOS 27.

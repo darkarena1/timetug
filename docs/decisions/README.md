@@ -19,3 +19,4 @@ ADRs record rationale and may describe the state when written. The [architecture
 | [0013](0013-conference-links-in-connector-library.md) | Link detection | Current | connector tests |
 | [0014](0014-reminder-model.md) | Reminders | Current | connector tests |
 | [0015](0015-recurrence-model.md) | Recurrence | Current | connector tests |
+| [0019](0019-shared-state-and-sandbox.md) | Shared state, sandbox | Current | App tests, manual checklist |

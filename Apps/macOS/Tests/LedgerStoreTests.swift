@@ -18,11 +18,11 @@ final class LedgerStoreTests: XCTestCase {
             sourceID: "s")
     }
 
-    func testDefaultLocationIsApplicationSupportTimeTug() {
+    func testDefaultLocationIsTheSharedTimeTugFolder() {
         let url = LedgerStore.defaultURL
+        XCTAssertEqual(url, AppSupportFiles.url("takeover-ledger.json"))
         XCTAssertEqual(url.lastPathComponent, "takeover-ledger.json")
         XCTAssertEqual(url.deletingLastPathComponent().lastPathComponent, "TimeTug")
-        XCTAssertTrue(url.path.contains("Application Support"))
     }
 
     func testMissingFileLoadsEmptyLedger() {
