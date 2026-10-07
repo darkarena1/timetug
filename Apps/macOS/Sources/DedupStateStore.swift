@@ -7,13 +7,8 @@ struct DedupStateStore {
     let url: URL
     private static let log = Logger(subsystem: "com.timetug.app", category: "dedup")
 
-    /// `~/Library/Application Support/TimeTug/dedup-state.json`
-    static var defaultURL: URL {
-        let base = (try? FileManager.default.url(
-            for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true))
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
-        return base.appendingPathComponent("TimeTug", isDirectory: true).appendingPathComponent("dedup-state.json")
-    }
+    /// `AppSupportFiles.url("dedup-state.json")`
+    static var defaultURL: URL { AppSupportFiles.url("dedup-state.json") }
 
     init(url: URL = DedupStateStore.defaultURL) { self.url = url }
 

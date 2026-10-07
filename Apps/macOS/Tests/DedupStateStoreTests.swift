@@ -9,8 +9,9 @@ final class DedupStateStoreTests: XCTestCase {
         return dir.appendingPathComponent("nested/dedup-state.json")
     }
 
-    func testDefaultLocationIsApplicationSupportTimeTug() {
+    func testDefaultLocationIsTheSharedTimeTugFolder() {
         let url = DedupStateStore.defaultURL
+        XCTAssertEqual(url, AppSupportFiles.url("dedup-state.json"))
         XCTAssertEqual(url.lastPathComponent, "dedup-state.json")
         XCTAssertEqual(url.deletingLastPathComponent().lastPathComponent, "TimeTug")
     }

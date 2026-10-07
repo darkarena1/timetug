@@ -13,7 +13,7 @@ struct BrowserPreferringPresenter: AuthorizationPresenting {
     let useBrowser: @Sendable () -> Bool
 
     init(sheet: any AuthorizationPresenting,
-         useBrowser: @escaping @Sendable () -> Bool = { UserDefaults.standard.bool(forKey: BrowserPreferringPresenter.defaultsKey) }) {
+         useBrowser: @escaping @Sendable () -> Bool = { GroupDefaults.suite.bool(forKey: BrowserPreferringPresenter.defaultsKey) }) {
         self.sheet = sheet
         self.useBrowser = useBrowser
     }

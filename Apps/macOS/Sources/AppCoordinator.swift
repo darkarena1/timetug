@@ -18,7 +18,7 @@ final class AppCoordinator {
     /// Meetings that started longer than this before launch are treated as already handled.
     private static let launchGrace: TimeInterval = 120
 
-    let settings = SettingsStore(shared: .appGroup)
+    let settings = SettingsStore(defaults: GroupDefaults.suite, shared: .appGroup)
     let model = AppModel()
     let navigation = SettingsNavigation()
     let updates = UpdateController(
