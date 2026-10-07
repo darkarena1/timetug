@@ -71,6 +71,7 @@ targets:
         SUFeedURL: https://darkarena1.github.io/timetug/appcast.xml
         SUPublicEDKey: QZXAO2hdupCAJzVJV0wqKHw3VPTjLDhQPGjJZDBlkzo=
         SUEnableAutomaticChecks: true
+        SUEnableInstallerLauncherService: true
         NSCalendarsFullAccessUsageDescription: TimeTug reads your calendars to alert you before meetings start.
         NSContactsUsageDescription: TimeTug looks up meeting attendees in Contacts to recognize the same meeting across your calendars.
         TimeTugGoogleClientID: $(GOOGLE_OAUTH_CLIENT_ID)
@@ -82,6 +83,12 @@ targets:
         com.apple.security.personal-information.calendars: true
         com.apple.security.personal-information.addressbook: true
         com.apple.security.application-groups: [YYA6ZKMD36.com.timetug.shared]
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.network.server: true
+        com.apple.security.temporary-exception.mach-lookup.global-name:
+          - $(PRODUCT_BUNDLE_IDENTIFIER)-spks
+          - $(PRODUCT_BUNDLE_IDENTIFIER)-spki
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.timetug.app
