@@ -51,6 +51,15 @@ has_background() { compgen -G "$mnt/.background.*" >/dev/null || compgen -G "$mn
 
 check "TimeTug.app/Contents/MacOS/TimeTug is executable" test -x "$mnt/TimeTug.app/Contents/MacOS/TimeTug"
 check "TimeTugWidgets.appex is embedded" test -d "$mnt/TimeTug.app/Contents/PlugIns/TimeTugWidgets.appex"
+# shellcheck disable=SC2329
+is_sandboxed() { codesign -d --entitlements - "$mnt/TimeTug.app" 2>/dev/null | grep -q "com.apple.security.app-sandbox"; }
+# shellcheck disable=SC2329
+has_literal_sparkle_ids() {
+  local ents; ents="$(codesign -d --entitlements - "$mnt/TimeTug.app" 2>/dev/null)"
+  grep -q "com.timetug.app-spks" <<<"$ents" && grep -q "com.timetug.app-spki" <<<"$ents" && ! grep -q '\$(' <<<"$ents"
+}
+check "TimeTug.app is sandboxed" is_sandboxed
+check "Sparkle mach-lookup ids are literal" has_literal_sparkle_ids
 check "Applications is a symlink to /Applications" is_applications_link
 check "hidden background image (.background.tiff) exists" has_background
 check ".DS_Store exists" test -f "$mnt/.DS_Store"
