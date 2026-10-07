@@ -93,6 +93,8 @@ targets:
     dependencies:
       - package: TimeTugCore
         product: TimeTugCore
+      - package: CalendarConnectors
+        product: CalendarCore
     info:
       path: Widgets/Info.plist
       properties:

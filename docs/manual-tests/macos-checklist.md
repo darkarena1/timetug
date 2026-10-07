@@ -80,7 +80,7 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] "Forget learned corrections" resets decisions and clears cached AI verdicts.
 
 ## Widgets and controls (needs a team-signed build)
-- [ ] Set up local signing once: `~/.config/timetug/signing.xcconfig` (see AGENTS.md "Widgets and controls"), run `xcodegen generate --spec Apps/macOS/project.yml`, then a `clean` build/Run in Xcode. Confirm `codesign -d --entitlements - TimeTug.app` shows the `YYA6ZKMD36.com.timetug.shared` group on the app and on `PlugIns/TimeTugWidgets.appex`.
+- [ ] Set up local signing once: `~/.config/timetug/signing.xcconfig` (see [operations](../development/runbooks/operations.md)), run `xcodegen generate --spec Apps/macOS/project.yml`, then a `clean` build/Run in Xcode. Confirm `codesign -d --entitlements - TimeTug.app` shows the `YYA6ZKMD36.com.timetug.shared` group on the app and on `PlugIns/TimeTugWidgets.appex`.
 - [ ] Add each widget and size from the widget gallery: Next Up small and medium, Today medium and large.
 - [ ] Widgets show real meetings with the right calendar colours.
 - [ ] Next Up advances to the next meeting at a meeting's start and end without reloading the widget.
@@ -102,7 +102,7 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] A meeting cancelled in Apple Calendar (an Exchange or iCloud invite the organizer cancelled, still shown struck through there) is gone from the popup and never takes over.
 - [ ] An Exchange or iCloud invite whose attendee has no mailto address (a `urn:uuid:` or principal URL) prompts for Contacts once, without delaying the popup; after allowing, the attendee's email appears and copies of the meeting merge on the shared attendee. Denying Contacts leaves the popup working and never asks again.
 - [ ] A meeting present in both Apple Calendar and a direct Google account merges into one popup entry.
-- [ ] Calendar write smoke (before releasing a change to the write API): `TIMETUG_LIVE_EVENTKIT=1 swift test --package-path Packages/EventKitSource --filter eventKit` passes (the filter is `eventKit`, not `Live`), and the Google smoke test (see `AGENTS.md`, Gotchas) passes and leaves no "TimeTug write smoke" events behind.
+- [ ] Calendar write smoke (before releasing a change to the write API): `TIMETUG_LIVE_EVENTKIT=1 swift test --package-path Packages/EventKitSource --filter eventKit` passes (the filter is `eventKit`, not `Live`), and the Google smoke test (see [operations](../development/runbooks/operations.md)) passes and leaves no "TimeTug write smoke" events behind.
 - [ ] Google sign-in opens the system sign-in sheet by default. After `defaults write com.timetug.app oauth.useBrowser.v1 -bool true`, the next sign-in opens the default browser with the client ID in the address bar and ends on the "You're signed in" page; `defaults delete com.timetug.app oauth.useBrowser.v1` restores the sheet.
 
 ## iCal link accounts

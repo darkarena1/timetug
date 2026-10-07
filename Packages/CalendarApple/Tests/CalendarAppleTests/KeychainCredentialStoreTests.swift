@@ -1,4 +1,5 @@
 import Foundation
+import CalendarCore
 import Security
 import Testing
 @testable import CalendarApple
@@ -38,4 +39,24 @@ private func keychainAvailable() -> Bool {
     #expect(try await store.secrets(for: "c1") == ["a": "1"])
     try await store.removeSecrets(for: "c1")
     try await store.removeSecrets(for: "c2")
+}
+
+@Test(.enabled(if: keychainAvailable())) func legacyCredentialIsMigratedAndRotationCannotUndoNewSignIn() async throws {
+    let service = "com.timetug.tests.\(UUID().uuidString)"
+    let store = KeychainCredentialStore(service: service)
+    let old = try JSONEncoder().encode(["refresh_token": "old"])
+    let query: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: service,
+        kSecAttrAccount as String: "c1",
+        kSecValueData as String: old,
+    ]
+    #expect(SecItemAdd(query as CFDictionary, nil) == errSecSuccess)
+    defer { SecItemDelete(query as CFDictionary) }
+    let snapshot = try #require(try await store.credentialSnapshot(for: "c1"))
+    #expect(snapshot.secrets["refresh_token"] == "old")
+    #expect(try await store.updateRefreshToken("rotated", for: "c1", expectedRevision: snapshot.revision))
+    try await store.setSecrets(["refresh_token": "new-sign-in"], for: "c1")
+    #expect(try await store.updateRefreshToken("stale", for: "c1", expectedRevision: snapshot.revision) == false)
+    #expect(try await store.secrets(for: "c1")?["refresh_token"] == "new-sign-in")
 }

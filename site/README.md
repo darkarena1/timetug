@@ -22,8 +22,12 @@ client — see `docs/decisions/`), custom domain `timetug.obryan.cloud`.
 
 Automatic: pushing to `master` with changes under `site/` deploys via
 `.github/workflows/firebase-hosting-merge.yml` (see that file for how the Firebase service account secret
-is supplied). A pull request that touches `site/` gets a preview URL via
-`.github/workflows/firebase-hosting-pull-request.yml`.
+is supplied). A pull request that touches `site/` runs credential-free offline website validation via
+`.github/workflows/firebase-hosting-pull-request.yml`; it does not publish a hosted preview.
+The current Firebase configuration includes a Content Security Policy for local scripts, GitHub API
+requests, Google Fonts and local images. Run `scripts/dev/verify.sh release-tools` from the repository root
+to test download links, JSON and workflows. Verify the actual response headers after an authorized
+merge deployment; repository inspection does not establish which headers are live on the hosted site.
 
 Manual, from this directory, if you have the Firebase CLI and are signed in as an account with access to
 the `timetug` project:

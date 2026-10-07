@@ -2,10 +2,15 @@ import CalendarCore
 import Foundation
 import Security
 
-/// A `CredentialStore` in the macOS Keychain: one generic-password item per connection (account =
-/// `connectionID`), whose data is the JSON of that connection's secrets. `service` namespaces the app's items.
-public struct KeychainCredentialStore: CredentialStore {
+/// One instance is the app's credential authority. Actor isolation makes a conditional refresh-token
+/// write atomic with sign-in/removal in that instance; other processes must not write these items.
+public actor KeychainCredentialStore: CredentialStore {
     public struct KeychainError: Error, Equatable { public let status: OSStatus }
+
+    private struct StoredCredential: Codable {
+        var secrets: [String: String]
+        var revision: UUID
+    }
 
     private let service: String
     public init(service: String) { self.service = service }
@@ -15,7 +20,7 @@ public struct KeychainCredentialStore: CredentialStore {
          kSecAttrAccount as String: connectionID]
     }
 
-    public func secrets(for connectionID: ConnectionID) async throws -> [String: String]? {
+    private func read(_ connectionID: ConnectionID) throws -> (credential: StoredCredential, isLegacy: Bool)? {
         var q = query(connectionID)
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -23,11 +28,13 @@ public struct KeychainCredentialStore: CredentialStore {
         let status = SecItemCopyMatching(q as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
         guard status == errSecSuccess, let data = result as? Data else { throw KeychainError(status: status) }
-        return try JSONDecoder().decode([String: String].self, from: data)
+        if let stored = try? JSONDecoder().decode(StoredCredential.self, from: data) { return (stored, false) }
+        let secrets = try JSONDecoder().decode([String: String].self, from: data)
+        return (StoredCredential(secrets: secrets, revision: UUID()), true)
     }
 
-    public func setSecrets(_ secrets: [String: String], for connectionID: ConnectionID) async throws {
-        let data = try JSONEncoder().encode(secrets)
+    private func save(_ credential: StoredCredential, for connectionID: ConnectionID) throws {
+        let data = try JSONEncoder().encode(credential)
         var status = SecItemUpdate(query(connectionID) as CFDictionary, [kSecValueData as String: data] as CFDictionary)
         if status == errSecItemNotFound {
             var add = query(connectionID)
@@ -36,6 +43,27 @@ public struct KeychainCredentialStore: CredentialStore {
             status = SecItemAdd(add as CFDictionary, nil)
         }
         guard status == errSecSuccess else { throw KeychainError(status: status) }
+    }
+
+    public func secrets(for connectionID: ConnectionID) async throws -> [String: String]? {
+        try read(connectionID)?.credential.secrets
+    }
+
+    public func credentialSnapshot(for connectionID: ConnectionID) async throws -> CredentialSnapshot? {
+        guard let found = try read(connectionID) else { return nil }
+        if found.isLegacy { try save(found.credential, for: connectionID) }
+        return CredentialSnapshot(secrets: found.credential.secrets, revision: found.credential.revision)
+    }
+
+    public func setSecrets(_ secrets: [String: String], for connectionID: ConnectionID) async throws {
+        try save(StoredCredential(secrets: secrets, revision: UUID()), for: connectionID)
+    }
+
+    public func updateRefreshToken(_ token: String, for connectionID: ConnectionID, expectedRevision: UUID) async throws -> Bool {
+        guard var stored = try read(connectionID)?.credential, stored.revision == expectedRevision else { return false }
+        stored.secrets["refresh_token"] = token
+        try save(stored, for: connectionID)
+        return true
     }
 
     public func removeSecrets(for connectionID: ConnectionID) async throws {

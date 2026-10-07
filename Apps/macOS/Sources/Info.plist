@@ -17,7 +17,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>0.0.0-dev</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>2</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSCalendarsFullAccessUsageDescription</key>
@@ -30,5 +30,11 @@
 	<string>https://darkarena1.github.io/timetug/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>QZXAO2hdupCAJzVJV0wqKHw3VPTjLDhQPGjJZDBlkzo=</string>
+	<key>TimeTugGoogleClientID</key>
+	<string>$(GOOGLE_OAUTH_CLIENT_ID)</string>
+	<key>TimeTugGoogleClientSecret</key>
+	<string>$(GOOGLE_OAUTH_CLIENT_SECRET)</string>
+	<key>TimeTugMicrosoftClientID</key>
+	<string>$(MICROSOFT_OAUTH_CLIENT_ID)</string>
 </dict>
 </plist>

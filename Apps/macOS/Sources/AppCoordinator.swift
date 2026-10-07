@@ -35,8 +35,7 @@ final class AppCoordinator {
     private let dedupStore = DedupStateStore()
     private var lastSavedDedupState: DedupState?
     private var ledger: TakeoverLedger
-    /// True until the first successful refresh after launch has acknowledged in-progress meetings.
-    private var needsLaunchAcknowledge = true
+    private var launchAcknowledgement = LaunchAcknowledgement(launchedAt: Date())
     private var fireTimer: Timer?
     private var tickTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
@@ -56,13 +55,16 @@ final class AppCoordinator {
         (googleOAuthConfig == nil ? ["google"] : []) + (microsoftOAuthConfig == nil ? ["microsoft"] : [])
     private let credentials = KeychainCredentialStore(service: "com.timetug.app.credentials")
     private let syncState = FileSyncStateStore(url: AppSupportFiles.url("sync-state.json"))
+    private lazy var sourceRefreshes = SourceRefreshCoordinator { [weak self] ids in
+        await self?.refresh(sourceIDs: ids)
+    }
     private lazy var reconciler = SourceReconciler(
         buildAccount: { [unowned self] connection in
             guard let kind = registry.kind(id: connection.kindID) else { throw CalendarCore.SourceError.invalidResponse("unknown account type") }
             return ConnectedSource(try kind.makeSource(for: connection, credentials: credentials, syncState: syncState))
         },
         buildEventKit: { [unowned self] in ConnectedSource(eventKit) },
-        onChange: { [weak self] in await self?.refresh() })
+        onChange: { [weak self] change in self?.sourceRefreshes.signal(change) })
     private let credentialPrompter = CredentialPrompter()
     lazy var accounts: AccountsController = AccountsController(
         registry: registry, connectionStore: FileConnectionStore(url: AppSupportFiles.url("accounts.json")),
@@ -74,6 +76,7 @@ final class AppCoordinator {
                 sheet: WebAuthenticationSessionPresenter(anchor: { [weak self] in self?.settingsWindow.currentWindow ?? NSApp.keyWindow }))),
         settings: settings, reconciler: reconciler,
         applySources: { [weak self] sources in
+            self?.launchAcknowledgement.registerSources(Set(sources.map(\.id)), now: Date())
             await self?.store.setSources(sources)
             await self?.refresh()
         },
@@ -132,9 +135,7 @@ final class AppCoordinator {
             DispatchQueue.main.async { self?.settings.reloadFromShared() }
         }
 
-        tickTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.updateUI() }
-        }
+        updateUI()
         Timer.scheduledTimer(withTimeInterval: Self.periodicRefresh, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
         }
@@ -157,15 +158,21 @@ final class AppCoordinator {
     }
 
     func refresh() async {
+        await refresh(sourceIDs: nil)
+    }
+
+    private func refresh(sourceIDs: Set<String>?) async {
         // Self-heals a dropped Darwin notification from the widget extension.
         settings.reloadFromShared()
-        apply(await store.refresh(now: Date(), leadTime: settings.takeover.leadTime))
+        apply(await store.refresh(now: Date(), leadTime: settings.takeover.leadTime, sourceIDs: sourceIDs,
+                                  onPublication: { [weak self] snapshot in await self?.apply(snapshot) }))
         // Inference never blocks a refresh (or start / the change loop).
         Task { @MainActor [weak self] in await self?.resolvePending() }
     }
 
     /// Publishes a snapshot to the model, ledger bookkeeping, timers and UI.
     private func apply(_ newSnapshot: CalendarSnapshot) {
+        guard newSnapshot.revision > snapshot.revision else { return }
         snapshot = newSnapshot
         model.calendars = snapshot.calendars
         model.statuses = snapshot.statuses
@@ -173,12 +180,14 @@ final class AppCoordinator {
         model.sourceNames = snapshot.sourceNames
         model.candidates = snapshot.candidates
         if ledger.prune(now: Date()) { persistLedger() }
-        if needsLaunchAcknowledge {
-            // Meetings already underway at launch never take over (late fire is for wake-from-sleep).
-            needsLaunchAcknowledge = false
-            let count = ledger.acknowledgeInProgress(events: snapshot.events, now: Date(), grace: Self.launchGrace)
+        let acknowledgementTime = Date()
+        let toAcknowledge = launchAcknowledgement.eventsToAcknowledge(
+            in: snapshot, now: acknowledgementTime, grace: Self.launchGrace)
+        if !toAcknowledge.isEmpty {
+            for event in toAcknowledge { ledger.markFired(event, now: acknowledgementTime) }
+            let count = toAcknowledge.count
             TakeoverLog.acknowledgedOnLaunch(count: count)
-            if count > 0 { persistLedger() }
+            persistLedger()
         }
         rearm()
         updateUI()
@@ -203,7 +212,7 @@ final class AppCoordinator {
     /// Writes the agenda snapshot for widgets; reloads their timelines only when the events changed.
     private func publishWidgetSnapshot() {
         let widgetSnapshot = WidgetSnapshot.make(
-            events: snapshot.events, calendars: snapshot.calendars, settings: settings.takeover,
+            events: snapshot.widgetEvents, calendars: snapshot.calendars, settings: settings.takeover,
             now: Date(), calendar: .current)
         do {
             try snapshotStore.write(widgetSnapshot)
@@ -314,21 +323,39 @@ final class AppCoordinator {
         }
     }
 
-    func updateUI() {
+    func updateUI(forceStructure: Bool = true) {
         let now = Date()
-        let agenda = DayAgenda.make(events: snapshot.events, settings: settings.takeover,
-                                    now: now, calendar: .current)
-        if agenda != model.agenda { model.agenda = agenda }
+        if forceStructure {
+            let agenda = DayAgenda.make(events: snapshot.events, settings: settings.takeover,
+                                        now: now, calendar: .current)
+            if agenda != model.agenda { model.agenda = agenda }
+        }
+        let agenda = model.agenda
         if model.leadTime != settings.takeover.leadTime { model.leadTime = settings.takeover.leadTime }
         statusItem?.setTitle(TimeFormatting.statusTitle(mode: settings.menuBarMode, next: agenda.next, now: now))
         statusItem?.setIconState(MenuBarIconState.resolve(
             events: snapshot.events, settings: settings.takeover, ledger: ledger, now: now))
+        tickTimer?.invalidate()
+        tickTimer = nil
+        if let wake = UITickPolicy.next(now: now, mode: settings.menuBarMode, nextEvent: agenda.next,
+                                        events: snapshot.events, leadTime: settings.takeover.leadTime,
+                                        calendar: .current) {
+            let timer = Timer(fire: wake.date, interval: 0, repeats: false) { [weak self] _ in
+                Task { @MainActor in self?.updateUI(forceStructure: wake.rebuildAgenda) }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            tickTimer = timer
+        }
     }
 
     /// Timers alone are not trusted: recompute after wake, clock, timezone and day changes.
     private func observeSystemEvents() {
         let recompute: @Sendable (Notification) -> Void = { [weak self] _ in
-            Task { @MainActor in await self?.refresh() }
+            Task { @MainActor in
+                guard let self else { return }
+                await self.store.setCalendar(.current)
+                await self.refresh()
+            }
         }
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main, using: recompute)
@@ -344,7 +371,7 @@ final class AppCoordinator {
         let calendarTitle = snapshot.calendars.first { $0.key == event.calendarKey }?.title
         overlay.show(request, calendarTitle: calendarTitle, actions: .init(
             join: { [weak self] in
-                if let url = request.joinURL { NSWorkspace.shared.open(url) }
+                if let url = request.joinURL { SafeJoin.open(url, using: { NSWorkspace.shared.open($0) }) }
                 self?.closeOverlay()
             },
             snooze: { [weak self] seconds in

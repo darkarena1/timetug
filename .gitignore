@@ -6,6 +6,8 @@ DerivedData/
 *.xcodeproj
 xcuserdata/
 build/
+__pycache__/
+*.pyc
 
 # Release output and signing material: never commit these
 dist/

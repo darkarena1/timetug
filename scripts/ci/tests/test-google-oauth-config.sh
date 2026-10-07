@@ -6,7 +6,7 @@ H="$PWD/scripts/ci/google-oauth-config.sh"
 fail() { echo "FAIL: $*" >&2; exit 1; }
 [ -f "$H" ] || fail "helper $H is missing"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-mode() { stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1"; }
+mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
 
 # Both set: file written 0600 with both lines, env exported, file removed on exit, prior EXIT trap kept.
 out="$(env -i PATH="$PATH" GOOGLE_OAUTH_CLIENT_ID=test-client-id GOOGLE_OAUTH_CLIENT_SECRET=test-client-secret \
@@ -18,7 +18,7 @@ out="$(env -i PATH="$PATH" GOOGLE_OAUTH_CLIENT_ID=test-client-id GOOGLE_OAUTH_CL
   f="$TIMETUG_GOOGLE_XCCONFIG"
   [ -n "$f" ] || exit 11
   printf "%s\n" "$f"
-  stat -f "%Lp" "$f" 2>/dev/null || stat -c "%a" "$f"
+  stat -c "%a" "$f" 2>/dev/null || stat -f "%Lp" "$f"
   cat "$f"
   bash -c "[ -n \"\${TIMETUG_GOOGLE_XCCONFIG:-}\" ]" || exit 12   # exported to children
 ')" || fail "both set: helper failed"

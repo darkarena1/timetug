@@ -17,7 +17,7 @@ out="$(env -i PATH="$PATH" MICROSOFT_OAUTH_CLIENT_ID=test-client-id \
   f="$TIMETUG_MICROSOFT_XCCONFIG"
   [ -n "$f" ] || exit 11
   printf "%s\n" "$f"
-  stat -f "%Lp" "$f" 2>/dev/null || stat -c "%a" "$f"
+  stat -c "%a" "$f" 2>/dev/null || stat -f "%Lp" "$f"
   cat "$f"
   bash -c "[ -n \"\${TIMETUG_MICROSOFT_XCCONFIG:-}\" ]" || exit 12   # exported to children
 ')" || fail "set: helper failed"
