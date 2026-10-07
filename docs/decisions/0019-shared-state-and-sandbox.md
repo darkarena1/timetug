@@ -1,0 +1,18 @@
+# 0019: App state lives in the App Group; the app is sandboxed
+
+Status: accepted, 2026-10-07
+
+## Context
+TimeTug will ship a downloaded (Developer ID) build and a Mac App Store build, and later a second app, and they should share data. The App Store requires the App Sandbox. A sandboxed app cannot read `~/Library/Application Support/TimeTug/`, so existing users' data has to move out of it while the app can still read it.
+
+## Decision
+- **Files** (`accounts.json`, `sync-state.json`, `takeover-ledger.json`, `dedup-state.json`) live in `<App Group container>/TimeTug/` (`AppSupportFiles`). The old files are copied there once, at launch, and only when the group does not already have the file; they are never overwritten or deleted. An ad-hoc build has no group container and keeps using the old folder.
+- **Preferences** live in the group suite (`GroupDefaults.suite`). The known keys are copied once per build from `UserDefaults.standard` and never overwrite a value already in the group. Sparkle's keys, the beta opt-in and the global shortcut (KeyboardShortcuts uses `UserDefaults.standard`) stay per build.
+- **Order matters**: the move into the group ships in a build that is still unsandboxed, so the copy can read the old folder; the sandbox ships after it.
+- **Credentials stay in each build's own Keychain item** for now. A shared keychain access group was tried: `kSecAttrAccessGroup` with the app group id fails with `errSecMissingEntitlement` (-34018) with or without the sandbox, because the explicit `keychain-access-groups` entitlement is needed, and that restricted entitlement needs a provisioning profile. The Developer ID release pipeline signs without a profile (the team-prefixed `application-groups` entitlement does not need one). Sharing credentials across builds therefore needs a Developer ID profile in the release pipeline; until then each build signs in once. The migration code is parked on the branch `app-store/keychain-group-wip`.
+- The `KeychainCredentialStore` documents that one process is the credential authority (refresh-token rotation is atomic only inside it). Two builds sharing a keychain group would need the single-instance rule first.
+
+## Consequences
+- Settings, accounts and the takeover ledger carry over between builds that share the group.
+- A build that is not team-signed keeps a separate copy in `~/Library/Application Support/TimeTug/`, so a dev build never touches a user's data.
+- The sandbox itself and its verification are recorded below once it ships.
