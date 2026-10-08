@@ -96,6 +96,7 @@ jobs:
           MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MACOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_PROVISIONING_PROFILE_BASE64 }}
         run: scripts/release/sign-app.sh dist/TimeTug.app
       - name: Zip and EdDSA-sign
         if: steps.signing.outputs.go == 'true'

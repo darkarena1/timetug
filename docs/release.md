@@ -144,6 +144,7 @@ Add these under Settings > Secrets and variables > Actions. Signing and notarizi
 | `MACOS_CERTIFICATE_P12_BASE64` | Developer ID Application certificate with its private key, exported from Keychain Access as `.p12`, then `base64 -i cert.p12 \| pbcopy` |
 | `MACOS_CERTIFICATE_PASSWORD` | The password you chose when exporting the `.p12` |
 | `APPLE_TEAM_ID` | Your 10-character team id (developer.apple.com > Membership) |
+| `MACOS_PROVISIONING_PROFILE_BASE64` | Optional. The "TimeTug Developer ID" provisioning profile for `com.timetug.app` (developer.apple.com > Profiles > Developer ID), downloaded as a binary file and encoded with `base64 -i TimeTug_Developer_ID.provisionprofile \| pbcopy`. `sign-app.sh` embeds it and adds the `keychain-access-groups` entitlement so builds share credentials through `YYA6ZKMD36.com.timetug.shared`. Without it the app keeps its own keychain item. The file must not be pasted through chat or any text channel: a text conversion corrupts it. |
 | `NOTARY_API_KEY_ID` | Key ID of an App Store Connect API key (Users and Access > Integrations > App Store Connect API) |
 | `NOTARY_API_ISSUER_ID` | The Issuer ID shown on that same page |
 | `NOTARY_API_KEY_P8_BASE64` | The downloaded `AuthKey_XXXX.p8`, encoded with `base64 -i AuthKey_XXXX.p8 \| pbcopy` |

@@ -29,6 +29,11 @@ public actor KeychainCredentialStore: CredentialStore {
         if let accessGroup {
             q[kSecUseDataProtectionKeychain as String] = true
             q[kSecAttrAccessGroup as String] = accessGroup
+        } else {
+            // Pin the private item to the file-based login keychain. Without this a query also reaches the shared
+            // group's data-protection item (same service and account), so removing the legacy item after a
+            // migration would delete the migrated one too.
+            q[kSecUseDataProtectionKeychain as String] = false
         }
         return q
     }
