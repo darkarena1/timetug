@@ -3,6 +3,54 @@
   <channel>
     <title>TimeTug</title>
     <item>
+      <title>TimeTug 2.0.0</title>
+      <pubDate>Thu, 08 Oct 2026 05:28:47 GMT</pubDate>
+      <sparkle:version>20261008052251</sparkle:version>
+      <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description>&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+&lt;meta charset="utf-8"&gt;
+&lt;style&gt;
+body {
+  font: 13px -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  color: #1d1d1f;
+  margin: 12px 16px;
+  word-wrap: break-word;
+}
+a { color: #0068da; }
+h1, h2, h3 { font-size: 1.05em; }
+pre, code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.95em; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (prefers-color-scheme: dark) {
+  body { color: #f5f5f7; }
+  a { color: #4da3ff; }
+}
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h2 dir="auto"&gt;What's Changed&lt;/h2&gt;
+&lt;ul dir="auto"&gt;
+&lt;li&gt;Calendar connectors Phase 6: iCal subscription link by &lt;a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/darkarena1/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/darkarena1"&gt;@darkarena1&lt;/a&gt; in &lt;a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5731487507" data-permission-text="Title is private" data-url="https://github.com/darkarena1/timetug/issues/52" data-hovercard-type="pull_request" data-hovercard-url="/darkarena1/timetug/pull/52/hovercard" href="https://github.com/darkarena1/timetug/pull/52"&gt;#52&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Release: publish flow is the standard; fail fast on a missing tag or thin notes by &lt;a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/darkarena1/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/darkarena1"&gt;@darkarena1&lt;/a&gt; in &lt;a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5645453807" data-permission-text="Title is private" data-url="https://github.com/darkarena1/timetug/issues/50" data-hovercard-type="pull_request" data-hovercard-url="/darkarena1/timetug/pull/50/hovercard" href="https://github.com/darkarena1/timetug/pull/50"&gt;#50&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Remove duplicate CalendarInfo.normalizedHex by &lt;a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/darkarena1/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/darkarena1"&gt;@darkarena1&lt;/a&gt; in &lt;a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5735321071" data-permission-text="Title is private" data-url="https://github.com/darkarena1/timetug/issues/54" data-hovercard-type="pull_request" data-hovercard-url="/darkarena1/timetug/pull/54/hovercard" href="https://github.com/darkarena1/timetug/pull/54"&gt;#54&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Share duplicated Google/Microsoft connector logic by &lt;a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/darkarena1/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/darkarena1"&gt;@darkarena1&lt;/a&gt; in &lt;a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5735396221" data-permission-text="Title is private" data-url="https://github.com/darkarena1/timetug/issues/55" data-hovercard-type="pull_request" data-hovercard-url="/darkarena1/timetug/pull/55/hovercard" href="https://github.com/darkarena1/timetug/pull/55"&gt;#55&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Audit remediation: security, correctness and CI hardening by &lt;a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/darkarena1/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/darkarena1"&gt;@darkarena1&lt;/a&gt; in &lt;a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5680997196" data-permission-text="Title is private" data-url="https://github.com/darkarena1/timetug/issues/51" data-hovercard-type="pull_request" data-hovercard-url="/darkarena1/timetug/pull/51/hovercard" href="https://github.com/darkarena1/timetug/pull/51"&gt;#51&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Show the status item's right-click menu on the clicked display by &lt;a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/darkarena1/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/darkarena1"&gt;@darkarena1&lt;/a&gt; in &lt;a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5741453248" data-permission-text="Title is private" data-url="https://github.com/darkarena1/timetug/issues/57" data-hovercard-type="pull_request" data-hovercard-url="/darkarena1/timetug/pull/57/hovercard" href="https://github.com/darkarena1/timetug/pull/57"&gt;#57&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Plan: direct and App Store builds, shared App Group state, single instance by &lt;a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/darkarena1/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/darkarena1"&gt;@darkarena1&lt;/a&gt; in &lt;a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5738052415" data-permission-text="Title is private" data-url="https://github.com/darkarena1/timetug/issues/56" data-hovercard-type="pull_request" data-hovercard-url="/darkarena1/timetug/pull/56/hovercard" href="https://github.com/darkarena1/timetug/pull/56"&gt;#56&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Keep app files and preferences in the App Group (step 1 of the sandbox) by &lt;a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/darkarena1/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/darkarena1"&gt;@darkarena1&lt;/a&gt; in &lt;a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5741683792" data-permission-text="Title is private" data-url="https://github.com/darkarena1/timetug/issues/58" data-hovercard-type="pull_request" data-hovercard-url="/darkarena1/timetug/pull/58/hovercard" href="https://github.com/darkarena1/timetug/pull/58"&gt;#58&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Sandbox the standalone app (stacked on &lt;a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5741683792" data-permission-text="Title is private" data-url="https://github.com/darkarena1/timetug/issues/58" data-hovercard-type="pull_request" data-hovercard-url="/darkarena1/timetug/pull/58/hovercard" href="https://github.com/darkarena1/timetug/pull/58"&gt;#58&lt;/a&gt;) by &lt;a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/darkarena1/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/darkarena1"&gt;@darkarena1&lt;/a&gt; in &lt;a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5742125252" data-permission-text="Title is private" data-url="https://github.com/darkarena1/timetug/issues/59" data-hovercard-type="pull_request" data-hovercard-url="/darkarena1/timetug/pull/59/hovercard" href="https://github.com/darkarena1/timetug/pull/59"&gt;#59&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Share credentials through the keychain group (stacked on &lt;a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5742125252" data-permission-text="Title is private" data-url="https://github.com/darkarena1/timetug/issues/59" data-hovercard-type="pull_request" data-hovercard-url="/darkarena1/timetug/pull/59/hovercard" href="https://github.com/darkarena1/timetug/pull/59"&gt;#59&lt;/a&gt;) by &lt;a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/darkarena1/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/darkarena1"&gt;@darkarena1&lt;/a&gt; in &lt;a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5754231511" data-permission-text="Title is private" data-url="https://github.com/darkarena1/timetug/issues/60" data-hovercard-type="pull_request" data-hovercard-url="/darkarena1/timetug/pull/60/hovercard" href="https://github.com/darkarena1/timetug/pull/60"&gt;#60&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Run only one TimeTug at a time (newest build wins) by &lt;a class="user-mention notranslate" data-hovercard-type="user" data-hovercard-url="/users/darkarena1/hovercard" data-octo-click="hovercard-link-click" data-octo-dimensions="link_type:self" href="https://github.com/darkarena1"&gt;@darkarena1&lt;/a&gt; in &lt;a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="5756002776" data-permission-text="Title is private" data-url="https://github.com/darkarena1/timetug/issues/61" data-hovercard-type="pull_request" data-hovercard-url="/darkarena1/timetug/pull/61/hovercard" href="https://github.com/darkarena1/timetug/pull/61"&gt;#61&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p dir="auto"&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a class="commit-link" href="https://github.com/darkarena1/timetug/compare/v1.4.1...v2.0.0"&gt;&lt;tt&gt;v1.4.1...v2.0.0&lt;/tt&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</description>
+      <enclosure url="https://github.com/darkarena1/timetug/releases/download/v2.0.0/TimeTug-2.0.0.zip" length="9377852" type="application/octet-stream" sparkle:edSignature="zEfMJhfax5TGIkKcmD8VB99JlimkcS4PHp+0MeB7QIoQ0FcNBNa8tdAFZd8tKIiUzsoN9dAIxnCrc7W7LqCUCw==" />
+    </item>
+    <item>
       <title>TimeTug 1.4.1-beta.20261008051405</title>
       <pubDate>Thu, 08 Oct 2026 05:16:50 GMT</pubDate>
       <sparkle:version>20261008051405</sparkle:version>
