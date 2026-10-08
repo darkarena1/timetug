@@ -8,6 +8,10 @@ struct InstanceInfo: Codable, Equatable {
     let build: String
     let distribution: Distribution
 
+    /// True for a build made on a developer's machine (Xcode or an untagged `build-release.sh`), which keeps the
+    /// `0.0.0-dev` placeholder version. CI stamps every beta, release and store build with a real version.
+    var isLocalBuild: Bool { version.hasSuffix("-dev") }
+
     static var current: InstanceInfo {
         let bundle = Bundle.main
         return InstanceInfo(
@@ -18,7 +22,8 @@ struct InstanceInfo: Codable, Equatable {
     }
 }
 
-/// Which of two TimeTug copies keeps running: the one built later.
+/// Which of two TimeTug copies keeps running: a locally built copy, otherwise the one built later. A developer who
+/// launches their own build wants to see it, not the installed app.
 ///
 /// The build number is a UTC timestamp shared by every channel (`scripts/ci/compute-versions.sh`), so it orders betas,
 /// releases and App Store uploads alike. The version string cannot: a beta is named after the release it follows
@@ -31,9 +36,11 @@ enum InstanceArbitration {
         case exit
     }
 
-    /// A missing or unreadable build number counts as 0, so it loses to any real build.
+    /// A local build outranks any other; otherwise the later build number wins. A missing or unreadable build number
+    /// counts as 0, so it loses to any real build.
     static func isNewer(_ a: InstanceInfo, than b: InstanceInfo) -> Bool {
-        (Int(a.build) ?? 0) > (Int(b.build) ?? 0)
+        if a.isLocalBuild != b.isLocalBuild { return a.isLocalBuild }
+        return (Int(a.build) ?? 0) > (Int(b.build) ?? 0)
     }
 
     static func decide(me: InstanceInfo, holder: InstanceInfo?) -> Decision {
