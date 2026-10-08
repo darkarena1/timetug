@@ -202,11 +202,15 @@ targets:
 schemes:
   TimeTug:
     build:
+      # Both app targets produce a "TimeTug.app"; implicit-dependency discovery can pair the test host with the wrong
+      # one and fail with "Multiple commands produce". All dependencies are declared, so it is not needed.
+      buildImplicitDependencies: false
       targets:
         TimeTug: all
     test:
       targets: [TimeTugTests]
   TimeTug-AppStore:
     build:
+      buildImplicitDependencies: false
       targets:
         TimeTug-AppStore: all
