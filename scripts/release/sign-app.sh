@@ -2,7 +2,12 @@
 # Sign TimeTug.app with a Developer ID Application certificate (hardened runtime), inside-out. No notarization.
 # Usage: scripts/release/sign-app.sh [APP_PATH]   (default dist/TimeTug.app)
 # Environment: MACOS_CERTIFICATE_P12_BASE64, MACOS_CERTIFICATE_PASSWORD, APPLE_TEAM_ID.
+#   MACOS_PROVISIONING_PROFILE_BASE64 (optional): base64 of the Developer ID .provisionprofile for com.timetug.app. When set,
+#   it is embedded and the app is signed with the keychain-access-groups entitlement (shared credentials); when unset
+#   the app keeps its own private keychain item.
 # SIGN_IDENTITY=-  signs ad hoc instead (local smoke test; needs no secrets and skips the timestamp).
+# SIGN_IDENTITY="Developer ID Application: ..."  signs with that identity from the login keychain (local test of a
+# profile-signed build; with a profile, also set APPLE_TEAM_ID and MACOS_PROVISIONING_PROFILE_BASE64).
 # The temporary keychain and decoded certificate are removed on exit. Nothing here prints secrets.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -16,8 +21,9 @@ APPEX="$APP_PATH/Contents/PlugIns/TimeTugWidgets.appex"
 WORK="$(mktemp -d)"
 KEYCHAIN_ARGS=()
 TIMESTAMP=(--timestamp)
-if [ "${SIGN_IDENTITY:-}" = "-" ]; then
-  IDENTITY="-"; TIMESTAMP=()
+if [ -n "${SIGN_IDENTITY:-}" ]; then
+  IDENTITY="$SIGN_IDENTITY"
+  [ "$IDENTITY" = "-" ] && TIMESTAMP=()
   trap 'rm -rf "$WORK"' EXIT
 else
   for var in MACOS_CERTIFICATE_P12_BASE64 MACOS_CERTIFICATE_PASSWORD APPLE_TEAM_ID; do
@@ -66,6 +72,24 @@ else
   echo "warning: Sparkle.framework not found in the app; signing without it" >&2
 fi
 sign --entitlements "$WIDGET_ENTITLEMENTS" "$APPEX"
-sign --entitlements "$ENTITLEMENTS" "$APP_PATH"
+APP_ENTITLEMENTS="$ENTITLEMENTS"
+if [ -n "${MACOS_PROVISIONING_PROFILE_BASE64:-}" ] && [ "${SIGN_IDENTITY:-}" != "-" ]; then
+  echo "$MACOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$WORK/embedded.provisionprofile"
+  # `security cms -D` also fails when the file was damaged in transfer (a text conversion turns bytes into U+FFFD).
+  security cms -D -i "$WORK/embedded.provisionprofile" > "$WORK/profile.plist" 2>/dev/null \
+    || { echo "error: MACOS_PROVISIONING_PROFILE_BASE64 is not an intact provisioning profile (download the .provisionprofile from the developer portal as a binary file)" >&2; exit 1; }
+  profile_app_id="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$WORK/profile.plist")"
+  [ "$profile_app_id" = "${APPLE_TEAM_ID}.com.timetug.app" ] \
+    || { echo "error: the provisioning profile is for $profile_app_id, not ${APPLE_TEAM_ID}.com.timetug.app" >&2; exit 1; }
+  cp "$WORK/embedded.provisionprofile" "$APP_PATH/Contents/embedded.provisionprofile"
+  APP_ENTITLEMENTS="$WORK/app.entitlements"
+  cp "$ENTITLEMENTS" "$APP_ENTITLEMENTS"
+  PB=/usr/libexec/PlistBuddy
+  $PB -c "Add :com.apple.application-identifier string ${APPLE_TEAM_ID}.com.timetug.app" "$APP_ENTITLEMENTS"
+  $PB -c "Add :com.apple.developer.team-identifier string ${APPLE_TEAM_ID}" "$APP_ENTITLEMENTS"
+  $PB -c "Add :keychain-access-groups array" -c "Add :keychain-access-groups:0 string ${APPLE_TEAM_ID}.com.timetug.shared" "$APP_ENTITLEMENTS"
+  echo "Embedded the provisioning profile; the app shares credentials through ${APPLE_TEAM_ID}.com.timetug.shared"
+fi
+sign --entitlements "$APP_ENTITLEMENTS" "$APP_PATH"
 codesign --verify --strict --deep --verbose=2 "$APP_PATH"
 echo "Signed (not notarized): $APP_PATH"

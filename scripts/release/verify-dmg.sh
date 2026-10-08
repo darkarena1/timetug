@@ -60,6 +60,14 @@ has_literal_sparkle_ids() {
 }
 check "TimeTug.app is sandboxed" is_sandboxed
 check "Sparkle mach-lookup ids are literal" has_literal_sparkle_ids
+# shellcheck disable=SC2329
+profile_matches_entitlements() { # a bundled profile and the keychain entitlement go together; neither is required
+  local has_profile=0 has_entitlement=0
+  [ -f "$mnt/TimeTug.app/Contents/embedded.provisionprofile" ] && has_profile=1
+  codesign -d --entitlements - "$mnt/TimeTug.app" 2>/dev/null | grep -q "keychain-access-groups" && has_entitlement=1
+  [ "$has_profile" = "$has_entitlement" ]
+}
+check "provisioning profile and keychain-access-groups entitlement come together" profile_matches_entitlements
 check "Applications is a symlink to /Applications" is_applications_link
 check "hidden background image (.background.tiff) exists" has_background
 check ".DS_Store exists" test -f "$mnt/.DS_Store"
