@@ -8,6 +8,13 @@ final class SettingsSearchTests: XCTestCase {
         SettingsSearch.results(for: query, calendars: calendars).map(\.id)
     }
 
+    func testEntriesWithoutUpdatesOmitTheUpdateItems() {
+        let ids = SettingsSearch.entries(includingUpdates: false).map(\.id)
+        for id in ["software-update", "automatic-updates", "beta-updates"] { XCTAssertFalse(ids.contains(id), id) }
+        XCTAssertTrue(ids.contains("launch-at-login"))
+        XCTAssertTrue(SettingsSearch.entries(includingUpdates: true).map(\.id).contains("software-update"))
+    }
+
     func testTitleSubstringMatch() {
         XCTAssertTrue(ids("lead").contains("lead-time"))
     }

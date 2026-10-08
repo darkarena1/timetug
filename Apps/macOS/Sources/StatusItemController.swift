@@ -102,10 +102,13 @@ final class StatusItemController: NSObject {
     }
 
     /// The right-click menu, laid out like the macOS Apple menu.
-    static func makeMenu(target: AnyObject, about: Selector, checkForUpdates: Selector, settings: Selector) -> NSMenu {
+    static func makeMenu(target: AnyObject, about: Selector, checkForUpdates: Selector, settings: Selector,
+                         includesUpdates: Bool = true) -> NSMenu {
         let menu = NSMenu()
         menu.addItem(withTitle: "About TimeTug", action: about, keyEquivalent: "").target = target
-        menu.addItem(withTitle: "Check for Updates…", action: checkForUpdates, keyEquivalent: "").target = target
+        if includesUpdates {
+            menu.addItem(withTitle: "Check for Updates…", action: checkForUpdates, keyEquivalent: "").target = target
+        }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings…", action: settings, keyEquivalent: ",").target = target
         menu.addItem(.separator())
@@ -115,7 +118,8 @@ final class StatusItemController: NSObject {
 
     private func showMenu() {
         let menu = Self.makeMenu(target: self, about: #selector(openAbout),
-                                 checkForUpdates: #selector(checkForUpdates), settings: #selector(openSettings))
+                                 checkForUpdates: #selector(checkForUpdates), settings: #selector(openSettings),
+                                 includesUpdates: Distribution.current.supportsInAppUpdates)
         // With a menu bar on every display the item has one window per screen, and `performClick` or a popup anchored
         // to `item.button` opens the menu on the active screen. Anchor it at the click instead: just under the menu bar
         // of the display the pointer is on (`clicked()` already recorded it).

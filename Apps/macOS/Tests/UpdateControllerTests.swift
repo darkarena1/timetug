@@ -23,6 +23,18 @@ final class UpdateControllerTests: XCTestCase {
         UpdateController(driver: driver, defaults: defaults ?? freshDefaults(), currentVersion: "0.2.0")
     }
 
+    func testAvailabilityIsInjectable() {
+        XCTAssertTrue(UpdateController(driver: FakeDriver(), defaults: freshDefaults(), currentVersion: "1", isAvailable: true).isAvailable)
+        XCTAssertFalse(UpdateController(driver: FakeDriver(), defaults: freshDefaults(), currentVersion: "1", isAvailable: false).isAvailable)
+    }
+
+    func testDistributionLabelsAndUpdateSupport() {
+        XCTAssertTrue(Distribution.direct.supportsInAppUpdates)
+        XCTAssertFalse(Distribution.appStore.supportsInAppUpdates)
+        XCTAssertEqual(Distribution.direct.label, "downloaded")
+        XCTAssertEqual(Distribution.appStore.label, "App Store")
+    }
+
     func testNoOpUpdaterDoesNothing() {
         let updater = NoOpUpdater()
         XCTAssertFalse(updater.automaticallyChecksForUpdates)

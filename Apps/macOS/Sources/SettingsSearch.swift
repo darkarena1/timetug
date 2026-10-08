@@ -73,6 +73,13 @@ enum SettingsSearch {
               keywords: ["hotkey", "shortcut", "keyboard", "global", "popup", "open", "toggle"], pane: .general),
     ]
 
+    /// The three Software Update entries; builds without an in-app updater do not offer them.
+    static let updateIDs: Set<String> = ["software-update", "automatic-updates", "beta-updates"]
+
+    static func entries(includingUpdates: Bool) -> [SettingsSearchItem] {
+        includingUpdates ? catalog : catalog.filter { !updateIDs.contains($0.id) }
+    }
+
     static func results(for query: String, calendars: [CalendarInfo]) -> [SettingsSearchItem] {
         let needle = fold(query.trimmingCharacters(in: .whitespacesAndNewlines))
         guard !needle.isEmpty else { return [] }
@@ -80,7 +87,7 @@ enum SettingsSearch {
         let calendarItems = calendars.map {
             SettingsSearchItem(id: calendarIDPrefix + $0.key, title: $0.title, keywords: [$0.accountName].compactMap { $0 }, pane: .calendars)
         }
-        let all = catalog + calendarItems
+        let all = entries(includingUpdates: Distribution.current.supportsInAppUpdates) + calendarItems
         let titleMatches = all.filter { fold($0.title).contains(needle) }
         let keywordMatches = all.filter { item in
             !fold(item.title).contains(needle) && item.keywords.contains { fold($0).contains(needle) }

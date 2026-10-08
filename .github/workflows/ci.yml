@@ -6,6 +6,7 @@
 #               Packages/CalendarBridge, Packages/CalendarApple, Packages/EventKitSource and
 #               Packages/AppleIntelligenceInference (macOS).
 #   app         Generates the Xcode project with XcodeGen, then builds and runs the app's XCTest suite (macOS).
+#   app-store-build  Builds the App Store target unsigned and checks it has no Sparkle (macOS).
 #   dmg         Builds the release app and the unsigned drag-to-install DMG, verifies it and uploads it
 #               as the `TimeTug-dmg` artifact (a fresh installer from every run).
 #   architecture  Checks the AGENTS.md layering rules (scripts/ci/check-architecture.sh) on Linux.
@@ -13,7 +14,7 @@
 #               stay portable. Allowed to fail (see below).
 #
 # The macOS jobs need an Xcode with the macOS 26 SDK or newer (Liquid Glass APIs behind #available).
-# If the `macos-26` runner label is not available to your account, change `runs-on` in all three macOS jobs
+# If the `macos-26` runner label is not available to your account, change `runs-on` in all the macOS jobs
 # (see docs/release.md, "Changing the runner label").
 name: CI
 
@@ -98,6 +99,34 @@ jobs:
         with:
           name: TestResults
           path: build/TestResults.xcresult
+  app-store-build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Select newest Xcode
+        run: scripts/ci/select-xcode.sh
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate --spec Apps/macOS/project.yml
+      - name: The checked-in App Store files match project.yml
+        run: git diff --exit-code -- Apps/macOS/AppStore
+      - name: Build the App Store target (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Apps/macOS/TimeTug.xcodeproj \
+            -scheme TimeTug-AppStore \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData-store \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+      - name: The App Store build has no Sparkle
+        run: |
+          app=build/DerivedData-store/Build/Products/Debug/TimeTug.app
+          test ! -e "$app/Contents/Frameworks/Sparkle.framework"
+          ! /usr/libexec/PlistBuddy -c "Print :SUFeedURL" "$app/Contents/Info.plist" 2>/dev/null
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = com.timetug.app.store
           if-no-files-found: ignore
 
   dmg:
