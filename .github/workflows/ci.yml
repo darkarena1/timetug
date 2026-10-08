@@ -99,6 +99,7 @@ jobs:
         with:
           name: TestResults
           path: build/TestResults.xcresult
+          if-no-files-found: ignore
   app-store-build:
     runs-on: macos-26
     steps:
@@ -125,9 +126,8 @@ jobs:
         run: |
           app=build/DerivedData-store/Build/Products/Debug/TimeTug.app
           test ! -e "$app/Contents/Frameworks/Sparkle.framework"
-          ! /usr/libexec/PlistBuddy -c "Print :SUFeedURL" "$app/Contents/Info.plist" 2>/dev/null
+          if /usr/libexec/PlistBuddy -c "Print :SUFeedURL" "$app/Contents/Info.plist" 2>/dev/null; then echo "SUFeedURL in the App Store build"; exit 1; fi
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = com.timetug.app.store
-          if-no-files-found: ignore
 
   dmg:
     runs-on: macos-26
