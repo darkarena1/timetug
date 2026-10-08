@@ -49,7 +49,13 @@ once and it takes over only once.
 Details: `docs/decisions/0009-duplicate-detection-and-on-device-inference.md`.
 
 ## Install
-Download the `.dmg` from the [Releases page](https://github.com/darkarena1/timetug/releases), open it and drag
+With [Homebrew](https://brew.sh):
+
+```bash
+brew install --cask digital-companion-llc/tap/timetug
+```
+
+Or download the `.dmg` from the [Releases page](https://github.com/darkarena1/timetug/releases), open it and drag
 TimeTug onto the Applications shortcut. Until Apple Developer signing is set up, releases are unsigned
 prereleases: the first time, right-click TimeTug and choose Open. If macOS says the app is damaged, run
 `xattr -dr com.apple.quarantine /Applications/TimeTug.app`.

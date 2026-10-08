@@ -24,6 +24,9 @@ A tag with a `-` suffix, or a release you marked as a pre-release in the GitHub 
 
 **Burned tag `v1.2.0`.** It was published, and locked, while immutable releases were on, with no assets; it cannot be reused. The next version is `v1.2.1` or higher.
 
+## Homebrew cask
+The cask lives in [digital-companion-llc/homebrew-tap](https://github.com/digital-companion-llc/homebrew-tap) (`Casks/timetug.rb`). Nothing in this repo's workflows touches it. The tap's `bump.yml` runs every six hours, reads the latest stable release (`gh release view` skips pre-releases, so betas never reach the cask), hashes the published DMG and opens a PR. Run it by hand from the tap's Actions tab to publish sooner. The DMG filename `TimeTug-<version>.dmg` and tag format `v<version>` are what the cask depends on; change them only together with the tap.
+
 ## Release rules
 These apply whenever a release is prepared, by hand or by Claude. They follow the format of the existing releases.
 
