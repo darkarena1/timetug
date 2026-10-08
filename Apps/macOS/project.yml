@@ -153,6 +153,9 @@ targets:
     info:
       path: AppStore/Info.plist
       properties:
+        # Stamped by scripts/release/build-appstore.sh through build settings, so the archive is signed once.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.productivity
         ITSAppUsesNonExemptEncryption: false
     entitlements:
@@ -165,22 +168,37 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.timetug.app.store
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APPSTORE"
+        MARKETING_VERSION: "0.0.0-dev"
+        CURRENT_PROJECT_VERSION: "2"
       configs:
         # Debug products get their own names so an Xcode build of both sets never has two targets producing one TimeTug.app.
         Debug:
           PRODUCT_NAME: TimeTug-AppStore
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          PROVISIONING_PROFILE_SPECIFIER: TimeTug App Store
   TimeTugWidgets-AppStore:
     templates: [TimeTugWidgetsBase]
     info:
       path: AppStore/Widgets-Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
     entitlements:
       path: AppStore/TimeTugStoreWidgets.entitlements
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.timetug.app.store.widgets
+        MARKETING_VERSION: "0.0.0-dev"
+        CURRENT_PROJECT_VERSION: "2"
       configs:
         Debug:
           PRODUCT_NAME: TimeTugWidgets-AppStore
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          PROVISIONING_PROFILE_SPECIFIER: TimeTug Widgets App Store
   TimeTugTests:
     type: bundle.unit-test
     platform: macOS

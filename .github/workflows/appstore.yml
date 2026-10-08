@@ -1,0 +1,86 @@
+# Builds the App Store target, signs it with the Apple Distribution certificate and uploads it to App Store Connect.
+# It runs when a STABLE release is published (a pre-release or a tag that is not vX.Y.Z is skipped), or by hand with a
+# stable version (to retry an upload). The App Store build is never a beta: there is no beta channel there.
+#
+# Uploading does not publish. The build appears in App Store Connect and TestFlight; it reaches users only when you
+# submit it for review there and release it. Needs the `appstore` environment's secrets (see docs/release.md, "App
+# Store"). A GitHub release created by another workflow does not fire `release: published`, so cut stable releases from
+# the GitHub UI, or run this workflow by hand afterwards.
+name: App Store
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable version X.Y.Z (no suffix), e.g. 2.0.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: macos-26
+    environment: appstore
+    concurrency:
+      group: appstore-${{ github.event.release.tag_name || inputs.version }}
+      cancel-in-progress: false
+    if: github.event_name == 'workflow_dispatch' || (!github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v'))
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+      INPUT_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Resolve the version
+        id: version
+        run: |
+          version="${INPUT_VERSION:-${TAG#v}}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Not a stable X.Y.Z version ('$version'): nothing to upload."
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "go=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: steps.version.outputs.go == 'true'
+        with:
+          ref: ${{ github.event.release.tag_name || format('v{0}', inputs.version) }}
+      - name: Select newest Xcode
+        if: steps.version.outputs.go == 'true'
+        run: scripts/ci/select-xcode.sh
+      - name: Install XcodeGen
+        if: steps.version.outputs.go == 'true'
+        run: brew install xcodegen
+      - name: Install signing material
+        if: steps.version.outputs.go == 'true'
+        env:
+          APPSTORE_DISTRIBUTION_CERT_P12: ${{ secrets.APPSTORE_DISTRIBUTION_CERT_P12 }}
+          APPSTORE_INSTALLER_CERT_P12: ${{ secrets.APPSTORE_INSTALLER_CERT_P12 }}
+          APPSTORE_CERT_PASSWORD: ${{ secrets.APPSTORE_CERT_PASSWORD }}
+          APPSTORE_APP_PROFILE: ${{ secrets.APPSTORE_APP_PROFILE }}
+          APPSTORE_WIDGET_PROFILE: ${{ secrets.APPSTORE_WIDGET_PROFILE }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: scripts/release/appstore-signing.sh install
+      - name: Archive and upload
+        if: steps.version.outputs.go == 'true'
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+          DESTINATION: upload
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          MICROSOFT_OAUTH_CLIENT_ID: ${{ secrets.MICROSOFT_OAUTH_CLIENT_ID }}
+        run: |
+          # Same UTC-timestamp build number as the direct builds, so single-instance ordering and App Store Connect's
+          # "must increase" rule both hold.
+          export BUILD_NUMBER
+          BUILD_NUMBER="$(scripts/ci/compute-versions.sh stable "v$APP_VERSION" | sed -n 's/^BUILD_NUMBER=//p')"
+          export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          scripts/release/build-appstore.sh
+      - name: Remove signing material
+        if: always() && steps.version.outputs.go == 'true'
+        run: scripts/release/appstore-signing.sh remove

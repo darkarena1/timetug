@@ -162,6 +162,37 @@ Create the certificate at developer.apple.com > Certificates > "Developer ID App
 
 WARNING: never commit certificates, `.p12`, `.p8`, `.cer` or `.pem` files, or their base64 text. They are git-ignored; keep it that way.
 
+## App Store
+The Mac App Store build is a second target (`TimeTug-AppStore`, bundle id `com.timetug.app.store`, no Sparkle) that shares the App Group and keychain group with the direct build. It is only ever a stable release; there is no beta channel on the App Store.
+
+**What runs.** `.github/workflows/appstore.yml` builds, signs with the Apple Distribution certificate and uploads to App Store Connect when a stable release (`vX.Y.Z`, not a pre-release) is published from the GitHub UI. Run it by hand from the Actions tab (input: the stable `X.Y.Z`) to retry an upload, or after a release the Release workflow created itself (GitHub does not fire `release: published` for those). The build number is the same UTC timestamp as the direct build (`scripts/ci/compute-versions.sh stable`), so it always increases.
+
+**Uploading does not publish.** The build lands in App Store Connect and TestFlight, visible only to you. It reaches users only when you submit it for review in App Store Connect and release it (choose "manually release" so you pick the moment). A direct release and an App Store release of the same version should be cut together; whichever copy was built later wins if both are installed on one Mac.
+
+**One-time setup (owner).**
+1. developer.apple.com > Identifiers: register `com.timetug.app.store` and `com.timetug.app.store.widgets` with the App Groups capability (`YYA6ZKMD36.com.timetug.shared`). The app also needs Keychain Sharing, which is entitlement-only (no portal toggle).
+2. Profiles > Mac App Store Connect: create `TimeTug App Store` (for the app id) and `TimeTug Widgets App Store` (for the widget id), each with the Apple Distribution certificate. The names must match `PROVISIONING_PROFILE_SPECIFIER` in `Apps/macOS/project.yml`. Download both as binary files (never paste them into chat or any text channel; that corrupts them).
+3. Certificates: create an Apple Distribution and a Mac Installer Distribution certificate; export each with its private key as `.p12`.
+4. App Store Connect: create the app record (bundle `com.timetug.app.store`, name TimeTug, category Productivity), the privacy answers, screenshots and review notes.
+5. App Store Connect > Users and Access > Integrations: create an API key with the App Manager role; note the key id and issuer id and download the `.p8` once.
+6. GitHub > Settings > Environments: create `appstore` (no required reviewer, so a release is not held waiting) and add these secrets to it. Encode files with `base64 -i FILE | gh secret set NAME --env appstore`:
+
+| Secret | Contents |
+| --- | --- |
+| `APPSTORE_DISTRIBUTION_CERT_P12` | Apple Distribution certificate and key, base64 of the `.p12` |
+| `APPSTORE_INSTALLER_CERT_P12` | Mac Installer Distribution certificate and key, base64 of the `.p12` |
+| `APPSTORE_CERT_PASSWORD` | The password used when exporting both `.p12` files |
+| `APPSTORE_APP_PROFILE` | Base64 of the `TimeTug App Store` profile |
+| `APPSTORE_WIDGET_PROFILE` | Base64 of the `TimeTug Widgets App Store` profile |
+| `ASC_KEY_ID`, `ASC_ISSUER_ID` | From the App Store Connect API key |
+| `ASC_KEY_P8` | Base64 of the downloaded `AuthKey_XXXX.p8` |
+
+The Google and Microsoft OAuth client secrets are the repository secrets the other workflows already use.
+
+**Local export.** With the certificates and profiles installed, `APP_VERSION=2.0.0 BUILD_NUMBER=$(date -u +%Y%m%d%H%M%S) DESTINATION=export scripts/release/build-appstore.sh` writes a signed `dist/appstore/TimeTug.pkg` without uploading. `DRY_RUN=1` only checks the inputs.
+
+**Unverified until the first upload.** App Store Connect's rule for the build number string (the 14-digit timestamp is expected to be accepted; if it is refused, switch to a counter in a repository variable) and the installer certificate's exact name (`Mac Installer Distribution` in `build-appstore.sh`).
+
 ## Test signing locally
 ```bash
 scripts/ci/build-release.sh                      # no secrets needed; produces dist/TimeTug.app
