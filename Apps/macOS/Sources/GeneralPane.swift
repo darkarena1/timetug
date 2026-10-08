@@ -67,16 +67,18 @@ struct GeneralPane: View {
                             .clipShape(RoundedRectangle(cornerRadius: 5.5, style: .continuous))
                     }
                 }
-                NavigationLink(value: GeneralDestination.softwareUpdate) {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Software Update")
-                            Text("TimeTug \(updates.currentVersion)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                if updates.isAvailable {
+                    NavigationLink(value: GeneralDestination.softwareUpdate) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Software Update")
+                                Text("TimeTug \(updates.currentVersion)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            SettingsRowIcon(systemImage: "arrow.triangle.2.circlepath", color: .blue)
                         }
-                    } icon: {
-                        SettingsRowIcon(systemImage: "arrow.triangle.2.circlepath", color: .blue)
                     }
                 }
             }

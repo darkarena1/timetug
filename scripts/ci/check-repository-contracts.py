@@ -64,11 +64,17 @@ for provider, path in (
     require(f'extension {provider}: WritableCalendarSource' in read(f'{path}/{provider}+Write.swift'),
             f'{provider} write protocol implementation absent')
 
-# XcodeGen is the source of truth for generated plist properties.
+# XcodeGen is the source of truth for generated plist properties. A target's properties are its template's plus its own.
 project = yaml.safe_load(read('Apps/macOS/project.yml'))
 for target, path in (('TimeTug', 'Apps/macOS/Sources/Info.plist'),
-                     ('TimeTugWidgets', 'Apps/macOS/Widgets/Info.plist')):
-    props = project['targets'][target]['info']['properties']
+                     ('TimeTugWidgets', 'Apps/macOS/Widgets/Info.plist'),
+                     ('TimeTug-AppStore', 'Apps/macOS/AppStore/Info.plist'),
+                     ('TimeTugWidgets-AppStore', 'Apps/macOS/AppStore/Widgets-Info.plist')):
+    definition = project['targets'][target]
+    props = {}
+    for template in definition.get('templates', []):
+        props.update(project['targetTemplates'][template].get('info', {}).get('properties', {}))
+    props.update(definition['info'].get('properties', {}))
     with (root / path).open('rb') as stream:
         plist = plistlib.load(stream)
     for key, value in props.items():

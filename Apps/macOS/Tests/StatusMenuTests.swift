@@ -22,6 +22,15 @@ final class StatusMenuTests: XCTestCase {
                        ["About TimeTug", "Check for Updates…", "<separator>", "Settings…", "<separator>", "Quit TimeTug"])
     }
 
+    func testMenuWithoutUpdatesOmitsTheUpdateItem() {
+        let t = Target()
+        let titles = StatusItemController.makeMenu(target: t, about: #selector(Target.about),
+                                                   checkForUpdates: #selector(Target.checkForUpdates),
+                                                   settings: #selector(Target.settings), includesUpdates: false).items.map(\.title)
+        XCTAssertFalse(titles.contains("Check for Updates…"))
+        for kept in ["About TimeTug", "Settings…", "Quit TimeTug"] { XCTAssertTrue(titles.contains(kept), kept) }
+    }
+
     func testKeyEquivalents() {
         let items = menu(Target()).items
         XCTAssertEqual(items[0].keyEquivalent, "")

@@ -22,10 +22,18 @@ final class AppCoordinator {
     let model = AppModel()
     let navigation = SettingsNavigation()
     let updates = UpdateController(
-        driver: ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
-            ? SparkleUpdater(includeBetas: { UserDefaults.standard.bool(forKey: UpdateController.betaKey) })
-            : NoOpUpdater(),
+        driver: AppCoordinator.makeUpdaterDriver(),
         currentVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?")
+
+    /// Sparkle in the direct build (inert in the XCTest host); nothing in the App Store build, which has no Sparkle.
+    private static func makeUpdaterDriver() -> UpdaterDriving {
+        #if APPSTORE
+        return NoOpUpdater()
+        #else
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return NoOpUpdater() }
+        return SparkleUpdater(includeBetas: { UserDefaults.standard.bool(forKey: UpdateController.betaKey) })
+        #endif
+    }
 
     private let eventKit = EventKitSource()
     private let store: CalendarStore

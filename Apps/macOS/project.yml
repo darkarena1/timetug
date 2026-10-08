@@ -30,13 +30,18 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     ENABLE_HARDENED_RUNTIME: YES
-targets:
-  TimeTug:
+targetTemplates:
+  # The app and widget are built twice from one source tree: the direct (Developer ID, Sparkle) target and the
+  # App Store target (bundle ids ending .store, no Sparkle, the APPSTORE compilation condition).
+  TimeTugAppBase:
     type: application
     platform: macOS
-    sources: [Sources, Resources, Shared]
+    sources:
+      - path: Sources
+        excludes: ["Info.plist", "*.entitlements"]
+      - Resources
+      - Shared
     dependencies:
-      - target: TimeTugWidgets
       - package: TimeTugCore
         product: TimeTugCore
       - package: EventKitSource
@@ -59,26 +64,18 @@ targets:
         product: CalendarApple
       - package: KeyboardShortcuts
         product: KeyboardShortcuts
-      - package: Sparkle
-        product: Sparkle
     info:
-      path: Sources/Info.plist
       properties:
         CFBundleName: TimeTug
         CFBundleShortVersionString: "0.0.0-dev"
         CFBundleVersion: "2"
         LSUIElement: true
-        SUFeedURL: https://darkarena1.github.io/timetug/appcast.xml
-        SUPublicEDKey: QZXAO2hdupCAJzVJV0wqKHw3VPTjLDhQPGjJZDBlkzo=
-        SUEnableAutomaticChecks: true
-        SUEnableInstallerLauncherService: true
         NSCalendarsFullAccessUsageDescription: TimeTug reads your calendars to alert you before meetings start.
         NSContactsUsageDescription: TimeTug looks up meeting attendees in Contacts to recognize the same meeting across your calendars.
         TimeTugGoogleClientID: $(GOOGLE_OAUTH_CLIENT_ID)
         TimeTugGoogleClientSecret: $(GOOGLE_OAUTH_CLIENT_SECRET)
         TimeTugMicrosoftClientID: $(MICROSOFT_OAUTH_CLIENT_ID)
     entitlements:
-      path: Sources/TimeTug.entitlements
       properties:
         com.apple.security.personal-information.calendars: true
         com.apple.security.personal-information.addressbook: true
@@ -86,24 +83,23 @@ targets:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
         com.apple.security.network.server: true
-        com.apple.security.temporary-exception.mach-lookup.global-name:
-          - com.timetug.app-spks
-          - com.timetug.app-spki
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.timetug.app
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-  TimeTugWidgets:
+        PRODUCT_NAME: TimeTug
+  TimeTugWidgetsBase:
     type: app-extension
     platform: macOS
-    sources: [Widgets, Shared]
+    sources:
+      - path: Widgets
+        excludes: ["Info.plist", "*.entitlements"]
+      - Shared
     dependencies:
       - package: TimeTugCore
         product: TimeTugCore
       - package: CalendarConnectors
         product: CalendarCore
     info:
-      path: Widgets/Info.plist
       properties:
         CFBundleName: TimeTugWidgets
         CFBundleDisplayName: TimeTug
@@ -112,13 +108,79 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
-      path: Widgets/TimeTugWidgets.entitlements
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.application-groups: [YYA6ZKMD36.com.timetug.shared]
     settings:
       base:
+        PRODUCT_NAME: TimeTugWidgets
+targets:
+  TimeTug:
+    templates: [TimeTugAppBase]
+    dependencies:
+      - target: TimeTugWidgets
+      - package: Sparkle
+        product: Sparkle
+    info:
+      path: Sources/Info.plist
+      properties:
+        SUFeedURL: https://darkarena1.github.io/timetug/appcast.xml
+        SUPublicEDKey: QZXAO2hdupCAJzVJV0wqKHw3VPTjLDhQPGjJZDBlkzo=
+        SUEnableAutomaticChecks: true
+        SUEnableInstallerLauncherService: true
+    entitlements:
+      path: Sources/TimeTug.entitlements
+      properties:
+        com.apple.security.temporary-exception.mach-lookup.global-name:
+          - com.timetug.app-spks
+          - com.timetug.app-spki
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.timetug.app
+  TimeTugWidgets:
+    templates: [TimeTugWidgetsBase]
+    info:
+      path: Widgets/Info.plist
+    entitlements:
+      path: Widgets/TimeTugWidgets.entitlements
+    settings:
+      base:
         PRODUCT_BUNDLE_IDENTIFIER: com.timetug.app.widgets
+  TimeTug-AppStore:
+    templates: [TimeTugAppBase]
+    dependencies:
+      - target: TimeTugWidgets-AppStore
+    info:
+      path: AppStore/Info.plist
+      properties:
+        LSApplicationCategoryType: public.app-category.productivity
+        ITSAppUsesNonExemptEncryption: false
+    entitlements:
+      path: AppStore/TimeTugStore.entitlements
+      properties:
+        # Restricted: the store build is signed with an App Store profile that carries it. Not in the direct target,
+        # where only the release signing step adds it (an ad-hoc or Xcode build cannot hold it).
+        keychain-access-groups: [YYA6ZKMD36.com.timetug.shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.timetug.app.store
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APPSTORE"
+      configs:
+        # Debug products get their own names so an Xcode build of both sets never has two targets producing one TimeTug.app.
+        Debug:
+          PRODUCT_NAME: TimeTug-AppStore
+  TimeTugWidgets-AppStore:
+    templates: [TimeTugWidgetsBase]
+    info:
+      path: AppStore/Widgets-Info.plist
+    entitlements:
+      path: AppStore/TimeTugStoreWidgets.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.timetug.app.store.widgets
+      configs:
+        Debug:
+          PRODUCT_NAME: TimeTugWidgets-AppStore
   TimeTugTests:
     type: bundle.unit-test
     platform: macOS
@@ -147,7 +209,15 @@ targets:
 schemes:
   TimeTug:
     build:
+      # Both app targets produce a "TimeTug.app"; implicit-dependency discovery can pair the test host with the wrong
+      # one and fail with "Multiple commands produce". All dependencies are declared, so it is not needed.
+      buildImplicitDependencies: false
       targets:
         TimeTug: all
     test:
       targets: [TimeTugTests]
+  TimeTug-AppStore:
+    build:
+      buildImplicitDependencies: false
+      targets:
+        TimeTug-AppStore: all

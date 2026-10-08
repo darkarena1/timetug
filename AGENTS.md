@@ -23,7 +23,7 @@ When you move guidance between this file and a skill, keep one copy: skills hold
 - `Packages/CalendarBridge`: minimal glue. `EventMapper` wraps library events in `TimeTugCalendarEvent` (drops cancelled ones, adds calendar info); `ConnectedSource` adapts a library source to Core's source protocol and translates errors and changes.
 - `Packages/CalendarApple`: Apple-side adapters for the library (Keychain `CredentialStore`, loopback OAuth interaction, `WebAuthenticationSessionPresenter` (the `ASWebAuthenticationSession` sign-in sheet), `CryptoKitSHA256`, injected in `AppConnectors.swift`).
 - `Packages/AppleIntelligenceInference`: Apple on-device model adapter for duplicate detection (macOS 26+, compile-guarded). Only place with Foundation Models imports.
-- `Apps/macOS`: AppKit/SwiftUI shell. Generated Xcode project (XcodeGen).
+- `Apps/macOS`: AppKit/SwiftUI shell. Generated Xcode project (XcodeGen). Two targets from one template: `TimeTug` (direct: Developer ID, Sparkle, bundle id `com.timetug.app`) and `TimeTug-AppStore` (bundle id `com.timetug.app.store`, no Sparkle, `APPSTORE` compilation condition; checked-in generated files in `Apps/macOS/AppStore/`). Both produce `TimeTug.app` and share one App Group, so build them into separate DerivedData folders. `Distribution` says which one is running.
 - `Apps/macOS/Sources/UpdateController.swift`, `UpdatesSection.swift`: Sparkle in the app layer only (never Core). Beta opt-in is `updates.includeBetas.v1` in UserDefaults.
 - `Apps/macOS/Widgets`: WidgetKit extension `TimeTugWidgets` (Next Up, Today, and macOS 26 Control Center controls). Reads the snapshot; no EventKit.
 - `Apps/macOS/Shared`: AppGroup, SharedSettings, SettingsChangeSignal, WidgetSnapshotStore. Compiled into both the app and the extension.
@@ -51,6 +51,7 @@ When you move guidance between this file and a skill, keep one copy: skills hold
 - Generate app project: `xcodegen generate --spec Apps/macOS/project.yml`
 - Build app: `xcodebuild -project Apps/macOS/TimeTug.xcodeproj -scheme TimeTug -destination 'platform=macOS' build`
 - App tests: `xcodebuild -project Apps/macOS/TimeTug.xcodeproj -scheme TimeTug -destination 'platform=macOS' test`
+- Build the App Store target (unsigned): `xcodebuild -project Apps/macOS/TimeTug.xcodeproj -scheme TimeTug-AppStore -destination 'platform=macOS' -derivedDataPath build/store CODE_SIGNING_ALLOWED=NO build`
 - Window/status-item behavior is verified by hand: `docs/manual-tests/macos-checklist.md`.
 
 ## Gotchas
@@ -61,7 +62,8 @@ When you move guidance between this file and a skill, keep one copy: skills hold
 - Calendar access needs the calendars entitlement and `NSCalendarsFullAccessUsageDescription`. EventKit attendee lookup (participants with no `mailto:` address) also needs the `com.apple.security.personal-information.addressbook` entitlement and `NSContactsUsageDescription`; the prompt appears once, never blocks a read, and denying it just leaves those emails nil.
 - Duplicate detection: rules run always; on-device inference is opt-in (Settings > Calendars, Beta), default off.
 - Widgets and Control Center controls read a snapshot the app writes to the app group container, and only work in team-signed builds (ADR 0010). Control Center intents live in the extension, write the shared suite and signal the app with a Darwin notification; the app re-reads.
-- `xcodegen generate` rewrites the two checked-in Info.plists (`Apps/macOS/Sources/Info.plist`, `Apps/macOS/Widgets/Info.plist`); restore them with `git checkout` before committing.
+- `xcodegen generate` rewrites the checked-in Info.plists (`Apps/macOS/Sources/Info.plist`, `Apps/macOS/Widgets/Info.plist`); restore them with `git checkout` before committing unless you changed a target's properties on purpose. The App Store target's generated files (`Apps/macOS/AppStore/*.plist`, `*.entitlements`) are checked in too and must match `project.yml`.
+- Anything that imports Sparkle must sit inside `#if !APPSTORE` (the store target has no Sparkle). `keychain-access-groups` is a restricted entitlement: it is in the store target's entitlements, and added to the direct build only at release signing (`sign-app.sh`), because an ad-hoc or Xcode build cannot launch with it.
 - Calendar writes are opt-in: `capabilities.canWrite == (source is WritableCalendarSource)`, unsupported fields throw `WriteError.unsupported`, updates send only changed fields and a stale version is judged per field against `EventPatch.base`. Live write tests against real accounts are opt-in and never run in CI.
 - `TimeTugCore` and `CalendarCore` both define `CalendarSource` and `SourceError`: inside Core the local declaration shadows the import; elsewhere qualify (`CalendarCore.SourceError`). All-day events belong to a day by calendar date in the event's own zone (`TimeTugCalendarEvent.allDayDates/covers`), never the viewer's zone; `CalendarStore` queries sources with a 26 hour margin each side (`sourceQueryMargin`).
 - A calendar that is not shown never tugs: `TakeoverPolicy` requires an opted-in copy on a calendar that is not hidden, and saved settings that both hide and opt in a calendar decode as hidden. The Calendars pane sets system-style calendars (`CalendarKind`: birthdays, subscribed feeds, from EventKit and Google ids) apart unless Tug is on for them.
