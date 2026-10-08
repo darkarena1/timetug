@@ -6,6 +6,7 @@ import SwiftUI
 struct GeneralPane: View {
     @ObservedObject var navigation: SettingsNavigation
     @ObservedObject var updates: UpdateController
+    let collision: CollisionNotice?
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var launchError: String?
     /// Set while we programmatically revert `launchAtLogin`, so the resulting
@@ -52,6 +53,9 @@ struct GeneralPane: View {
 
     private var hub: some View {
         Form {
+            if let collision {
+                Section("Other copy installed") { Text(collision.message).font(.footnote).foregroundStyle(.secondary) }
+            }
             Section {
                 NavigationLink(value: GeneralDestination.about) {
                     Label {

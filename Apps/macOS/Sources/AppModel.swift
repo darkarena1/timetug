@@ -7,6 +7,8 @@ import TimeTugCore
 final class AppModel: ObservableObject {
     @Published var agenda: DayAgenda = .empty
     @Published var calendars: [CalendarInfo] = []
+    /// A quiet hint that a second copy of TimeTug was opened (see `CollisionNotice`).
+    @Published var collisionNotice: CollisionNotice?
     @Published var statuses: [String: SourceStatus] = [:]
     /// Quiet per-source hints from the latest snapshot, keyed like `statuses`.
     @Published var notices: [String: [SourceNotice]] = [:]
