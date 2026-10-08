@@ -35,6 +35,25 @@ final class InstanceArbitrationTests: XCTestCase {
         XCTAssertFalse(InstanceArbitration.isNewer(info(build: "?"), than: info(build: "")))
     }
 
+    func testALocalBuildBeatsAnyInstalledBuild() {
+        let local = info("0.0.0-dev", build: "2")
+        let installed = info("1.5.0", build: "20261231000000")
+        XCTAssertTrue(InstanceArbitration.isNewer(local, than: installed))
+        XCTAssertFalse(InstanceArbitration.isNewer(installed, than: local))
+        XCTAssertEqual(InstanceArbitration.decide(me: local, holder: installed), .askHolderToQuit)
+        XCTAssertEqual(InstanceArbitration.decide(me: installed, holder: local), .exit)
+    }
+
+    func testTwoLocalBuildsFallBackToTheBuildNumber() {
+        XCTAssertFalse(InstanceArbitration.isNewer(info("0.0.0-dev", build: "2"), than: info("0.0.0-dev", build: "2")))
+        XCTAssertTrue(InstanceArbitration.isNewer(info("0.0.0-dev", build: "3"), than: info("0.0.0-dev", build: "2")))
+    }
+
+    func testABetaFromTheNoTagFallbackIsNotLocal() {
+        XCTAssertFalse(info("0.0.0-dev-beta.20261008035539", build: "20261008035539").isLocalBuild)
+        XCTAssertTrue(info("0.0.0-dev", build: "2").isLocalBuild)
+    }
+
     func testANewerNewcomerAsksTheHolderToQuit() {
         XCTAssertEqual(InstanceArbitration.decide(me: info(build: "2"), holder: info(build: "1")), .askHolderToQuit)
     }
