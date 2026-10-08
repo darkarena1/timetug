@@ -121,3 +121,17 @@ Run before a release, and after touching overlay, status item or scheduling code
 - [ ] `log show --predicate 'subsystem == "com.timetug.app" AND category == "icalsub"' --info --last 5m` lists the same entries (private values show as `<private>`).
 - [ ] An iCal link feed with an unreadable RRULE shows a small subdued warning triangle after the status text of that account in Settings > Accounts; hovering it shows "Some repeating events from this link use a rule TimeTug can't read, so they may not appear." (VoiceOver reads the same). A clean feed shows no triangle; after the feed is fixed and refreshed it disappears.
 - [ ] Searching Settings for "diagnostics" or "logs" opens the Accounts pane.
+
+## Sandbox
+Run on a team-signed build. Watch denials while testing: `/usr/bin/log stream --style compact --predicate 'eventMessage CONTAINS "deny(" AND eventMessage CONTAINS "TimeTug"'` (use the full path: `log` is a zsh builtin). Known harmless denial: `system-info vfs.disk-space`.
+- [ ] Launches, shows the menu bar icon, no other denial in the log.
+- [ ] Apple Calendar: access prompt appears once; events show.
+- [ ] Google sign-in (loopback redirect) completes and events show.
+- [ ] Microsoft sign-in completes and events show.
+- [ ] iCloud and Other CalDAV sign-in complete.
+- [ ] iCal link account added and polled.
+- [ ] A takeover appears for a test event (Settings > Test Tug) and its Join button opens the browser.
+- [ ] Widgets and the Control Center controls update from the app.
+- [ ] Settings changes survive quitting and relaunching; accounts survive too.
+- [ ] Launch at login toggle works.
+- [ ] Settings > Software Update > Check for Updates reaches a test appcast, and an update from the unsandboxed 1.x installs.

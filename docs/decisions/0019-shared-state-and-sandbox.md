@@ -15,4 +15,13 @@ TimeTug will ship a downloaded (Developer ID) build and a Mac App Store build, a
 ## Consequences
 - Settings, accounts and the takeover ledger carry over between builds that share the group.
 - A build that is not team-signed keeps a separate copy in `~/Library/Application Support/TimeTug/`, so a dev build never touches a user's data.
-- The sandbox itself and its verification are recorded below once it ships.
+
+## Sandbox outcome
+The main app is sandboxed (`Apps/macOS/project.yml`, generated into `Sources/TimeTug.entitlements`).
+
+- **Entitlements**: `app-sandbox`, `network.client`, `network.server` (the OAuth loopback `NWListener`), calendars, address book, and the team `application-groups`.
+- **Sparkle** (2.10.0) follows its sandbox guide: Info.plist `SUEnableInstallerLauncherService`, plus `temporary-exception.mach-lookup.global-name` for `com.timetug.app-spks` and `com.timetug.app-spki`.
+- **The mach-lookup ids must be literal.** The release pipeline re-signs with the raw checked-in entitlements file, which does not expand `$(PRODUCT_BUNDLE_IDENTIFIER)`. With the variable, a sandboxed to sandboxed Sparkle update failed with "installation data was never received".
+- **Verified** with a Developer ID signed build, no provisioning profile, over real data: it launches, Google and Microsoft accounts stay connected, the migrated state is present, and there are no unexpected sandbox denials (`system-info vfs.disk-space` is harmless). Sparkle updates worked for both hops, unsandboxed to sandboxed and sandboxed to sandboxed.
+- The unit tests run inside the real app, so `AppDelegate` skips the coordinator when `XCTestConfigurationFilePath` is set. Without that guard the tests wrote empty settings into the real group.
+- The interactive items are in the Sandbox section of `docs/manual-tests/macos-checklist.md`.
