@@ -97,6 +97,20 @@ final class AppCoordinator {
         persistLedger()
     }
 
+    /// Another copy of TimeTug was opened and left (or was replaced by this one): show the hint unless this pair of
+    /// builds was dismissed before.
+    func noteCollision(with other: InstanceInfo) {
+        let notice = CollisionNotice.make(survivor: .current, other: other)
+        let dismissed = GroupDefaults.suite.string(forKey: CollisionNotice.dismissedKey)
+        model.collisionNotice = CollisionNotice.shouldShow(notice, dismissedPair: dismissed) ? notice : nil
+    }
+
+    func dismissCollisionNotice() {
+        guard let notice = model.collisionNotice else { return }
+        GroupDefaults.suite.set(notice.pairKey, forKey: CollisionNotice.dismissedKey)
+        model.collisionNotice = nil
+    }
+
     func start() async {
         NSApp.appearance = settings.appearanceMode.nsAppearance
         statusItem = StatusItemController(
@@ -107,7 +121,8 @@ final class AppCoordinator {
                     onJoin: { [weak self] url in self?.statusItem?.join(url) },
                     onUnmerge: { [weak self] event in self?.unmerge(event) },
                     onSeparate: { [weak self] event, members in self?.separate(event, members: members) },
-                    onMerge: { [weak self] a, b in self?.merge(a, b) }
+                    onMerge: { [weak self] a, b in self?.merge(a, b) },
+                    onDismissCollision: { [weak self] in self?.dismissCollisionNotice() }
                 )
             ),
             onOpenSettings: { [weak self] in self?.openSettings() },

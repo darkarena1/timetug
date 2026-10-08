@@ -10,6 +10,7 @@ struct DropdownView: View {
     let onUnmerge: (TimeTugCalendarEvent) -> Void
     let onSeparate: (TimeTugCalendarEvent, [MergedMember]) -> Void
     let onMerge: (TimeTugCalendarEvent, TimeTugCalendarEvent) -> Void
+    let onDismissCollision: () -> Void
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -43,6 +44,10 @@ struct DropdownView: View {
 
         return VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
+                if let notice = model.collisionNotice {
+                    CollisionNoticeRow(notice: notice, onDismiss: onDismissCollision)
+                        .padding(.horizontal, 12).padding(.top, 12)
+                }
                 if !problems.isEmpty {
                     VStack(spacing: 6) {
                         ForEach(problems, id: \.sourceID) {
