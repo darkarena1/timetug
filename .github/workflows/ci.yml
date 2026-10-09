@@ -188,7 +188,8 @@ jobs:
             echo "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin && exit 0
             sleep $((attempt * 15))
           done
-          exit 1
+          # Logging in only raises the pull limit; carry on anonymously if Docker's auth server stays unreachable.
+          echo "::warning::Docker Hub login failed; pulling anonymously."
       - name: Pull the Swift image
         run: |
           for attempt in 1 2 3; do
