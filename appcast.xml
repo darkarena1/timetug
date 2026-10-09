@@ -3,6 +3,41 @@
   <channel>
     <title>TimeTug</title>
     <item>
+      <title>TimeTug 2.0.0-beta.20261009190115</title>
+      <pubDate>Fri, 09 Oct 2026 19:06:10 GMT</pubDate>
+      <sparkle:version>20261009190115</sparkle:version>
+      <sparkle:shortVersionString>2.0.0-beta.20261009190115</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:channel>beta</sparkle:channel>
+      <description>&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+&lt;meta charset="utf-8"&gt;
+&lt;style&gt;
+body {
+  font: 13px -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  color: #1d1d1f;
+  margin: 12px 16px;
+  word-wrap: break-word;
+}
+a { color: #0068da; }
+h1, h2, h3 { font-size: 1.05em; }
+pre, code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.95em; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (prefers-color-scheme: dark) {
+  body { color: #f5f5f7; }
+  a { color: #4da3ff; }
+}
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;p dir="auto"&gt;Beta build from &lt;a class="commit-link" data-hovercard-type="commit" data-hovercard-url="https://github.com/darkarena1/timetug/commit/322fd59c9a68c965fc0dc9192b8fc78e6543aacf/hovercard" href="https://github.com/darkarena1/timetug/commit/322fd59c9a68c965fc0dc9192b8fc78e6543aacf"&gt;&lt;tt&gt;322fd59&lt;/tt&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</description>
+      <enclosure url="https://github.com/darkarena1/timetug/releases/download/beta-20261009190115/TimeTug-2.0.0-beta.20261009190115.zip" length="9376787" type="application/octet-stream" sparkle:edSignature="xIBKULC3vb1QvhMLSRBSwDeXgREnLeHvcD7SUuOaozxYPj6g4khVGFCvsbTkoXpKwp8Vyn119o+lxR3sTuEzDw==" />
+    </item>
+    <item>
       <title>TimeTug 2.0.0-beta.20261009164657</title>
       <pubDate>Fri, 09 Oct 2026 16:51:01 GMT</pubDate>
       <sparkle:version>20261009164657</sparkle:version>
@@ -189,41 +224,6 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 &lt;/html&gt;
 </description>
       <enclosure url="https://github.com/darkarena1/timetug/releases/download/v2.0.0/TimeTug-2.0.0.zip" length="9377852" type="application/octet-stream" sparkle:edSignature="zEfMJhfax5TGIkKcmD8VB99JlimkcS4PHp+0MeB7QIoQ0FcNBNa8tdAFZd8tKIiUzsoN9dAIxnCrc7W7LqCUCw==" />
-    </item>
-    <item>
-      <title>TimeTug 1.4.1-beta.20261008051405</title>
-      <pubDate>Thu, 08 Oct 2026 05:16:50 GMT</pubDate>
-      <sparkle:version>20261008051405</sparkle:version>
-      <sparkle:shortVersionString>1.4.1-beta.20261008051405</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <sparkle:channel>beta</sparkle:channel>
-      <description>&lt;!DOCTYPE html&gt;
-&lt;html&gt;
-&lt;head&gt;
-&lt;meta charset="utf-8"&gt;
-&lt;style&gt;
-body {
-  font: 13px -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
-  color: #1d1d1f;
-  margin: 12px 16px;
-  word-wrap: break-word;
-}
-a { color: #0068da; }
-h1, h2, h3 { font-size: 1.05em; }
-pre, code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.95em; }
-pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-@media (prefers-color-scheme: dark) {
-  body { color: #f5f5f7; }
-  a { color: #4da3ff; }
-}
-&lt;/style&gt;
-&lt;/head&gt;
-&lt;body&gt;
-&lt;p dir="auto"&gt;Beta build from &lt;a class="commit-link" data-hovercard-type="commit" data-hovercard-url="https://github.com/darkarena1/timetug/commit/fd49a1e4ec0526c34d33f3060962b8a4d28e5ad5/hovercard" href="https://github.com/darkarena1/timetug/commit/fd49a1e4ec0526c34d33f3060962b8a4d28e5ad5"&gt;&lt;tt&gt;fd49a1e&lt;/tt&gt;&lt;/a&gt;&lt;/p&gt;
-&lt;/body&gt;
-&lt;/html&gt;
-</description>
-      <enclosure url="https://github.com/darkarena1/timetug/releases/download/beta-20261008051405/TimeTug-1.4.1-beta.20261008051405.zip" length="9376166" type="application/octet-stream" sparkle:edSignature="IxpZcus8u8tgT0DRj6ZHyz8kS+Cjg9KYcou7RdCd9qYPdoAsiVYr1YYXiqTPXph9how/q+ugmdkdBQiqVVP8Ag==" />
     </item>
     <item>
       <title>TimeTug 1.4.1</title>
