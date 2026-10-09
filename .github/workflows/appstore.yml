@@ -17,6 +17,10 @@ on:
         description: Stable version X.Y.Z (no suffix), e.g. 2.0.0
         required: true
         type: string
+      ref:
+        description: Branch, tag or SHA to build (default: the tag for that version)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -47,7 +51,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: steps.version.outputs.go == 'true'
         with:
-          ref: ${{ github.event.release.tag_name || format('v{0}', inputs.version) }}
+          ref: ${{ github.event.release.tag_name || inputs.ref || format('v{0}', inputs.version) }}
       - name: Select newest Xcode
         if: steps.version.outputs.go == 'true'
         run: scripts/ci/select-xcode.sh
