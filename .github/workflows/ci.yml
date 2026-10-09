@@ -183,7 +183,19 @@ jobs:
       # public images lifts that. Pull requests from forks get no secrets, so the step is skipped and they pull anonymously.
       - name: Log in to Docker Hub
         if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
-        run: echo "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+        run: |
+          for attempt in 1 2 3; do
+            echo "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin && exit 0
+            sleep $((attempt * 15))
+          done
+          exit 1
+      - name: Pull the Swift image
+        run: |
+          for attempt in 1 2 3; do
+            docker pull swift:6.0 && exit 0
+            sleep $((attempt * 15))
+          done
+          exit 1
       - name: Test TimeTugCore and CalendarConnectors
         run: |
           docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w /work swift:6.0 \
