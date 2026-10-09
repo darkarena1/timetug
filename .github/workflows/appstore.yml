@@ -18,7 +18,7 @@ on:
         required: true
         type: string
       ref:
-        description: Branch, tag or SHA to build; blank builds the tag for that version
+        description: Only master or a vX.Y.Z tag; blank builds the existing tag for that version
         required: false
         type: string
 
@@ -36,6 +36,8 @@ jobs:
     env:
       TAG: ${{ github.event.release.tag_name }}
       INPUT_VERSION: ${{ inputs.version }}
+      INPUT_REF: ${{ inputs.ref }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Resolve the version
         id: version
@@ -45,6 +47,16 @@ jobs:
             echo "Not a stable X.Y.Z version ('$version'): nothing to upload."
             echo "go=false" >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+          # Same rules as the Release workflow: only a master or release-tag commit is ever uploaded, and a manual run
+          # without a ref needs the tag to exist (the workflow cannot create a v* tag).
+          if [ -n "$INPUT_REF" ] && [ "$INPUT_REF" != master ] && [[ ! "$INPUT_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::ref must be master or a vX.Y.Z tag, not '$INPUT_REF'."
+            exit 1
+          fi
+          if [ -n "$INPUT_VERSION" ] && [ -z "$INPUT_REF" ] && ! gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$version" >/dev/null 2>&1; then
+            echo "::error::tag v$version does not exist. Publish the release in the GitHub UI, or pass ref=master for a trial upload."
+            exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "go=true" >> "$GITHUB_OUTPUT"
