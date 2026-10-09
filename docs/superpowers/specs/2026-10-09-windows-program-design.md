@@ -399,7 +399,7 @@ Requirements (from the user): only the owner can merge into the default branch o
 
 Each phase gets its own spec and plan. The Mac app stays releasable after every phase.
 
-**Spike S (first, one to two days, throwaway):** build TimeTugCore and the connector library with Swift 6.3 on the Windows ARM VM and run their tests; export one C function and call it from a C# console app; record the Swift runtime size and any Foundation gaps. A bad result sends approach A back for review before any repository moves.
+**Spike S (first, one to two days, throwaway; plan: `docs/superpowers/plans/2026-10-09-windows-spike-s.md`):** build TimeTugCore and the connector library with the latest stable Swift (6.4.0 on 2026-10-09) on the Windows ARM VM and run their tests; export one C function and call it from a C# console app; record the Swift runtime size and any Foundation gaps. A bad result sends approach A back for review before any repository moves.
 
 | Phase | Delivers | Depends on |
 |---|---|---|
