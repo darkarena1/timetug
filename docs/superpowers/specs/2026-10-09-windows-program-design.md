@@ -18,7 +18,7 @@ Ship a native Windows version of TimeTug with the same behaviour as the direct-d
 ## Assumptions
 
 - Windows 11 22H2 (build 22621) or later, x64 and ARM64. Windows 10 support ended in October 2025, and third-party Windows Widgets need 22H2.
-- Development and manual testing happen in a Windows 11 ARM virtual machine (Parallels) on the user's Mac; CI uses GitHub's Windows runners. A virtual machine has no NPU, so on-device AI needs a Copilot+ PC (phase 8).
+- Development and manual testing happen in a Windows 11 ARM virtual machine (Parallels) on the user's Mac; CI uses GitHub's Windows runners. The owner has no Copilot+ PC; on-device AI testing is layered so only one final check needs supported hardware (section 5).
 - All repositories are public. The `binary-companion` organization is on GitHub Free, where organization secrets, required-reviewer environments and rulesets work for public repositories.
 
 ## Decisions
@@ -311,6 +311,10 @@ Same model as Mac (ADR 0009): rules always run, the model judges only leftover a
 - **Acceptance:** the dedup benchmark (today `scripts/benchmarks/run-dedup.sh` in `timetug`; its fixtures move to `timetug-shared` in phase 3 with the prompt building, and each host supplies a model runner) runs against Aion on a Copilot+ PC; the bar is zero wrong merges on the fixture set.
 - **Open in the phase spec:** the `systemAIModels` manifest capability and how Store review treats it.
 - **Rejected for 1.0:** bundling a model through Windows ML or Foundry Local for PCs without an NPU (a multi-GB download for a Beta feature).
+- **Testing, in three layers** (the owner has no Copilot+ PC):
+  1. *Everyday, no special hardware:* prompt building and answer parsing are shared Swift code tested on the Mac; the Windows host code is tested with a fake `ITextGenerator`; the Windows VM covers the "Not supported on this PC" state, the settings UI and the rules-only fallback.
+  2. *Prompt tuning against Aion, probably no special hardware:* run the dedup benchmark prompts against the Aion model through a small test page in Microsoft Edge preview builds (Edge ships Aion behind a flag and states CPU inference on PCs without a capable GPU), on the Windows VM; or, if Microsoft has published the Aion Instruct open weights as promised, run them on the Mac. Edge's copy may not be the exact build Windows uses, so this tunes the prompt profile but does not prove the integration.
+  3. *One real-integration check on supported hardware*, chosen at the start of phase 8: re-check whether Aion's retail rollout (January 2027) widens hardware support so the VM works; or a tester with a Copilot+ PC in the Store flight group runs an in-app **Run AI self-test** (Settings > Diagnostics: judges a fixed set of synthetic event pairs, no calendar data, and adds the results to Copy diagnostics); or a PC with an NVIDIA RTX 30-series or newer GPU on a Windows Insider build; or an inexpensive Copilot+ laptop. No rentable cloud machine with a supported NPU or consumer GPU was found.
 
 ## 6. Distribution
 
@@ -406,7 +410,7 @@ Each phase gets its own spec and plan. The Mac app stays releasable after every 
 | 5 Windows app core | `timetug-windows` with code index; tray and menu, flyout, overlay with focus hint and toast fallback, settings, browser sign-in, Credential Locker, `HttpClient` transport, startup task, single instance, hotkey, diagnostics; dev builds on the VM | 4 |
 | 6 WAM sign-in | External-token mode in the connector library, MSAL broker, automatic first-run consent, "On this PC" accounts | 5 and a library release |
 | 7 Widgets | Next Up and Today, with the Enable Tug toggle | 5 |
-| 8 On-device AI | `LanguageModel` host service, availability states, prompt profile, energy-saver pause; benchmark on a Copilot+ PC | 5; Aion retail |
+| 8 On-device AI | `LanguageModel` host service, availability states, prompt profile tuned via Edge or open weights, energy-saver pause, Run AI self-test; one real-hardware check (section 5) | 5; Aion retail |
 | 9 Store 1.0 | Listing, certification kit, tester flights, first stable submission, website Store button, winget | 5, 6, 7 (8 may follow in 1.1) |
 | Deferred | Signed website download | Trigger in section 6 |
 
@@ -437,3 +441,4 @@ Phase 1.5 runs alongside everything. After phase 5, phases 6, 7 and 8 are indepe
 - [Google app privacy policy requirements](https://support.google.com/cloud/answer/13806988?hl=en)
 - [Microsoft Entra publisher domain](https://learn.microsoft.com/uk-ua/entra/identity-platform/howto-configure-publisher-domain)
 - [Microsoft publisher verification troubleshooting](https://learn.microsoft.com/sl-si/entra/identity-platform/troubleshoot-publisher-verification)
+- [Expanding on-device AI in Microsoft Edge (Aion, CPU inference)](https://blogs.windows.com/msedgedev/2026/06/02/expanding-on-device-ai-in-microsoft-edge-new-models-and-apis-for-the-web/)
