@@ -190,11 +190,11 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.timetug.app.store.widgets
+        # Same name in every configuration: the app's embed step refers to the extension by the name in the project file.
+        PRODUCT_NAME: TimeTugWidgets-AppStore
         MARKETING_VERSION: "0.0.0-dev"
         CURRENT_PROJECT_VERSION: "2"
       configs:
-        Debug:
-          PRODUCT_NAME: TimeTugWidgets-AppStore
         Release:
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: Apple Distribution
