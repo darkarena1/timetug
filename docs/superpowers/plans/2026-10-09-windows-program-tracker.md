@@ -64,7 +64,7 @@ Agents keep this list current; the owner checks items off (or tells an agent to)
 ### 0 Organization move
 - [ ] Publish the Mac release that carries the new feed URL; wait for users to take it (watch the appcast download counts).
 - [ ] Enable 2FA requirement and the organization settings in spec section 8.
-- [ ] Docker Hub: create a Binary Companion account (not the personal one), make a "Public Repo Read-only" token, and set `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` as repository secrets (PR 71's `core-linux` job reads them). Re-set them if the personal account was used first.
+- [ ] Docker Hub (after the transfer): create a Binary Companion account (not the personal one), make a "Public Repo Read-only" token, and set `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` as organization secrets limited to the repositories that run Linux CI (`timetug` first). PR 71's `core-linux` job reads them and pulls anonymously until they exist.
 - [ ] Transfer `timetug` and `homebrew-tap` to `binary-companion` (repository Settings > Transfer).
 - [ ] Create the `timetug-bot` GitHub App and install it on the dependent repositories.
 - [ ] Run the audit script with an `admin:org` token; it must pass.
