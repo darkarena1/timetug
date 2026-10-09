@@ -50,6 +50,7 @@ Agents keep this list current; the owner checks items off (or tells an agent to)
 - [ ] Locate or recreate each value (see **Where each secret comes from** at the end of this file).
 - [ ] Create the `beta` environment (deployment branch `master` only, no reviewer) and enter the beta signing values there.
 - [ ] Enter the release values into `release`; turn off admin bypass on `release` and `appstore`.
+- [ ] Add yourself as required reviewer on `appstore` (today it has only the `master`/`v*` deployment policy, so uploads run without approval).
 - [ ] After one beta and one release run green from environments, delete the repository-level copies.
 
 ### 1.5 Domain and branding
@@ -89,6 +90,7 @@ Agents keep this list current; the owner checks items off (or tells an agent to)
 Append one line per session: date, what was done, what is next.
 
 - 2026-10-09: Program spec written, reviewed (DeepSeek: 14 findings, all real, fixed) and approved. Read-only security audit of `darkarena1/timetug` and `binary-companion` (findings in spec section 8). Sparkle key found in the login keychain (item created 2026-09-20); public-key match not yet confirmed. Next: owner prepares the VM, then Spike S.
+- 2026-10-09: Checked master's #69 (App Store manual runs accept only `master` or a `vX.Y.Z` tag). It matches the spec; the Windows stable workflow copies the rule. Found `appstore` has no required reviewer; added to spec section 8 and checklist A.
 
 ## Where each secret comes from
 

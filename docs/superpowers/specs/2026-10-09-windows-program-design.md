@@ -336,7 +336,7 @@ One codebase builds two package flavours, as the Mac app's direct and App Store 
 
 **Chosen plan:** Store first, at no cost.
 
-- **Stable:** publishing a release whose tag is exactly `vX.Y.Z` (no suffix, not marked pre-release) uploads the package to Partner Center; the owner submits it there, as with App Store Connect. The same rule `appstore.yml` uses today.
+- **Stable:** publishing a release whose tag is exactly `vX.Y.Z` (no suffix, not marked pre-release) uploads the package to Partner Center; the owner submits it there, as with App Store Connect. The same rules `appstore.yml` uses (tightened in #69): a manual run accepts only the default branch or a `vX.Y.Z` tag as its ref, and without a ref needs that version's tag to exist.
 - **Betas:** a flight workflow (run by hand, or on a pre-release whose tag has a suffix such as `v1.2.0-beta.1`) submits to the tester flight group; the stable workflow ignores suffixed tags and pre-releases. Flights are slower than Mac betas because each passes certification, so they are cut per batch of changes.
 - **Development builds:** CI builds an MSIX on every PR and merge, signed with a throwaway self-signed certificate created in the job (never the owner's); the owner installs it on the VM in Developer Mode after trusting that certificate.
 - **Website:** leads with the Store button (web installer) and `winget install`.
@@ -369,6 +369,7 @@ Requirements (from the user): only the owner can merge into the default branch o
 | Organization: two-factor authentication not required; members can create repositories | Weak baseline | Require 2FA; members cannot create repositories; base permission stays read |
 | Actions allow any action; SHA pinning not required | A compromised third-party action could read the secrets of the job it runs in | Organization policy: GitHub-owned and an explicit allow-list only, SHA pinning required (`docs/development/action-pins.md` already pins) |
 | Fork PR workflows need approval only for first-time contributors | Low (fork PRs get no secrets) | Require approval for all outside contributors |
+| The `appstore` environment has a deployment policy (`master`, `v*` tags) but no required reviewer | An App Store upload starts without the owner's approval; #69 limits it to `master` and release tags, but it still runs unattended | Add the owner as required reviewer, as on `release` |
 | Release environments allow admin bypass | None while the owner is the only admin | Turn bypass off so even an owner token cannot skip the approval |
 | Organization Actions policy could not be read (`gh` token lacks `admin:org`) | Unknown | The owner refreshes the token scope and runs the audit script |
 
