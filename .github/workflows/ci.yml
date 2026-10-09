@@ -174,10 +174,17 @@ jobs:
   core-linux:
     runs-on: ubuntu-latest
     continue-on-error: true
-    container: swift:6.0
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Test TimeTugCore
-        run: swift test --package-path Packages/TimeTugCore
-      - name: Test CalendarConnectors
-        run: swift test --package-path Packages/CalendarConnectors
+      # Docker Hub limits anonymous pulls per IP address, and GitHub's runners share addresses. A read-only token for
+      # public images lifts that. Pull requests from forks get no secrets, so the step is skipped and they pull anonymously.
+      - name: Log in to Docker Hub
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        run: echo "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      - name: Test TimeTugCore and CalendarConnectors
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w /work swift:6.0 \
+            sh -c 'swift test --package-path Packages/TimeTugCore && swift test --package-path Packages/CalendarConnectors'
