@@ -18,7 +18,7 @@ on:
         required: true
         type: string
       ref:
-        description: Branch, tag or SHA to build (default: the tag for that version)
+        description: Branch, tag or SHA to build; blank builds the tag for that version
         required: false
         type: string
 
