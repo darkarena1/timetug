@@ -68,7 +68,7 @@ cat > "$BUILD_DIR/ExportOptions-AppStore.plist" <<PLIST
   <key>teamID</key><string>$TEAM_ID</string>
   <key>signingStyle</key><string>manual</string>
   <key>signingCertificate</key><string>Apple Distribution</string>
-  <key>installerSigningCertificate</key><string>Mac Installer Distribution</string>
+  <key>installerSigningCertificate</key><string>3rd Party Mac Developer Installer</string>
   <key>provisioningProfiles</key><dict>
     <key>com.timetug.app.store</key><string>TimeTug App Store</string>
     <key>com.timetug.app.store.widgets</key><string>TimeTug Widgets App Store</string>

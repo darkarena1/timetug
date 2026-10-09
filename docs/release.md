@@ -165,7 +165,7 @@ WARNING: never commit certificates, `.p12`, `.p8`, `.cer` or `.pem` files, or th
 ## App Store
 The Mac App Store build is a second target (`TimeTug-AppStore`, bundle id `com.timetug.app.store`, no Sparkle) that shares the App Group and keychain group with the direct build. It is only ever a stable release; there is no beta channel on the App Store.
 
-**What runs.** `.github/workflows/appstore.yml` builds, signs with the Apple Distribution certificate and uploads to App Store Connect when a stable release (`vX.Y.Z`, not a pre-release) is published from the GitHub UI. Run it by hand from the Actions tab (input: the stable `X.Y.Z`) to retry an upload, or after a release the Release workflow created itself (GitHub does not fire `release: published` for those). The build number is the same UTC timestamp as the direct build (`scripts/ci/compute-versions.sh stable`), so it always increases.
+**What runs.** `.github/workflows/appstore.yml` builds, signs with the Apple Distribution certificate and uploads to App Store Connect when a stable release (`vX.Y.Z`, not a pre-release) is published from the GitHub UI. Run it by hand from the Actions tab (input: the stable `X.Y.Z`) to retry an upload, or after a release the Release workflow created itself (GitHub does not fire `release: published` for those). The rules match the Release workflow: only `vX.Y.Z` tags (never a pre-release or a suffixed tag, so no betas), the `appstore` environment only runs for `master` or `v*` tags, and a manual run builds the version's existing tag. For a trial upload before a tag exists, pass `ref=master`; no other ref is accepted. The build number is the same UTC timestamp as the direct build (`scripts/ci/compute-versions.sh stable`), so it always increases.
 
 **Uploading does not publish.** The build lands in App Store Connect and TestFlight, visible only to you. It reaches users only when you submit it for review in App Store Connect and release it (choose "manually release" so you pick the moment). A direct release and an App Store release of the same version should be cut together; whichever copy was built later wins if both are installed on one Mac.
 
@@ -191,7 +191,7 @@ The Google and Microsoft OAuth client secrets are the repository secrets the oth
 
 **Local export.** With the certificates and profiles installed, `APP_VERSION=2.0.0 BUILD_NUMBER=$(date -u +%Y%m%d%H%M%S) DESTINATION=export scripts/release/build-appstore.sh` writes a signed `dist/appstore/TimeTug.pkg` without uploading. `DRY_RUN=1` only checks the inputs.
 
-**Unverified until the first upload.** App Store Connect's rule for the build number string (the 14-digit timestamp is expected to be accepted; if it is refused, switch to a counter in a repository variable) and the installer certificate's exact name (`Mac Installer Distribution` in `build-appstore.sh`).
+**Unverified until the first upload.** App Store Connect's rule for the build number string (the 14-digit timestamp is expected to be accepted; if it is refused, switch to a counter in a repository variable) and the installer certificate's exact name (`3rd Party Mac Developer Installer` is what the portal's Mac Installer Distribution certificate imports as).
 
 ## Test signing locally
 ```bash

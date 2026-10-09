@@ -37,6 +37,14 @@ case "$action" in
     mkdir -p "$PROFILES"
     echo "$APPSTORE_APP_PROFILE" | base64 --decode > "$PROFILES/timetug-app-store.provisionprofile"
     echo "$APPSTORE_WIDGET_PROFILE" | base64 --decode > "$PROFILES/timetug-widgets-app-store.provisionprofile"
+    for file in timetug-app-store timetug-widgets-app-store; do
+      if ! security cms -D -i "$PROFILES/$file.provisionprofile" > "$TMP/$file.plist" 2>/dev/null; then
+        echo "error: the $file profile secret is not a valid provisioning profile (re-encode the downloaded file with base64 -i, without opening or pasting it)" >&2
+        exit 1
+      fi
+      echo "profile: $(/usr/libexec/PlistBuddy -c 'Print :Name' "$TMP/$file.plist") for $(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$TMP/$file.plist")"
+      rm -f "$TMP/$file.plist"
+    done
     echo "$ASC_KEY_P8" | base64 --decode > "$TMP/AuthKey.p8"
     chmod 600 "$TMP/AuthKey.p8"
     security find-identity -v "$KEYCHAIN" | sed -n 's/^ *[0-9]*) [0-9A-F]* "\(.*\)"$/identity: \1/p'
