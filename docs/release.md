@@ -191,7 +191,7 @@ The Google and Microsoft OAuth client secrets are the repository secrets the oth
 
 **Local export.** With the certificates and profiles installed, `APP_VERSION=2.0.0 BUILD_NUMBER=$(date -u +%Y%m%d%H%M%S) DESTINATION=export scripts/release/build-appstore.sh` writes a signed `dist/appstore/TimeTug.pkg` without uploading. `DRY_RUN=1` only checks the inputs.
 
-**Unverified until the first upload.** App Store Connect's rule for the build number string (the 14-digit timestamp is expected to be accepted; if it is refused, switch to a counter in a repository variable) and the installer certificate's exact name (`Mac Installer Distribution` in `build-appstore.sh`).
+**Unverified until the first upload.** App Store Connect's rule for the build number string (the 14-digit timestamp is expected to be accepted; if it is refused, switch to a counter in a repository variable) and the installer certificate's exact name (`3rd Party Mac Developer Installer` is what the portal's Mac Installer Distribution certificate imports as).
 
 ## Test signing locally
 ```bash
