@@ -53,7 +53,8 @@ Agents keep this list current; the owner checks items off (or tells an agent to)
 ### A Secrets into environments
 - [x] Environments `beta` and `hosting` created (master-only policy); `release` admin bypass turned off (2026-10-10, by the agent).
 - [x] Agent set from local files: `GOOGLE_OAUTH_CLIENT_ID/SECRET` and `MICROSOFT_OAUTH_CLIENT_ID` in `beta`, `release`, `appstore`; `APPLE_TEAM_ID`, `SPARKLE_PRIVATE_KEY` (re-exported and verified against `SUPublicEDKey`) and `MACOS_PROVISIONING_PROFILE_BASE64` in `beta` and `release`; a new `FIREBASE_SERVICE_ACCOUNT_TIMETUG` key in `hosting`.
-- [ ] Still to enter: Developer ID certificate (`MACOS_CERTIFICATE_P12_BASE64`, `MACOS_CERTIFICATE_PASSWORD`) in `beta` and `release`; notary values (`NOTARY_API_KEY_ID`, `NOTARY_API_ISSUER_ID`, `NOTARY_API_KEY_P8_BASE64`) in `release`.
+- [x] Developer ID certificate (`MACOS_CERTIFICATE_P12_BASE64`, `MACOS_CERTIFICATE_PASSWORD`) set in `beta` and `release` on 2026-10-10 (certificate verified: Developer ID Application, team `YYA6ZKMD36`, valid to 2031-09). `beta` now holds all eight values.
+- [ ] Still to enter in `release`: `NOTARY_API_KEY_ID`, `NOTARY_API_ISSUER_ID`, `NOTARY_API_KEY_P8_BASE64` (owner is confirming which App Store Connect key is the notary key and its Issuer ID).
 - [ ] After the first `hosting` deploy succeeds, delete the old user-managed Firebase key `5be03ce9c4a9...` on service account `github-action-1376589039@timetug.iam.gserviceaccount.com` (`gcloud iam service-accounts keys delete`).
 - [ ] Locate or recreate each remaining value (see **Where each secret comes from** at the end of this file).
 - [ ] Create the `beta` environment (deployment branch `master` only, no reviewer) and enter the beta signing values there.
