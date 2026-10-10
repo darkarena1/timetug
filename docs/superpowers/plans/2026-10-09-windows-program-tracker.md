@@ -19,7 +19,7 @@ Status values: `not started`, `planning`, `in progress`, `blocked` (say on what)
 | Phase | Status | Spec | Plan | PRs |
 |---|---|---|---|---|
 | S Spike: Swift on Windows | done; approach A confirmed 2026-10-09 | spec section 9 | [plan](2026-10-09-windows-spike-s.md) | [findings](../../spikes/2026-10-09-swift-on-windows.md) |
-| A Secrets into environments (standalone, Mac repo) | not started | spec section 8 | to write | |
+| A Secrets into environments (standalone, Mac repo) | planning (plan written, awaiting owner review) | spec section 8 | [plan](2026-10-09-phase-a-secrets-into-environments.md) | |
 | 1.5 Domain and branding | not started | spec section 1.5 | to write (site changes only) | |
 | 0 Organization move and hardening | not started | spec sections 1 and 8 | to write | |
 | 1 `calendar-connectors` repository | not started | spec section 1 | to write | |
@@ -43,7 +43,8 @@ Order: S first. A and 1.5 can run alongside S. Phase 0 needs the 1.5 domain live
 - [x] Spike S, plan Tasks 2 to 5. Done 2026-10-09; findings in `docs/spikes/2026-10-09-swift-on-windows.md`.
 - [x] **(owner)** Review the Spike S findings and decide on approach A. Decided: approach A, 2026-10-09.
 - [x] Apply the spike's six recommendations to the spec. Done in the approach A decision PR.
-- [ ] Write the plan for phase A (secrets into environments) and show it to the owner before changing any workflow.
+- [x] Write the plan for phase A. Written 2026-10-09.
+- [ ] **(owner)** Review the phase A plan; then choose Native or Subagent-driven for the code tasks (1 to 3). Tasks 4 and 5 are yours.
 
 ## Owner checklist by phase
 
@@ -52,7 +53,7 @@ Agents keep this list current; the owner checks items off (or tells an agent to)
 ### A Secrets into environments
 - [ ] Locate or recreate each value (see **Where each secret comes from** at the end of this file).
 - [ ] Create the `beta` environment (deployment branch `master` only, no reviewer) and enter the beta signing values there.
-- [ ] Enter the release values into `release`; turn off admin bypass on `release` and `appstore`.
+- [ ] Enter the release values into `release`; turn off admin bypass on `release` (not needed on `appstore`, which has no reviewer). Details: phase A plan, Task 4.
 - [ ] After one beta and one release run green from environments, delete the repository-level copies.
 
 ### 1.5 Domain and branding
