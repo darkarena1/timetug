@@ -7,7 +7,7 @@ This is the saved progress for the Windows program. It is updated at the end of 
 ## How to resume
 
 1. Read the spec once, then this file.
-2. Go to **Now**. The first unchecked item is the next thing to do. Items marked **(owner)** are for the owner; agents never do them (publishing releases, approving deployments, merging, console changes in Google, Microsoft, Apple or GitHub settings, entering credentials).
+2. Go to **Now**. The first unchecked item is the next thing to do. Items marked **(owner)** are for the owner; agents never do them (publishing releases, approving deployments, merging, console changes in Google, Microsoft or Apple settings). Agents may set up CI secrets and GitHub environments themselves, but only by streaming a value from a file into `gh secret set` (never printing it, never putting it in chat or context); values only the owner can produce (Apple portal downloads, keychain export prompts) stay the owner's.
 3. Before starting a phase, check that its spec and plan exist (links in the phase table). A phase without a plan gets one first: a short phase spec (brainstorming), then a plan (writing-plans), both linked here.
 4. When you finish an item: check it, add a line to the **Session log**, and commit this file with the work.
 5. When a phase's last item is done, set its status to `done` and add its PR links.
@@ -51,7 +51,11 @@ Order: S first. A and 1.5 can run alongside S. Phase 0 needs the 1.5 domain live
 Agents keep this list current; the owner checks items off (or tells an agent to).
 
 ### A Secrets into environments
-- [ ] Locate or recreate each value (see **Where each secret comes from** at the end of this file).
+- [x] Environments `beta` and `hosting` created (master-only policy); `release` admin bypass turned off (2026-10-10, by the agent).
+- [x] Agent set from local files: `GOOGLE_OAUTH_CLIENT_ID/SECRET` and `MICROSOFT_OAUTH_CLIENT_ID` in `beta`, `release`, `appstore`; `APPLE_TEAM_ID`, `SPARKLE_PRIVATE_KEY` (re-exported and verified against `SUPublicEDKey`) and `MACOS_PROVISIONING_PROFILE_BASE64` in `beta` and `release`; a new `FIREBASE_SERVICE_ACCOUNT_TIMETUG` key in `hosting`.
+- [ ] Still to enter: Developer ID certificate (`MACOS_CERTIFICATE_P12_BASE64`, `MACOS_CERTIFICATE_PASSWORD`) in `beta` and `release`; notary values (`NOTARY_API_KEY_ID`, `NOTARY_API_ISSUER_ID`, `NOTARY_API_KEY_P8_BASE64`) in `release`.
+- [ ] After the first `hosting` deploy succeeds, delete the old user-managed Firebase key `5be03ce9c4a9...` on service account `github-action-1376589039@timetug.iam.gserviceaccount.com` (`gcloud iam service-accounts keys delete`).
+- [ ] Locate or recreate each remaining value (see **Where each secret comes from** at the end of this file).
 - [ ] Create the `beta` environment (deployment branch `master` only, no reviewer) and enter the beta signing values there.
 - [ ] Enter the release values into `release`; turn off admin bypass on `release` (not needed on `appstore`, which has no reviewer). Details: phase A plan, Task 4.
 - [ ] After one beta and one release run green from environments, delete the repository-level copies.

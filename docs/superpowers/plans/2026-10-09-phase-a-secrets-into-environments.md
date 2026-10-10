@@ -15,7 +15,7 @@
 - Environment names: `beta` and `hosting` (automatic, deployment policy `master` only, no reviewer), `release` (owner reviewer, deployment policy `master` and `v*` tags, admin bypass off), `appstore` (deployment policy `master` and `v*` tags; **no reviewer**, by the owner's choice on 2026-10-09).
 - Only `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` may be read outside an environment, and only in `ci.yml` (spec section 8 amendment).
 - Secret values never appear in chat, in the repository, in logs or in a command line argument. The owner enters each with `gh secret set NAME --env <environment> < file` or the GitHub UI.
-- Agents never create or edit environments, never set secrets, never merge. The owner runs the commands in Task 4.
+- Agents may create environments and set secrets, only by streaming a value from a file into `gh secret set` (no printing, nothing in chat or context; owner's instruction of 2026-10-10). Values only the owner can produce stay the owner's. Agents never merge, and delete repository-level secrets only after each environment has passed a run and the owner agrees.
 - PRs go to `master`; the owner squash-merges. Attribution: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
 
 ## Review Focus
@@ -191,9 +191,9 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 
 - [ ] **Step 6: Push and open the pull request** (title: "Run beta and website deploys in environments and test that secrets stay there"). Stop here: the owner runs Task 4, then Task 5.
 
-### Task 4: Create the environments and enter the values (owner)
+### Task 4: Create the environments and enter the values (agent, owner for owner-only values)
 
-Run in the owner's own terminal, on the Mac, signed in to `gh` as `darkarena1`. Nothing here is run by an agent. Every command below is safe to run before the pull request merges, because a missing environment value falls back to the repository secret.
+Run from the Mac signed in to `gh` as `darkarena1`. The agent ran steps 1 and 2 and the file-sourced part of step 3 on 2026-10-10 (see the tracker); the owner-only values remain. Every command below is safe to run before the pull request merges, because a missing environment value falls back to the repository secret.
 
 - [ ] **Step 1: Create `beta` and `hosting` with a `master`-only policy.**
 
