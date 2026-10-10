@@ -36,6 +36,7 @@ Ship a native Windows version of TimeTug with the same behaviour as the direct-d
 | Website and feed domain | `timetug.binarycompanions.com`; `timetug.obryan.cloud` redirects permanently |
 | Code index | Every new repository gets the semantic code index workflow |
 | Release control | Owner-only merges and releases through organization rulesets and reviewer-gated environments; every secret lives in an environment (section 8) |
+| Front-end approach | **A, confirmed by the owner on 2026-10-09** after Spike S: C# WinUI 3 app plus the Swift engine DLL behind four C functions. Evidence: `docs/spikes/2026-10-09-swift-on-windows.md` |
 
 Rejected approaches for the Windows front end:
 
@@ -59,6 +60,8 @@ All in the `binary-companion` organization:
 `timetug` is the existing `darkarena1/timetug`, transferred with its history, releases and stars. `homebrew-tap` moves from `digital-companion-llc` to `binary-companion` (nobody uses it yet), after which `digital-companion-llc` can be deleted.
 
 Dependency direction: `calendar-connectors` <- `timetug-shared` <- {`timetug`, `timetug-windows`}; `timetug` also depends on `calendar-connectors` directly (it registers connector kinds and supplies Apple adapters).
+
+Every repository carries a `.gitattributes` with `* text=auto eol=lf`, so Git for Windows' default `autocrlf=true` cannot change line endings in sources, fixtures or golden files (Spike S).
 
 ### Pinning
 
@@ -135,7 +138,7 @@ Supplied by each front end, through the existing seams where they exist:
 | Credential storage | `CredentialStore` | Keychain (shared group) | Windows Credential Locker (`PasswordVault`) |
 | Sign-in interaction | `AuthorizationInteraction`, `OAuthRedirectSession` | Existing web-authentication sheet | Default browser plus a loopback listener (`HttpListener` on 127.0.0.1) |
 | External tokens | new (section 4.5) | not used | MSAL with the WAM broker |
-| HTTP | `HTTPTransport` | `URLSession` | .NET `HttpClient`, so the system proxy, corporate TLS inspection and the Windows certificate store apply. Swift Foundation on Windows uses libcurl and ignores system proxy settings |
+| HTTP | `HTTPTransport` | `URLSession` | .NET `HttpClient`, so the system proxy, corporate TLS inspection and the Windows certificate store apply. Swift Foundation on Windows uses libcurl, which is believed to ignore system proxy settings (not verified in Spike S: the VM had no proxy). The engine never relies on it, because all engine HTTP goes through the host's `HttpClient` |
 | Text generation | new: availability and generate | Apple Intelligence | Windows AI `LanguageModel` |
 | Data directory | config | App Group container | The package's `LocalState` folder |
 | Diagnostics sink | config | OSLog | Rolling log file plus ETW `EventSource` |
@@ -156,7 +159,7 @@ Every message is a UTF-8 JSON envelope `{"v":1,"type":...,"id":...,"payload":...
 
 ### Contract
 
-The message types live in `TimeTugEngineProtocol` (Codable). Golden JSON fixtures in `timetug-shared` are round-tripped by the Swift tests and shipped in the NuGet package, where the C# tests deserialize and round-trip them. A breaking change bumps `v` and the major version.
+The message types live in `TimeTugEngineProtocol` (Codable). Golden JSON fixtures in `timetug-shared` are round-tripped by the Swift tests and shipped in the NuGet package, where the C# tests deserialize and round-trip them. Fixtures and conformance checks compare parsed JSON values, never bytes: Foundation escapes `/` as `\/` and orders keys only on request (Spike S). A breaking change bumps `v` and the major version.
 
 ### Mac migration first
 
@@ -348,7 +351,7 @@ Differences from Mac to note: the Store and website builds, when both exist, hav
 
 ## 7. Testing and CI
 
-Every repository keeps the current rules: logic in scripts, not YAML; PR jobs get none of the owner's signing material (the development MSIX is signed with a throwaway self-signed certificate created inside the job); live account tests are opt-in and never run in CI; failing test first; a `verify` or `affected-tests` script says what to run.
+Every repository keeps the current rules: logic in scripts, not YAML; PR jobs get none of the owner's signing material (the development MSIX is signed with a throwaway self-signed certificate created inside the job); live account tests are opt-in and never run in CI; failing test first; a `verify` or `affected-tests` script says what to run. On Windows, scripts get the build output location from `swift build --show-bin-path` and never assume `.build\release`; creating SwiftPM's convenience symlink needs Developer Mode or an elevated shell, and a failure to create it is only a warning (Spike S).
 
 - **`calendar-connectors`:** macOS and Linux (swift:6.x, now required) plus a Windows job. Tests that depend on platform quirks are skipped with a reason.
 - **`timetug-shared`:** unit tests for Core, Bridge and Engine on macOS, Linux, Windows x64 and Windows ARM64 (`windows-11-arm` runners). An engine conformance suite drives a real engine with fake host services (in-memory credentials, recorded HTTP responses, a fake clock) and checks state and events; it runs in Swift and in C# against the real DLL, and later in other front ends. Contract fixtures round-trip in Swift and C#. A C program smoke-tests the four exported functions. The architecture check moves here. The release workflow tags, builds and publishes the NuGet package, and notifies dependents.
@@ -400,7 +403,7 @@ Requirements (from the user): only the owner can merge into the default branch o
 
 Each phase gets its own spec and plan. The Mac app stays releasable after every phase.
 
-**Spike S (first, one to two days, throwaway; plan: `docs/superpowers/plans/2026-10-09-windows-spike-s.md`):** build TimeTugCore and the connector library with the latest stable Swift (6.4.0 on 2026-10-09) on the Windows ARM VM and run their tests; export one C function and call it from a C# console app; record the Swift runtime size and any Foundation gaps. A bad result sends approach A back for review before any repository moves.
+**Spike S (done 2026-10-09; findings: `docs/spikes/2026-10-09-swift-on-windows.md`; result: approach A confirmed; first, one to two days, throwaway; plan: `docs/superpowers/plans/2026-10-09-windows-spike-s.md`):** build TimeTugCore and the connector library with the latest stable Swift (6.4.0 on 2026-10-09) on the Windows ARM VM and run their tests; export one C function and call it from a C# console app; record the Swift runtime size and any Foundation gaps. A bad result sends approach A back for review before any repository moves.
 
 | Phase | Delivers | Depends on |
 |---|---|---|
@@ -422,7 +425,8 @@ Phase 1.5 runs alongside everything. After phase 5, phases 6, 7 and 8 are indepe
 ## Risks
 
 - **Swift on Windows.** Foundation behaviour differences and toolchain regressions (export limits since Swift 6.1). Mitigated by Spike S, Windows CI from phase 2 and the conformance suite.
-- **Swift runtime size.** Roughly 30 to 50 MB added to the package; measured in Spike S.
+- **Swift runtime size.** Measured in Spike S: 57.4 MB uncompressed for the 18 DLLs the engine needs (59.6 MB with the engine DLL); `_FoundationICU.dll` is 36.2 MB of that. Phase 4 measures the compressed MSIX and decides whether avoiding `FoundationInternationalization` is worth pursuing.
+- **x64 unverified.** Spike S ran on ARM64 only. Phase 2 (Windows x64 CI) and phase 3 must confirm that the same packages and DLL build and pass on x64 before the engine work depends on it.
 - **AI timing and coverage.** Aion's dates come partly from a developer email; most Windows PCs lack the hardware. The feature is Beta and optional, and 1.0 does not wait for it.
 - **Store certification latency** slows tester flights compared with Mac betas.
 - **Focus rules.** Windows may change foreground behaviour; the overlay never depends on focus to be seen.
