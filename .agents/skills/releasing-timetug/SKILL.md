@@ -12,7 +12,7 @@ description: Use when preparing, cutting or troubleshooting a TimeTug release or
 | Cut a stable release | "Cut a release", then "Release rules" and "Choosing the version" |
 | Why a beta did or did not ship | "How betas work", "Troubleshooting" |
 | Version and build numbers | "Channels and versioning" |
-| Signing, notarization, secrets | "Security model", "One-time setup (owner)", "GitHub Actions secrets to add later" |
+| Signing, notarization, secrets | "Security model", "One-time setup (owner)", "GitHub Actions secrets" |
 | DMG layout or background | "DMG packaging", "Build and verify a DMG locally" |
 | Runner label or Xcode version | "Changing the runner label" (`scripts/ci/select-xcode.sh`) |
 
