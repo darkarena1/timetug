@@ -48,6 +48,27 @@ else:
     if 'build/verify-venv/bin:$PATH' not in runs:
         errors.append('CI release-tooling job does not use pinned prerequisites')
 
+# Secrets are only readable through a protected environment (spec section 8). The Docker Hub pull token is the one
+# amended exception, and only in ci.yml.
+ALLOWED_OUTSIDE_ENVIRONMENT = {'ci.yml': {'DOCKERHUB_USERNAME', 'DOCKERHUB_TOKEN'}}
+IGNORED_SECRETS = {'GITHUB_TOKEN'}
+EXPECTED_ENVIRONMENTS = {
+    'beta.yml': 'beta',
+    'release.yml': 'release',
+    'appstore.yml': 'appstore',
+    'firebase-hosting-merge.yml': 'hosting',
+}
+for file_name, document in workflows.items():
+    allowed = ALLOWED_OUTSIDE_ENVIRONMENT.get(file_name, set())
+    for job_name, job in document['jobs'].items():
+        used = set(re.findall(r'secrets\.([A-Za-z0-9_]+)', yaml.safe_dump(job))) - IGNORED_SECRETS - allowed
+        environment = job.get('environment')
+        if used and not environment:
+            errors.append(f'{file_name}/{job_name}: reads secrets.{sorted(used)[0]} but declares no environment')
+        expected = EXPECTED_ENVIRONMENTS.get(file_name)
+        if used and environment and expected and environment != expected:
+            errors.append(f'{file_name}/{job_name}: environment is {environment!r}, expected {expected!r}')
+
 if errors:
     for error in errors:
         print(f'FAIL: {error}', file=sys.stderr)
