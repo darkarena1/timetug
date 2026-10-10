@@ -38,7 +38,7 @@ Order: S first. A and 1.5 can run alongside S. Phase 0 needs the 1.5 domain live
 ## Now
 
 - [x] **(owner)** Confirm the Sparkle key in the login keychain is the one the app trusts. Confirmed 2026-10-09: `generate_keys -p` prints the key in `SUPublicEDKey`.
-- [ ] **(owner)** Export a backup of the Sparkle private key with `generate_keys -x <file>` into the password manager, then delete the file (the value never goes into chat or the repository).
+- [x] **(owner)** Export a backup of the Sparkle private key into the password manager. Done 2026-10-09 (1Password); the exported file must be deleted from the Mac.
 - [x] **(owner)** Prepare the Windows VM for Spike S (plan Task 1). Done 2026-10-09: the agent installed the tools itself through `prlctl exec`.
 - [x] Spike S, plan Tasks 2 to 5. Done 2026-10-09; findings in `docs/spikes/2026-10-09-swift-on-windows.md`.
 - [x] **(owner)** Review the Spike S findings and decide on approach A. Decided: approach A, 2026-10-09.
