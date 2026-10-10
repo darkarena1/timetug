@@ -92,7 +92,6 @@ Append one line per session: date, what was done, what is next.
 
 - 2026-10-09: Program spec written, reviewed (DeepSeek: 14 findings, all real, fixed) and approved. Read-only security audit of `darkarena1/timetug` and `binary-companion` (findings in spec section 8). Sparkle key found in the login keychain (item created 2026-09-20); public-key match not yet confirmed. Next: owner prepares the VM, then Spike S.
 - 2026-10-09: Checked master's #69 (App Store manual runs accept only `master` or a `vX.Y.Z` tag). It matches the spec; the Windows stable workflow copies the rule. `appstore` has no required reviewer; the owner accepted that (can be added later), recorded in spec section 8.
-
 - 2026-10-09 (later): Spike S done. All three packages pass on Windows 11 ARM64 (98, 299, 13 tests; 0 failures); the Swift DLL exports the four C functions and a .NET 10 host calls them with an off-thread callback; runtime 57.4 MB minimal (ICU is 36 MB); Foundation probe all PASS. Merged PR 71 (Docker Hub login for `core-linux`); amended the secrets rule for read-only CI tokens. Next: owner decides on approach A, then phase A (secrets into environments) and 1.5 can start.
 
 ## Where each secret comes from
