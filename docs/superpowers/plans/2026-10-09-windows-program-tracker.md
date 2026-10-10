@@ -37,7 +37,8 @@ Order: S first. A and 1.5 can run alongside S. Phase 0 needs the 1.5 domain live
 
 ## Now
 
-- [ ] **(owner)** Confirm the Sparkle key in the login keychain is the one the app trusts: `generate_keys -p` must print `QZXAO2hdupCAJzVJV0wqKHw3VPTjLDhQPGjJZDBlkzo=` (the tool is under `~/Library/Developer/Xcode/DerivedData/TimeTug-*/SourcePackages/artifacts/sparkle/Sparkle/bin/`). Then export a backup with `generate_keys -x <file>` into the password manager and delete the file.
+- [x] **(owner)** Confirm the Sparkle key in the login keychain is the one the app trusts. Confirmed 2026-10-09: `generate_keys -p` prints the key in `SUPublicEDKey`.
+- [ ] **(owner)** Export a backup of the Sparkle private key with `generate_keys -x <file>` into the password manager, then delete the file (the value never goes into chat or the repository).
 - [x] **(owner)** Prepare the Windows VM for Spike S (plan Task 1). Done 2026-10-09: the agent installed the tools itself through `prlctl exec`.
 - [x] Spike S, plan Tasks 2 to 5. Done 2026-10-09; findings in `docs/spikes/2026-10-09-swift-on-windows.md`.
 - [x] **(owner)** Review the Spike S findings and decide on approach A. Decided: approach A, 2026-10-09.
@@ -94,7 +95,7 @@ Append one line per session: date, what was done, what is next.
 - 2026-10-09: Program spec written, reviewed (DeepSeek: 14 findings, all real, fixed) and approved. Read-only security audit of `darkarena1/timetug` and `binary-companion` (findings in spec section 8). Sparkle key found in the login keychain (item created 2026-09-20); public-key match not yet confirmed. Next: owner prepares the VM, then Spike S.
 - 2026-10-09: Checked master's #69 (App Store manual runs accept only `master` or a `vX.Y.Z` tag). It matches the spec; the Windows stable workflow copies the rule. `appstore` has no required reviewer; the owner accepted that (can be added later), recorded in spec section 8.
 - 2026-10-09 (later): Spike S done. All three packages pass on Windows 11 ARM64 (98, 299, 13 tests; 0 failures); the Swift DLL exports the four C functions and a .NET 10 host calls them with an off-thread callback; runtime 57.4 MB minimal (ICU is 36 MB); Foundation probe all PASS. Merged PR 71 (Docker Hub login for `core-linux`); amended the secrets rule for read-only CI tokens. Next: owner decides on approach A, then phase A (secrets into environments) and 1.5 can start.
-- 2026-10-09 (later still): Owner chose approach A. Spec updated with the six Spike S recommendations (`.gitattributes`, `--show-bin-path`, parsed-JSON fixtures, proxy note, runtime size and x64 risks). Next: phase A plan, then phase 1.5.
+- 2026-10-09 (later still): Owner chose approach A. Spec updated with the six Spike S recommendations (`.gitattributes`, `--show-bin-path`, parsed-JSON fixtures, proxy note, runtime size and x64 risks). Sparkle public key confirmed by the owner. Next: phase A plan, then phase 1.5.
 
 ## Where each secret comes from
 
