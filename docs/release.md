@@ -66,7 +66,7 @@ Pull requests only build and run tests (`ci.yml`). They get no signing, no secre
 
 1. `.github/workflows/beta.yml` (name `Beta`) runs on `workflow_run` of `CI` completed, on `master`. It proceeds only when CI succeeded, the CI run was a `push`, and its head repository is this repository. `workflow_run` always runs the copy of the workflow on the default branch.
 2. It builds only the tip of `master`. It checks out the CI-verified commit and requires it to be an ancestor of `origin/master`. If it is no longer the tip, the run skips with a notice: the newer commit gets its own run. This also makes re-running an old run harmless (it cannot stamp old code with a fresh build number).
-3. If any of the signing secrets (Developer ID certificate, its password, team id, `SPARKLE_PRIVATE_KEY`) is missing, it skips with a notice and the run stays green. `beta.yml` declares no environment, so these must be repository secrets (see Troubleshooting).
+3. If any of the signing secrets (Developer ID certificate, its password, team id, `SPARKLE_PRIVATE_KEY`) is missing, it skips with a notice and the run stays green. `beta.yml` runs in the `beta` environment, so these must be `beta` environment secrets (see GitHub Actions secrets).
 4. Otherwise it builds (`scripts/ci/build-release.sh`, with `APP_VERSION` and `BUILD_NUMBER` from `scripts/ci/compute-versions.sh beta`), signs with `scripts/release/sign-app.sh` (Developer ID Application certificate, hardened runtime, inside-out: Sparkle helpers, framework, widget, app; not notarized), zips with `make-update-zip.sh` (`ditto`) and EdDSA-signs the zip with `SPARKLE_PRIVATE_KEY`.
 5. It creates the GitHub release `beta-<build number>` as a draft prerelease, publishes it, and only then adds the appcast item (`scripts/release/publish-appcast.sh`, channel `beta`, with a release-notes link), keeping the newest 5 betas. Pruned betas have their releases and tags deleted. The order means the feed never points at an asset that cannot be downloaded. If the appcast step fails, the release stays public but unlisted.
 6. Beta runs share the `appcast` concurrency group (`cancel-in-progress: false`). The release workflow does not use it (a shared group could cancel a queued release run when betas queue behind it); `publish-appcast.sh` never force-pushes and fetches, rebases and retries a rejected push, which covers the overlap.
@@ -139,8 +139,26 @@ scripts/release/verify-dmg.sh dist/TimeTug-*-unsigned.dmg
 ```
 `verify-dmg.sh` mounts the image read-only and checks the app executable, the `Applications` symlink, the hidden background, `.DS_Store`, the volume icon, and the stored icon positions and window size; it prints PASS or FAIL. It checks structure, not looks: open the DMG and follow `docs/manual-tests/macos-checklist.md` for the visual check.
 
-## GitHub Actions secrets to add later
-Add these under Settings > Secrets and variables > Actions. Signing and notarizing a release happens only when ALL six are set (the `release` job). Betas are never notarized: they need only `MACOS_CERTIFICATE_P12_BASE64`, `MACOS_CERTIFICATE_PASSWORD`, `APPLE_TEAM_ID` and `SPARKLE_PRIVATE_KEY`, and skip when any of those four is missing.
+## GitHub Actions secrets
+Every signing, notarization, Sparkle and OAuth value lives in a GitHub environment, never at repository or organization level (only the read-only Docker Hub pull token in `ci.yml` is a repository secret; see the program spec, section 8). Add each under Settings > Environments > the environment > Environment secrets, or with `gh secret set NAME --env <environment> < file`. A value a job needs must be in that job's own environment; environments do not share secrets. `scripts/ci/tests/check-workflow-contracts.py` fails if a job reads a secret without declaring an environment.
+
+| Environment | Runs | Policy |
+| --- | --- | --- |
+| `beta` | `beta.yml` | Deployment branch `master` only; no reviewer |
+| `release` | `release.yml` | Branch `master` and tags `v*`; the owner must approve; admin bypass off |
+| `appstore` | `appstore.yml` | Branch `master` and tags `v*`; no reviewer (owner's choice) |
+| `hosting` | `firebase-hosting-merge.yml` | Deployment branch `master` only; no reviewer |
+
+Signing and notarizing a release happens only when ALL six release values are set (the `release` job). Betas are never notarized: they need only `MACOS_CERTIFICATE_P12_BASE64`, `MACOS_CERTIFICATE_PASSWORD`, `APPLE_TEAM_ID` and `SPARKLE_PRIVATE_KEY`, and skip when any of those four is missing.
+
+**What each environment holds**
+
+- `beta`: `MACOS_CERTIFICATE_P12_BASE64`, `MACOS_CERTIFICATE_PASSWORD`, `APPLE_TEAM_ID`, `SPARKLE_PRIVATE_KEY`, `MACOS_PROVISIONING_PROFILE_BASE64`, `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `MICROSOFT_OAUTH_CLIENT_ID`
+- `release`: the same eight, plus `NOTARY_API_KEY_ID`, `NOTARY_API_ISSUER_ID`, `NOTARY_API_KEY_P8_BASE64`
+- `appstore`: `APPSTORE_DISTRIBUTION_CERT_P12`, `APPSTORE_INSTALLER_CERT_P12`, `APPSTORE_CERT_PASSWORD`, `APPSTORE_APP_PROFILE`, `APPSTORE_WIDGET_PROFILE`, `ASC_KEY_P8`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, plus `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `MICROSOFT_OAUTH_CLIENT_ID`
+- `hosting`: `FIREBASE_SERVICE_ACCOUNT_TIMETUG`
+
+The notarization key (`release`) and the App Store Connect upload key (`appstore`) are different API keys.
 
 | Secret | Contents |
 | --- | --- |
@@ -187,7 +205,7 @@ The Mac App Store build is a second target (`TimeTug-AppStore`, bundle id `com.t
 | `ASC_KEY_ID`, `ASC_ISSUER_ID` | From the App Store Connect API key |
 | `ASC_KEY_P8` | Base64 of the downloaded `AuthKey_XXXX.p8` |
 
-The Google and Microsoft OAuth client secrets are the repository secrets the other workflows already use.
+The Google and Microsoft OAuth client values (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `MICROSOFT_OAUTH_CLIENT_ID`) are entered separately in each of `beta`, `release` and `appstore`, because each of those workflows reads them.
 
 **Local export.** With the certificates and profiles installed, `APP_VERSION=2.0.0 BUILD_NUMBER=$(date -u +%Y%m%d%H%M%S) DESTINATION=export scripts/release/build-appstore.sh` writes a signed `dist/appstore/TimeTug.pkg` without uploading. `DRY_RUN=1` only checks the inputs.
 
@@ -221,9 +239,9 @@ Workflows use `runs-on: macos-26` (the hosted image with Xcode 26 or newer). If 
 - **`sign_update` fails or the workflow says it could not read edSignature.** `SPARKLE_PRIVATE_KEY` is missing, empty or not the key from `generate_keys -x`. The secret holds the file contents.
 - **The app rejects an update (signature error).** The private key that signed the zip does not match `SUPublicEDKey` in the installed app.
 - **A user is not offered a beta.** Beta updates is off (Settings > General); their installed build number is not lower than the beta's; the beta was pruned (only the newest 5 are kept); or the appcast step failed after the release was published (check the `Beta` run).
-- **A merge to `master` produced no beta.** Open the `Beta` run. A notice "A newer commit is on master" means a later commit got its own run. A notice "Signing secrets are not set" means one of the four secrets is missing or not visible to the workflow. No `Beta` run at all means CI on that push did not succeed. A `Beta` run can also show as cancelled: GitHub's `appcast` concurrency group keeps only one pending run, so a later CI completion (even a failed CI run) can cancel a queued beta run for an older commit. This is expected with the tip-only rule; the newest green tip still gets its beta.
+- **A merge to `master` produced no beta.** Open the `Beta` run. A notice "A newer commit is on master" means a later commit got its own run. A notice "Signing secrets are not set" means one of the four secrets is missing from the `beta` environment. No `Beta` run at all means CI on that push did not succeed. A `Beta` run can also show as cancelled: GitHub's `appcast` concurrency group keeps only one pending run, so a later CI completion (even a failed CI run) can cancel a queued beta run for an older commit. This is expected with the tip-only rule; the newest green tip still gets its beta.
 - **The `Beta` run fails.** Before building: the commit is not on `master`. After building and signing, at "Create and publish the prerelease": `beta-<build number>` already exists as a release or tag. These fail closed on purpose.
-- **To verify on the first real run after merging this pipeline:** that `workflow_run` fires the `Beta` workflow for `CI` runs on `master` pushes, and that the signing secrets are repository-scoped. `beta.yml` declares no environment, so secrets stored only in the `release` environment are not visible to it and it skips with a notice.
+- **A beta skips with "Signing secrets are not set" although the secrets exist.** `beta.yml` runs in the `beta` environment and reads only that environment's secrets (and any repository-level secret of the same name that has not been deleted yet). Values stored only in `release` are not visible to it. Add the missing value to `beta`; the list is under GitHub Actions secrets.
 - **The Release run fails early with "published and immutable; cannot add assets to an immutable release".** That tag is published and GitHub immutable releases are on, so its assets are locked and the tag cannot be reused. Draft a new release for a higher version and start the workflow manually with that tag. `scripts/release/release-state.sh <tag>` prints `none`, `draft`, `published` or `published-immutable`.
 - **Publishing a release did not start the workflow.** Only `v*` tags start it, and a saved draft never does: use the manual run.
 - **A stable release fails at the appcast step.** See the recovery steps under "Publishing the stable update".
