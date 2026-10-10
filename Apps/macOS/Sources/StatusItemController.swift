@@ -12,6 +12,9 @@ final class StatusItemController: NSObject {
     private let idleImage: NSImage?
     private let soonImage: NSImage?
     private var iconState = MenuBarIconState.idle
+    /// What the button currently shows. Assigning `button.image` re-lays out the status item, which can
+    /// re-fire the `effectiveAppearance` observer, so an unchanged icon must not be assigned again.
+    private var appliedIcon: (state: MenuBarIconState, dark: Bool)?
     private var appearanceObservation: NSKeyValueObservation?
     private var lastClickedScreen: NSScreen?
 
@@ -62,12 +65,16 @@ final class StatusItemController: NSObject {
     /// Shows the image for the current state and the menu bar's current light/dark appearance.
     private func refreshIcon() {
         guard let button = item.button else { return }
+        let dark = button.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        // The soon icon is the same in both menu bar appearances.
+        let applied = (state: iconState, dark: iconState == .idle && dark)
+        if let appliedIcon, appliedIcon.state == applied.state, appliedIcon.dark == applied.dark { return }
+        appliedIcon = applied
         switch iconState {
         case .soon:
             button.image = soonImage
             button.toolTip = "Meeting soon"
         case .idle:
-            let dark = button.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             button.image = Self.puppy(.idle, darkMenuBar: dark) ?? idleImage
             button.toolTip = nil
         }
