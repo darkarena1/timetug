@@ -19,7 +19,7 @@ Status values: `not started`, `planning`, `in progress`, `blocked` (say on what)
 | Phase | Status | Spec | Plan | PRs |
 |---|---|---|---|---|
 | S Spike: Swift on Windows | done; approach A confirmed 2026-10-09 | spec section 9 | [plan](2026-10-09-windows-spike-s.md) | [findings](../../spikes/2026-10-09-swift-on-windows.md) |
-| A Secrets into environments (standalone, Mac repo) | planning (plan written, awaiting owner review) | spec section 8 | [plan](2026-10-09-phase-a-secrets-into-environments.md) | |
+| A Secrets into environments (standalone, Mac repo) | in progress: values entered, code PR open, verification and deletion pending | spec section 8 | [plan](2026-10-09-phase-a-secrets-into-environments.md) | |
 | 1.5 Domain and branding | not started | spec section 1.5 | to write (site changes only) | |
 | 0 Organization move and hardening | not started | spec sections 1 and 8 | to write | |
 | 1 `calendar-connectors` repository | not started | spec section 1 | to write | |
@@ -44,7 +44,9 @@ Order: S first. A and 1.5 can run alongside S. Phase 0 needs the 1.5 domain live
 - [x] **(owner)** Review the Spike S findings and decide on approach A. Decided: approach A, 2026-10-09.
 - [x] Apply the spike's six recommendations to the spec. Done in the approach A decision PR.
 - [x] Write the plan for phase A. Written 2026-10-09.
-- [ ] **(owner)** Review the phase A plan; then choose Native or Subagent-driven for the code tasks (1 to 3). Tasks 4 and 5 are yours.
+- [x] Phase A code tasks 1 to 3 done (contract test, `environment:` lines, docs); PR open.
+- [ ] **(owner)** Squash-merge the phase A PR, then check the next `Beta` run shows `Environment: beta` and signs.
+- [ ] Verify `release` (next release), `appstore` (trial upload, `ref=master`) and `hosting` (next `site/` change); then, with the owner's go, delete the repository-level copies and the old Firebase key (plan Task 5).
 
 ## Owner checklist by phase
 
@@ -97,6 +99,8 @@ Append one line per session: date, what was done, what is next.
 - 2026-10-09: Checked master's #69 (App Store manual runs accept only `master` or a `vX.Y.Z` tag). It matches the spec; the Windows stable workflow copies the rule. `appstore` has no required reviewer; the owner accepted that (can be added later), recorded in spec section 8.
 - 2026-10-09 (later): Spike S done. All three packages pass on Windows 11 ARM64 (98, 299, 13 tests; 0 failures); the Swift DLL exports the four C functions and a .NET 10 host calls them with an off-thread callback; runtime 57.4 MB minimal (ICU is 36 MB); Foundation probe all PASS. Merged PR 71 (Docker Hub login for `core-linux`); amended the secrets rule for read-only CI tokens. Next: owner decides on approach A, then phase A (secrets into environments) and 1.5 can start.
 - 2026-10-09 (later still): Owner chose approach A. Spec updated with the six Spike S recommendations (`.gitattributes`, `--show-bin-path`, parsed-JSON fixtures, proxy note, runtime size and x64 risks). Sparkle public key confirmed by the owner. Next: phase A plan, then phase 1.5.
+
+- 2026-10-10: Phase A: environments `beta`/`hosting` created, `release` admin bypass off; all values entered by the agent from local files (Developer ID certificate exported by the owner; notary key `L57LKGZZZ4`, App Store key `RGSA38Z6TF`); code PR with the contract test, `environment:` lines and docs. Next: owner merges, then verification runs and deletion of repository-level copies.
 
 ## Where each secret comes from
 
